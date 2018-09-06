@@ -13,6 +13,9 @@
 #include "ViewModels/Stack/NiagaraStackGraphUtilities.h"
 #include "NiagaraConstants.h"
 #include "NiagaraNodeAssignment.h"
+#include "SNewEmitterDialog.h"
+#include "Editor.h"
+#include "Misc/MessageDialog.h"
 
 #include "Misc/ConfigCacheIni.h"
 
@@ -25,6 +28,48 @@ UNiagaraEmitterFactoryNew::UNiagaraEmitterFactoryNew(const FObjectInitializer& O
 	bCreateNew = false;
 	bEditAfterNew = true;
 	bCreateNew = true;
+	EmitterToCopy = nullptr;
+}
+
+bool UNiagaraEmitterFactoryNew::ConfigureProperties()
+{
+	TSharedRef<SNewEmitterDialog> NewEmitterDialog = SNew(SNewEmitterDialog);
+	GEditor->EditorAddModalWindow(NewEmitterDialog);
+	if (NewEmitterDialog->GetUserConfirmedSelection() == false)
+	{
+		// User cancelled or closed the dialog so abort asset creation.
+		return false;
+	}
+
+	TOptional<FAssetData> SelectedEmitterAsset = NewEmitterDialog->GetSelectedEmitterAsset();
+	if (SelectedEmitterAsset.IsSet())
+	{
+		EmitterToCopy = Cast<UNiagaraEmitter>(SelectedEmitterAsset->GetAsset());
+		if (EmitterToCopy == nullptr)
+		{
+			FText Title = LOCTEXT("FailedToLoadTitle", "Create Default?");
+			EAppReturnType::Type DialogResult = FMessageDialog::Open(EAppMsgType::OkCancel, EAppReturnType::Cancel,
+				LOCTEXT("FailedToLoadMessage", "The selected emitter failed to load\nWould you like to create a default emitter?"),
+				&Title);
+			if (DialogResult == EAppReturnType::Cancel)
+			{
+				return false;
+			}
+			else
+			{
+				// The selected emitter couldn't be loaded but the user still wants to create a default emitter so leave
+				// the emitter to copy unset, and not null to force creation of a default emitter.
+				EmitterToCopy.Reset();
+			}
+		}
+	}
+	else
+	{
+		// User selected an empty emitter so set the emitter to copy to null.
+		EmitterToCopy = nullptr;
+	}
+
+	return true;
 }
 
 UObject* UNiagaraEmitterFactoryNew::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
@@ -36,7 +81,40 @@ UObject* UNiagaraEmitterFactoryNew::FactoryCreateNew(UClass* Class, UObject* InP
 
 	UNiagaraEmitter* NewEmitter;
 
-	if (UNiagaraEmitter* Default = Cast<UNiagaraEmitter>(Settings->DefaultEmitter.TryLoad()))
+	if (EmitterToCopy.IsSet())
+	{
+		if (EmitterToCopy.GetValue() != nullptr)
+		{
+			NewEmitter = Cast<UNiagaraEmitter>(StaticDuplicateObject(EmitterToCopy.GetValue(), InParent, Name, Flags, Class));
+			NewEmitter->bIsPrototypeAsset = false;
+			NewEmitter->PrototypeAssetDescription = FText();
+		}
+		else
+		{
+			// Create an empty emitter, source, and graph.
+			NewEmitter = NewObject<UNiagaraEmitter>(InParent, Class, Name, Flags | RF_Transactional);
+			NewEmitter->SimTarget = ENiagaraSimTarget::CPUSim;
+
+			UNiagaraScriptSource* Source = NewObject<UNiagaraScriptSource>(NewEmitter, NAME_None, RF_Transactional);
+			UNiagaraGraph* CreatedGraph = NewObject<UNiagaraGraph>(Source, NAME_None, RF_Transactional);
+			Source->NodeGraph = CreatedGraph;
+
+			// Fix up source pointers.
+			NewEmitter->GraphSource = Source;
+			NewEmitter->SpawnScriptProps.Script->SetSource(Source);
+			NewEmitter->UpdateScriptProps.Script->SetSource(Source);
+			NewEmitter->EmitterSpawnScriptProps.Script->SetSource(Source);
+			NewEmitter->EmitterUpdateScriptProps.Script->SetSource(Source);
+			NewEmitter->GetGPUComputeScript()->SetSource(Source);
+
+			// Initialize the scripts for output.
+			FNiagaraStackGraphUtilities::ResetGraphForOutput(*Source->NodeGraph, ENiagaraScriptUsage::EmitterSpawnScript, NewEmitter->EmitterSpawnScriptProps.Script->GetUsageId());
+			FNiagaraStackGraphUtilities::ResetGraphForOutput(*Source->NodeGraph, ENiagaraScriptUsage::EmitterUpdateScript, NewEmitter->EmitterUpdateScriptProps.Script->GetUsageId());
+			FNiagaraStackGraphUtilities::ResetGraphForOutput(*Source->NodeGraph, ENiagaraScriptUsage::ParticleSpawnScript, NewEmitter->SpawnScriptProps.Script->GetUsageId());
+			FNiagaraStackGraphUtilities::ResetGraphForOutput(*Source->NodeGraph, ENiagaraScriptUsage::ParticleUpdateScript, NewEmitter->UpdateScriptProps.Script->GetUsageId());
+		}
+	}
+	else if (UNiagaraEmitter* Default = Cast<UNiagaraEmitter>(Settings->DefaultEmitter.TryLoad()))
 	{
 		NewEmitter = Cast<UNiagaraEmitter>(StaticDuplicateObject(Default, InParent, Name, Flags, Class));
 	}
