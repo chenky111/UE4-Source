@@ -69,6 +69,28 @@ TSharedRef< FSlateStyleSet > FNiagaraEditorStyle::Create()
 
 	Style->Set("NiagaraEditor.StatsText", CategoryText);
 
+	// Asset picker
+	FTextBlockStyle AssetPickerAssetNameText = FTextBlockStyle(NormalText)
+		.SetFont(DEFAULT_FONT("Regular", 14));;
+
+	Style->Set("NiagaraEditor.AssetPickerAssetNameText", AssetPickerAssetNameText);
+
+	FTextBlockStyle AssetPickerAssetCategoryText = FTextBlockStyle(NormalText)
+		.SetFont(DEFAULT_FONT("Bold", 10))
+		.SetColorAndOpacity(FLinearColor(.7f, .7f, .7f, 1.0f))
+		.SetShadowOffset(FVector2D(0, 1))
+		.SetShadowColorAndOpacity(FLinearColor(0, 0, 0, 0.9f));
+
+	Style->Set("NiagaraEditor.AssetPickerAssetCategoryText", AssetPickerAssetCategoryText);
+
+	// New Asset Dialog
+	FTextBlockStyle NewAssetDialogHeaderText = FTextBlockStyle(NormalText)
+		.SetFont(DEFAULT_FONT("Bold", 10))
+		.SetShadowOffset(FVector2D(0, 1))
+		.SetShadowColorAndOpacity(FLinearColor(0, 0, 0, 0.9f));
+
+	Style->Set("NiagaraEditor.NewAssetDialogHeaderText", NewAssetDialogHeaderText);
+
 	// Emitter Header
 	FTextBlockStyle HeadingText = FTextBlockStyle(NormalText)
 		.SetFont(DEFAULT_FONT("Regular", 14))
