@@ -183,3 +183,5 @@ TSharedRef<SWidget> SNiagaraPrototypeAssetPicker::OnGenerateWidgetForItem(const 
 			]
 		];
 }
+
+#undef LOCTEXT_NAMESPACE
