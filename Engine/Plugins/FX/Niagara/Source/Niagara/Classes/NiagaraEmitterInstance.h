@@ -47,7 +47,7 @@ public:
 
 	void PreTick();
 	void Tick(float DeltaSeconds);
-	void PostProcessParticles();
+	void PostTick();
 	bool HandleCompletion(bool bForce=false);
 
 	bool RequiredPersistentID()const;

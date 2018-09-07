@@ -13,7 +13,8 @@ IMPLEMENT_MODULE(FDefaultModuleImpl, VectorVM);
 
 
 DECLARE_STATS_GROUP(TEXT("VectorVM"), STATGROUP_VectorVM, STATCAT_Advanced);
-DECLARE_CYCLE_STAT(TEXT("Execution"), STAT_VVMExec, STATGROUP_VectorVM);
+DECLARE_CYCLE_STAT(TEXT("VVM Execution"), STAT_VVMExec, STATGROUP_VectorVM);
+DECLARE_CYCLE_STAT(TEXT("VVM Chunk"), STAT_VVMExecChunk, STATGROUP_VectorVM);
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorVM, All, All);
 
@@ -1574,12 +1575,14 @@ void VectorVM::Exec(
 	}
 
 	int32 NumChunks = (NumInstances / InstancesPerChunk) + 1;
-	int32 ChunksPerBatch = GbParallelVVM != 0 ? GParallelVVMChunksPerBatch : NumChunks;
+	int32 ChunksPerBatch = (GbParallelVVM != 0 && FApp::ShouldUseThreadingForPerformance()) ? GParallelVVMChunksPerBatch : NumChunks;
 	int32 NumBatches = FMath::DivideAndRoundUp(NumChunks, ChunksPerBatch);
 	bool bParallel = NumBatches > 1;
 
 	auto ExecChunkBatch = [&](int32 BatchIdx)
-	{		
+	{
+		SCOPE_CYCLE_COUNTER(STAT_VVMExecChunk);
+
 		FVectorVMContext& Context = FVectorVMContext::Get();
 		Context.PrepareForExec(InputRegisters, OutputRegisters, NumInputRegisters, NumOutputRegisters, ConstantTable, DataSetIndexTable.GetData(), DataSetOffsetTable.GetData(), DataSetOffsetTable.Num(),
 			ExternalFunctionTable, UserPtrTable, DataSetMetaTable.GetData()

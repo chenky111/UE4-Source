@@ -11,8 +11,8 @@
 #include "ShaderParameterUtils.h"
 #include "ClearQuad.h"
 
-DECLARE_CYCLE_STAT(TEXT("Batching"), STAT_NiagaraGPUSimTick_RT, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("GPU Data Readback"), STAT_NiagaraGPUReadback_RT, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("GPU Emitter Dispatch [RT]"), STAT_NiagaraGPUSimTick_RT, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("GPU Data Readback [RT]"), STAT_NiagaraGPUReadback_RT, STATGROUP_Niagara);
 DECLARE_FLOAT_COUNTER_STAT(TEXT("Niagara GPU Sim"), STAT_GPU_NiagaraSim, STATGROUP_GPU);
 DECLARE_DWORD_COUNTER_STAT(TEXT("# GPU Particles"), STAT_NiagaraGPUParticles, STATGROUP_Niagara);
 DECLARE_DWORD_COUNTER_STAT(TEXT("Readback latency (frames)"), STAT_NiagaraReadbackLatency, STATGROUP_Niagara);

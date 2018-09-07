@@ -109,6 +109,11 @@ DECLARE_CYCLE_STAT(TEXT("ParticleComponent QueueAsyncGT"), STAT_UParticleSystemC
 DECLARE_CYCLE_STAT(TEXT("ParticleComponent WaitForAsyncAndFinalize GT"), STAT_UParticleSystemComponent_WaitForAsyncAndFinalize, STATGROUP_Particles);
 DECLARE_CYCLE_STAT(TEXT("ParticleComponent CreateRenderState Concurrent GT"), STAT_ParticleSystemComponent_CreateRenderState_Concurrent, STATGROUP_Particles);
 
+DEFINE_STAT(STAT_ParticlesOverview_GT);
+DEFINE_STAT(STAT_ParticlesOverview_GT_CNC);
+DEFINE_STAT(STAT_ParticlesOverview_RT);
+DEFINE_STAT(STAT_ParticlesOverview_RT_CNC);
+
 #include "InGamePerformanceTracker.h"
 
 #define LOCTEXT_NAMESPACE "ParticleComponents"
@@ -3727,6 +3732,7 @@ void UParticleSystemComponent::OnUnregister()
 void UParticleSystemComponent::CreateRenderState_Concurrent()
 {
 	SCOPE_CYCLE_COUNTER(STAT_ParticleSystemComponent_CreateRenderState_Concurrent);
+	SCOPE_CYCLE_COUNTER(STAT_ParticlesOverview_GT_CNC);
 
 	ForceAsyncWorkCompletion(ENSURE_AND_STALL);
 	check( GetWorld() );
@@ -3761,6 +3767,7 @@ void UParticleSystemComponent::CreateRenderState_Concurrent()
 void UParticleSystemComponent::SendRenderTransform_Concurrent()
 {
 	SCOPE_CYCLE_COUNTER(STAT_ParticleSystemComponent_SendRenderTransform_Concurrent);
+	SCOPE_CYCLE_COUNTER(STAT_ParticlesOverview_GT_CNC);
 
 	ForceAsyncWorkCompletion(ENSURE_AND_STALL);
 	if (bIsActive)
@@ -3778,6 +3785,7 @@ void UParticleSystemComponent::SendRenderTransform_Concurrent()
 void UParticleSystemComponent::SendRenderDynamicData_Concurrent()
 {
 	SCOPE_CYCLE_COUNTER(STAT_ParticleSystemComponent_SendRenderDynamicData_Concurrent);
+	SCOPE_CYCLE_COUNTER(STAT_ParticlesOverview_GT_CNC);
 
 	ForceAsyncWorkCompletion(ENSURE_AND_STALL);
 	Super::SendRenderDynamicData_Concurrent();
@@ -3812,6 +3820,7 @@ void UParticleSystemComponent::SendRenderDynamicData_Concurrent()
 void UParticleSystemComponent::DestroyRenderState_Concurrent()
 {
 	SCOPE_CYCLE_COUNTER(STAT_ParticleSystemComponent_DestroyRenderState_Concurrent);
+	SCOPE_CYCLE_COUNTER(STAT_ParticlesOverview_GT_CNC);
 
 	ForceAsyncWorkCompletion(ENSURE_AND_STALL);
 	check( GetWorld() );
@@ -4719,6 +4728,7 @@ void UParticleSystemComponent::TickComponent(float DeltaTime, enum ELevelTick Ti
 {
 	LLM_SCOPE(ELLMTag::Particles);
 	FInGameScopedCycleCounter InGameCycleCounter(GetWorld(), EInGamePerfTrackers::VFXSignificance, EInGamePerfTrackerThreads::GameThread, bIsManagingSignificance);
+	SCOPE_CYCLE_COUNTER(STAT_ParticlesOverview_GT);
 
 	if (Template == nullptr || Template->Emitters.Num() == 0)
 	{
@@ -5033,6 +5043,8 @@ void UParticleSystemComponent::ComputeTickComponent_Concurrent()
 
 	SCOPE_CYCLE_COUNTER(STAT_ParticleComputeTickTime);
 	FScopeCycleCounterUObject AdditionalScope(AdditionalStatObject(), GET_STATID(STAT_ParticleComputeTickTime));
+	SCOPE_CYCLE_COUNTER(STAT_ParticlesOverview_GT_CNC);
+
 	// Tick Subemitters.
 	int32 EmitterIndex;
 	NumSignificantEmitters = 0;
@@ -5106,6 +5118,7 @@ void UParticleSystemComponent::FinalizeTickComponent()
 	FInGameScopedCycleCounter InGameCycleCounter(GetWorld(), EInGamePerfTrackers::VFXSignificance, IsInGameThread() ? EInGamePerfTrackerThreads::GameThread : EInGamePerfTrackerThreads::OtherThread, bIsManagingSignificance);
 
 	SCOPE_CYCLE_COUNTER(STAT_ParticleFinalizeTickTime);
+	SCOPE_CYCLE_COUNTER(STAT_ParticlesOverview_GT);
 
 	if(bAsyncDataCopyIsValid)
 	{
@@ -5592,6 +5605,7 @@ void UParticleSystemComponent::SetTemplate(class UParticleSystem* NewTemplate)
 void UParticleSystemComponent::ActivateSystem(bool bFlagAsJustAttached)
 {
 	SCOPE_CYCLE_COUNTER(STAT_ParticleActivateTime);
+	SCOPE_CYCLE_COUNTER(STAT_ParticlesOverview_GT);
 	ForceAsyncWorkCompletion(STALL);
 
 	if (IsTemplate() == true || !IsRegistered() || 	!FApp::CanEverRender())
@@ -5836,6 +5850,7 @@ void UParticleSystemComponent::Complete()
 void UParticleSystemComponent::DeactivateSystem()
 {
 	FInGameScopedCycleCounter InGameCycleCounter(GetWorld(), EInGamePerfTrackers::VFXSignificance, EInGamePerfTrackerThreads::GameThread, bIsManagingSignificance);
+	SCOPE_CYCLE_COUNTER(STAT_ParticlesOverview_GT);
 
 	if (IsTemplate() == true)
 	{

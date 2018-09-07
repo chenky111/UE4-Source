@@ -14,16 +14,17 @@
 #include "Templates/AlignmentTemplates.h"
 
 
-DECLARE_CYCLE_STAT(TEXT("System Activate (GT)"), STAT_NiagaraSystemActivate, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Deactivate (GT)"), STAT_NiagaraSystemDeactivate, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Complete (GT)"), STAT_NiagaraSystemComplete, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Parallel Tick"), STAT_NiagaraParallelTick, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Reset (GT)"), STAT_NiagaraSystemReset, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Reinit (GT)"), STAT_NiagaraSystemReinit, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Init Emitters (GT)"), STAT_NiagaraSystemInitEmitters, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Advance Simulation "), STAT_NiagaraSystemAdvanceSim, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System SetSolo "), STAT_NiagaraSystemSetSolo, STATGROUP_Niagara); 
-DECLARE_CYCLE_STAT(TEXT("System PreSimulateTick "), STAT_NiagaraSystemPreSimulateTick, STATGROUP_Niagara); 
+DECLARE_CYCLE_STAT(TEXT("System Activate [GT]"), STAT_NiagaraSystemActivate, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Deactivate [GT]"), STAT_NiagaraSystemDeactivate, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Complete [GT]"), STAT_NiagaraSystemComplete, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Reset [GT]"), STAT_NiagaraSystemReset, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Reinit [GT]"), STAT_NiagaraSystemReinit, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Init Emitters [GT]"), STAT_NiagaraSystemInitEmitters, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Advance Simulation [GT] "), STAT_NiagaraSystemAdvanceSim, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System SetSolo[GT] "), STAT_NiagaraSystemSetSolo, STATGROUP_Niagara);
+
+DECLARE_CYCLE_STAT(TEXT("System PreSimulateTick [CNC]"), STAT_NiagaraSystemPreSimulateTick, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Instance Tick [CNC]"), STAT_NiagaraSystemInstanceTick, STATGROUP_Niagara);
 
  
 /** Safety time to allow for the LastRenderTime coming back from the RT. */
@@ -1170,6 +1171,9 @@ void FNiagaraSystemInstance::PreSimulateTick(float DeltaSeconds)
 
 void FNiagaraSystemInstance::PostSimulateTick(float DeltaSeconds)
 {
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraSystemInstanceTick);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_GT_CNC);
+
 	if (IsComplete() || !bHasTickingEmitters || GetSystem() == nullptr || Component == nullptr || DeltaSeconds < SMALL_NUMBER)
 	{
 		return;

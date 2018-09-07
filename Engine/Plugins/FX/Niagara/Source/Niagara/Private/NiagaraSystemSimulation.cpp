@@ -14,14 +14,14 @@
 #include "NiagaraComponent.h"
 #include "NiagaraWorldManager.h"
 
-DECLARE_CYCLE_STAT(TEXT("System Simulation"), STAT_NiagaraSystemSim, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Pre Simulate"), STAT_NiagaraSystemSim_PreSimulate, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Prepare For Simulate"), STAT_NiagaraSystemSim_PrepareForSimulate, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Update"), STAT_NiagaraSystemSim_Update, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Spawn"), STAT_NiagaraSystemSim_Spawn, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Transfer Parameters"), STAT_NiagaraSystemSim_TransferParameters, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Post Simulate"), STAT_NiagaraSystemSim_PostSimulate, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("System Mark Component Dirty"), STAT_NiagaraSystemSim_MarkComponentDirty, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Simulation [GT]"), STAT_NiagaraSystemSim, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Pre Simulate [GT]"), STAT_NiagaraSystemSim_PreSimulate, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Prepare For Simulate [GT]"), STAT_NiagaraSystemSim_PrepareForSimulate, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Sim Update [GT]"), STAT_NiagaraSystemSim_Update, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Sim Spawn [GT]"), STAT_NiagaraSystemSim_Spawn, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Sim Transfer Parameters [GT]"), STAT_NiagaraSystemSim_TransferParameters, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Post Simulate [GT]"), STAT_NiagaraSystemSim_PostSimulate, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("System Mark Component Dirty [GT]"), STAT_NiagaraSystemSim_MarkComponentDirty, STATGROUP_Niagara);
 
 
 static int32 GbDumpSystemData = 0;

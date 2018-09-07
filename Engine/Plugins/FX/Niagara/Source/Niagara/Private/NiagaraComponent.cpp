@@ -20,12 +20,12 @@
 #include "NiagaraWorldManager.h"
 #include "EngineUtils.h"
 
-DECLARE_CYCLE_STAT(TEXT("Sceneproxy create (GT)"), STAT_NiagaraCreateSceneProxy, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Component Tick (GT)"), STAT_NiagaraComponentTick, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Activate (GT)"), STAT_NiagaraComponentActivate, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Deactivate (GT)"), STAT_NiagaraComponentDeactivate, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Send Render Data (GT)"), STAT_NiagaraComponentSendRenderData, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Get Dynamic Mesh Elements (RT)"), STAT_NiagaraComponentGetDynamicMeshElements, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Sceneproxy create [GT]"), STAT_NiagaraCreateSceneProxy, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Component Tick [GT]"), STAT_NiagaraComponentTick, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Activate [GT]"), STAT_NiagaraComponentActivate, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Deactivate [GT]"), STAT_NiagaraComponentDeactivate, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Send Render Data [GT]"), STAT_NiagaraComponentSendRenderData, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Get Dynamic Mesh Elements [RT]"), STAT_NiagaraComponentGetDynamicMeshElements, STATGROUP_Niagara);
 
 DEFINE_LOG_CATEGORY(LogNiagara);
 
@@ -251,6 +251,7 @@ void FNiagaraSceneProxy::SetRenderingEnabled(bool bInRenderingEnabled)
 void FNiagaraSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraComponentGetDynamicMeshElements);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_RT);
 	for (NiagaraRenderer* Renderer : EmitterRenderers)
 	{
 		if (Renderer)
@@ -279,6 +280,7 @@ void FNiagaraSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>&
 
 void FNiagaraSceneProxy::GatherSimpleLights(const FSceneViewFamily& ViewFamily, FSimpleLightArray& OutParticleLights) const
 {
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_RT);
 	NiagaraRendererLights *LightRenderer = nullptr;
 	FNiagaraDynamicDataLights *DynamicData = nullptr;
 	for (int32 Idx = 0; Idx < EmitterRenderers.Num(); Idx++)
@@ -346,6 +348,7 @@ UNiagaraComponent::UNiagaraComponent(const FObjectInitializer& ObjectInitializer
 void UNiagaraComponent::TickComponent(float DeltaSeconds, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraComponentTick);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_GT);
 
 	if (bAwaitingActivationDueToNotReady)
 	{
@@ -510,6 +513,7 @@ void UNiagaraComponent::Activate(bool bReset /* = false */)
 	}
 
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraComponentActivate);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_GT);
 	if (Asset == nullptr)
 	{
 		DestroyInstance();
@@ -613,6 +617,7 @@ void UNiagaraComponent::Activate(bool bReset /* = false */)
 void UNiagaraComponent::Deactivate()
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraComponentDeactivate);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_GT);
 	Super::Deactivate();
 
 	//UE_LOG(LogNiagara, Log, TEXT("Deactivate: %u - %s"), this, *Asset->GetName());
@@ -628,6 +633,7 @@ void UNiagaraComponent::Deactivate()
 void UNiagaraComponent::DeactivateImmediate()
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraComponentDeactivate);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_GT);
 	Super::Deactivate();
 
 	//UE_LOG(LogNiagara, Log, TEXT("DeactivateImmediate: %u - %s"), this, *Asset->GetName());
@@ -765,6 +771,7 @@ TSharedPtr<FNiagaraSystemSimulation, ESPMode::ThreadSafe> UNiagaraComponent::Get
 
 void UNiagaraComponent::CreateRenderState_Concurrent()
 {
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_GT_CNC);
 	Super::CreateRenderState_Concurrent();
 	// The emitter instance may not tick again next frame so we send the dynamic data here so that the current state
 	// renders.  This can happen when while editing, or any time the age update mode is set to desired age.
@@ -774,6 +781,7 @@ void UNiagaraComponent::CreateRenderState_Concurrent()
 void UNiagaraComponent::SendRenderDynamicData_Concurrent()
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraComponentSendRenderData);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_GT_CNC);
 	if (SystemInstance.IsValid() && SceneProxy)
 	{
 		FNiagaraSceneProxy* NiagaraProxy = static_cast<FNiagaraSceneProxy*>(SceneProxy);
@@ -852,6 +860,7 @@ FBoxSphereBounds UNiagaraComponent::CalcBounds(const FTransform& LocalToWorld) c
 FPrimitiveSceneProxy* UNiagaraComponent::CreateSceneProxy()
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraCreateSceneProxy);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_GT);
 	// The constructor will set up the System renderers from the component.
 	FNiagaraSceneProxy* Proxy = new FNiagaraSceneProxy(this);
 	return Proxy;

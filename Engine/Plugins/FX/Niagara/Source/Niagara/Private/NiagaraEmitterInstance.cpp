@@ -17,12 +17,11 @@
 DECLARE_DWORD_COUNTER_STAT(TEXT("Num Custom Events"), STAT_NiagaraNumCustomEvents, STATGROUP_Niagara);
 
 //DECLARE_CYCLE_STAT(TEXT("Tick"), STAT_NiagaraTick, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Simulate"), STAT_NiagaraSimulate, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Spawn"), STAT_NiagaraSpawn, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Spawn"), STAT_NiagaraEvents, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Kill"), STAT_NiagaraKill, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Event Handling"), STAT_NiagaraEventHandle, STATGROUP_Niagara);
-DECLARE_CYCLE_STAT(TEXT("Error Check"), STAT_NiagaraEmitterErrorCheck, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Emitter Simulate [CNC]"), STAT_NiagaraSimulate, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Emitter Spawn [CNC]"), STAT_NiagaraSpawn, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Emitter Post Tick [CNC]"), STAT_NiagaraEmitterPostTick, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Emitter Event Handling [CNC]"), STAT_NiagaraEventHandle, STATGROUP_Niagara);
+DECLARE_CYCLE_STAT(TEXT("Emitter Error Check [CNC]"), STAT_NiagaraEmitterErrorCheck, STATGROUP_Niagara);
 
 static int32 GbDumpParticleData = 0;
 static FAutoConsoleVariableRef CVarNiagaraDumpParticleData(
@@ -293,7 +292,7 @@ void FNiagaraEmitterInstance::Init(int32 InEmitterIdx, FName InSystemInstanceNam
 	}
 	else
 	{
-		//Init accessors for PostProcessParticles
+		//Init accessors for PostTick
 		PositionAccessor = FNiagaraDataSetAccessor<FVector>(Data, FNiagaraVariable(FNiagaraTypeDefinition::GetVec3Def(), PositionName));
 		SizeAccessor = FNiagaraDataSetAccessor<FVector2D>(Data, FNiagaraVariable(FNiagaraTypeDefinition::GetVec2Def(), SizeName));
 		MeshScaleAccessor = FNiagaraDataSetAccessor<FVector>(Data, FNiagaraVariable(FNiagaraTypeDefinition::GetVec3Def(), MeshScaleName));
@@ -676,12 +675,12 @@ TOptional<FBox> FNiagaraEmitterInstance::CalculateDynamicBounds()
 	return Ret;
 }
 
-/** Look for dead particles and move from the end of the list to the dead location, compacting in the process
-  * Also calculates bounds; Kill will be removed from this once we do conditional write
+/** 
+  * Do any post work such as calculating dynamic bounds.
   */
-void FNiagaraEmitterInstance::PostProcessParticles()
+void FNiagaraEmitterInstance::PostTick()
 {
-	SCOPE_CYCLE_COUNTER(STAT_NiagaraKill);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraEmitterPostTick);
 
 	checkSlow(CachedEmitter);
 	CachedBounds.Init();
@@ -1374,7 +1373,7 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 // 		}
 	}
 
-	PostProcessParticles();
+	PostTick();
 
 	SpawnExecContext.PostTick();
 	UpdateExecContext.PostTick();

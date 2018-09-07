@@ -12,6 +12,9 @@
 #include "Misc/ConfigCacheIni.h"
 #include "NiagaraDataInterfaceSkeletalMesh.h"
 #include "EngineModule.h"
+#include "NiagaraStats.h"
+
+DECLARE_CYCLE_STAT(TEXT("Niagara Manager Tick [GT]"), STAT_NiagaraWorldManTick, STATGROUP_Niagara);
 
 TGlobalResource<FNiagaraViewDataMgr> GNiagaraViewDataManager;
 
@@ -199,6 +202,9 @@ Going off this idea tbh
 		}
 	}
 */
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraWorldManTick);
+	SCOPE_CYCLE_COUNTER(STAT_NiagaraOverview_GT);
+
 	SkeletalMeshGeneratedData.TickGeneratedData(DeltaSeconds);
 
 	//Tick our collections to push any changes to bound stores.
