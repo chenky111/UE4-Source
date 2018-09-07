@@ -690,3 +690,6 @@ FNiagaraDataInterfaceParametersCS* UNiagaraDataInterfaceVolume::ConstructCompute
 {
 	return new FNiagaraDataInterfaceParametersCS_Volume();
 }
+
+
+#undef LOCTEXT_NAMESPACE
