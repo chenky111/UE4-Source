@@ -198,6 +198,8 @@ public:
 	/** Dumps all of this systems info to the log. */
 	void Dump()const;
 
+	bool GetPerInstanceDataAndOffsets(void*& OutData, uint32& OutDataSize, TMap<TWeakObjectPtr<UNiagaraDataInterface>, int32>*& OutOffsets);
+
 private:
 	/** Builds the emitter simulations. */
 	void InitEmitters();

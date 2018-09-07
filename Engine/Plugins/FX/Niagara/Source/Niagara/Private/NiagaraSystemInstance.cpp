@@ -860,6 +860,15 @@ void FNiagaraSystemInstance::InitDataInterfaces()
 	}
 }
 
+bool FNiagaraSystemInstance::GetPerInstanceDataAndOffsets(void*& OutData, uint32& OutDataSize, TMap<TWeakObjectPtr<UNiagaraDataInterface>, int32>*& OutOffsets)
+{
+	OutData = DataInterfaceInstanceData.GetData();
+	OutDataSize = DataInterfaceInstanceData.Num();
+	OutOffsets = &DataInterfaceInstanceDataOffsets;
+	return DataInterfaceInstanceDataOffsets.Num() != 0;
+}
+
+
 void FNiagaraSystemInstance::TickDataInterfaces(float DeltaSeconds, bool bPostSimulate)
 {
 	if (!GetSystem() || !Component || IsDisabled())

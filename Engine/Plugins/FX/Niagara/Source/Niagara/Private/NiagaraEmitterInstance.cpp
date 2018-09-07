@@ -234,7 +234,7 @@ void FNiagaraEmitterInstance::Init(int32 InEmitterIdx, FName InSystemInstanceNam
 	// setup the parameer store for the GPU execution context; since spawn and update are combined here, we build one with params from both script props
 	if (CachedEmitter->SimTarget == ENiagaraSimTarget::GPUComputeSim)
 	{
-		GPUExecContext.InitParams(CachedEmitter->GetGPUComputeScript(), CachedEmitter->SpawnScriptProps.Script, CachedEmitter->UpdateScriptProps.Script, CachedEmitter->SimTarget);
+		GPUExecContext.InitParams(CachedEmitter->GetGPUComputeScript(), CachedEmitter->SpawnScriptProps.Script, CachedEmitter->UpdateScriptProps.Script, CachedEmitter->SimTarget, CachedEmitter->GetUniqueEmitterName());
 		SpawnExecContext.Parameters.Bind(&GPUExecContext.CombinedParamStore);
 		UpdateExecContext.Parameters.Bind(&GPUExecContext.CombinedParamStore);
 	}
@@ -949,6 +949,8 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 		GPUExecContext.SpawnRateInstances = SpawnTotal;
 		GPUExecContext.EventSpawnTotal = EventSpawnTotal;
 		GPUExecContext.NumIndicesPerInstance = CachedEmitter->GetRenderers()[0]->GetNumIndicesPerInstance();
+
+		ParentSystemInstance->GetPerInstanceDataAndOffsets(GPUExecContext.PerInstanceData, GPUExecContext.PerInstanceDataSize, GPUExecContext.PerInstanceDataInterfaceOffsets);
 
 		bool bOnlySetOnce = false;
 		for (FNiagaraSpawnInfo& Info : SpawnInfos)

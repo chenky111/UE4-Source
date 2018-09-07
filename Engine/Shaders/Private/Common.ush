@@ -200,7 +200,7 @@ float2 Tile1Dto2D(float xsize, float idx)
 float4 PseudoVolumeTexture(Texture2D Tex, SamplerState TexSampler, float3 inPos, float2 xysize, float numframes,
 	uint mipmode = 0, float miplevel = 0, float2 InDDX = 0, float2 InDDY = 0)
 {
-	float zframe = ceil(inPos.z * numframes);
+	float zframe = floor(inPos.z * numframes);
 	float zphase = frac(inPos.z * numframes);
 
 	float2 uv = frac(inPos.xy) / xysize;

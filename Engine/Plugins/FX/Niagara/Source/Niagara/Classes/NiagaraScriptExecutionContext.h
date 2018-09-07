@@ -96,6 +96,9 @@ struct FNiagaraComputeExecutionContext
 		, GPUDataReadback(nullptr)
 		, AccumulatedSpawnRate(0)
 		, NumIndicesPerInstance(0)
+		, PerInstanceData(nullptr)
+		, PerInstanceDataSize(0)
+		, PerInstanceDataInterfaceOffsets(nullptr)
 		, bPendingExecution(0)
 	{
 	}
@@ -111,9 +114,10 @@ struct FNiagaraComputeExecutionContext
 		GPUDataReadback = nullptr;
 	}
 
-	void InitParams(UNiagaraScript* InGPUComputeScript, UNiagaraScript* InSpawnScript, UNiagaraScript *InUpdateScript, ENiagaraSimTarget SimTarget)
+	void InitParams(UNiagaraScript* InGPUComputeScript, UNiagaraScript* InSpawnScript, UNiagaraScript *InUpdateScript, ENiagaraSimTarget InSimTarget, const FString& InDebugSimName)
 	{
-		CombinedParamStore.InitFromOwningContext(InGPUComputeScript, SimTarget, true);
+		DebugSimName = InDebugSimName;
+		CombinedParamStore.InitFromOwningContext(InGPUComputeScript, InSimTarget, true);
 
 		GPUScript = InGPUComputeScript;
 		SpawnScript = InSpawnScript;
@@ -172,7 +176,7 @@ struct FNiagaraComputeExecutionContext
 	}
 
 	const TArray<FNiagaraEventScriptProperties> &GetEventHandlers() const { return EventHandlerScriptProps; }
-
+	FString DebugSimName;
 	class FNiagaraDataSet *MainDataSet;
 	TArray<FNiagaraDataSet*>UpdateEventWriteDataSets;
 	TArray<FNiagaraEventScriptProperties> EventHandlerScriptProps;
@@ -199,6 +203,12 @@ struct FNiagaraComputeExecutionContext
 	uint32 AccumulatedSpawnRate;
 	uint32 NumIndicesPerInstance;	// how many vtx indices per instance the renderer is going to have for its draw call
 
+	void* PerInstanceData; // Data stored on parent system instance
+	uint32 PerInstanceDataSize; // Size of data stored on parent system instance in bytes
+	TMap<TWeakObjectPtr<UNiagaraDataInterface>, int32>* PerInstanceDataInterfaceOffsets;
+
 	/** Ensures we only enqueue each context once before they're dispatched. */
 	uint32 bPendingExecution : 1;
+
+
 };
