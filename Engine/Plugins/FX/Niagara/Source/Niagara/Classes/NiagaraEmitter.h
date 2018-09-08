@@ -289,10 +289,10 @@ public:
 	uint32 ThumbnailImageOutOfDate : 1;
 
 	UPROPERTY(EditAnywhere, AdvancedDisplay, Category = "Asset Options", AssetRegistrySearchable)
-	bool bIsPrototypeAsset;
+	bool bIsTemplateAsset;
 
 	UPROPERTY(EditAnywhere, AdvancedDisplay, Category = "Asset Options", AssetRegistrySearchable)
-	FText PrototypeAssetDescription;
+	FText TemplateAssetDescription;
 	
 	/** Callback issued whenever a VM compilation successfully happened (even if the results are a script that cannot be executed due to errors)*/
 	NIAGARA_API FOnEmitterCompiled& OnEmitterVMCompiled();

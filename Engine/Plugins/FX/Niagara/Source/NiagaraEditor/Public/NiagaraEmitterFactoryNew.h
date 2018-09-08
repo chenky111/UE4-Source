@@ -13,7 +13,8 @@ class UNiagaraEmitterFactoryNew : public UFactory
 {
 	GENERATED_UCLASS_BODY()
 
-	TOptional<UNiagaraEmitter*> EmitterToCopy;
+	UNiagaraEmitter* EmitterToCopy;
+	bool bAddDefaultModulesAndRenderersToEmptyEmitter;
 
 	//~ Begin UFactory Interface
 	virtual bool ConfigureProperties() override;

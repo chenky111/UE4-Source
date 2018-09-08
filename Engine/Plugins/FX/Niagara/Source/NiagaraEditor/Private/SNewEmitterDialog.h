@@ -2,15 +2,17 @@
 
 #pragma once
 
+#include "SNiagaraNewAssetDialog.h"
+
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SWindow.h"
 #include "AssetData.h"
-#include "IAssetTypeActions.h"
+#include "ContentBrowserDelegates.h"
 
-class SNiagaraPrototypeAssetPicker;
+class SNiagaraTemplateAssetPicker;
 
-/** A window which allows the user to select additional content to add to the currently loaded project. */
-class SNewEmitterDialog : public SWindow
+/** A modal dialog to collect information needed to create a new niagara system. */
+class SNewEmitterDialog : public SNiagaraNewAssetDialog
 {
 public:
 	SLATE_BEGIN_ARGS(SNewEmitterDialog)
@@ -19,44 +21,15 @@ public:
 
 	void Construct(const FArguments& InArgs);
 
-	bool GetUserConfirmedSelection() const;
-
 	TOptional<FAssetData> GetSelectedEmitterAsset();
 
 private:
-	void OnAssetPickerAssetSelected(const FAssetData& SelectedAsset);
+	TArray<FAssetData> GetSelectedEmitterTemplateAssets();
 
-	ECheckBoxState GetCreateFromPrototypeCheckBoxState() const;
-
-	void CreateFromPrototypeCheckBoxStateChanged(ECheckBoxState InCheckBoxState);
-
-	ECheckBoxState GetCreateFromOtherEmitterCheckBoxState() const;
-
-	void CreateFromOtherEmitterCheckBoxStateChanged(ECheckBoxState InCheckBoxState);
-
-	ECheckBoxState GetCreateEmptyCheckBoxState() const;
-
-	void CreateEmptyCheckBoxStateChanged(ECheckBoxState InCheckBoxState);
-
-	EVisibility GetPrototypeAssetPickerVisibility() const;
-
-	EVisibility GetAssetPickerVisibility() const;
-
-	bool IsOkButtonEnabled() const;
-
-	FReply OnOkButtonClicked();
-
-	FReply OnCancelButtonClicked();
+	TArray<FAssetData> GetSelectedProjectEmiterAssets();
 
 private:
-	bool bUserConfirmedSelection;
-	bool bCreateFromPrototype;
-	bool bCreateFromOtherEmitter;
-	bool bCreateEmpty;
+	TSharedPtr<SNiagaraTemplateAssetPicker> TemplateAssetPicker;
 
-	TSharedPtr<SNiagaraPrototypeAssetPicker> PrototypeAssetPicker;
-
-	TOptional<FAssetData> AssetPickerSelectedAsset;
-
-	TOptional<FAssetData> SelectedEmitterAsset;
+	FGetCurrentSelectionDelegate GetSelectedEmitterAssetsFromPicker;
 };

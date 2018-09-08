@@ -71,25 +71,45 @@ TSharedRef< FSlateStyleSet > FNiagaraEditorStyle::Create()
 
 	// Asset picker
 	FTextBlockStyle AssetPickerAssetNameText = FTextBlockStyle(NormalText)
-		.SetFont(DEFAULT_FONT("Regular", 14));;
+		.SetColorAndOpacity(FLinearColor::White)
+		.SetFont(DEFAULT_FONT("Bold", 14))
+		.SetShadowOffset(FVector2D(0, 1))
+		.SetShadowColorAndOpacity(FLinearColor(0, 0, 0, 0.9f));
 
 	Style->Set("NiagaraEditor.AssetPickerAssetNameText", AssetPickerAssetNameText);
 
 	FTextBlockStyle AssetPickerAssetCategoryText = FTextBlockStyle(NormalText)
-		.SetFont(DEFAULT_FONT("Bold", 10))
-		.SetColorAndOpacity(FLinearColor(.7f, .7f, .7f, 1.0f))
-		.SetShadowOffset(FVector2D(0, 1))
-		.SetShadowColorAndOpacity(FLinearColor(0, 0, 0, 0.9f));
+		.SetFont(DEFAULT_FONT("Regular", 10));
 
 	Style->Set("NiagaraEditor.AssetPickerAssetCategoryText", AssetPickerAssetCategoryText);
 
 	// New Asset Dialog
+	FTextBlockStyle NewAssetDialogOptionText = FTextBlockStyle(NormalText)
+		.SetFont(DEFAULT_FONT("Regular", 10));
+
+	Style->Set("NiagaraEditor.NewAssetDialog.OptionText", NewAssetDialogOptionText);
+
 	FTextBlockStyle NewAssetDialogHeaderText = FTextBlockStyle(NormalText)
+		.SetColorAndOpacity(FLinearColor::White)
 		.SetFont(DEFAULT_FONT("Bold", 10))
 		.SetShadowOffset(FVector2D(0, 1))
 		.SetShadowColorAndOpacity(FLinearColor(0, 0, 0, 0.9f));
 
-	Style->Set("NiagaraEditor.NewAssetDialogHeaderText", NewAssetDialogHeaderText);
+	Style->Set("NiagaraEditor.NewAssetDialog.HeaderText", NewAssetDialogHeaderText);
+
+	FTextBlockStyle NewAssetDialogSubHeaderText = FTextBlockStyle(NormalText)
+		.SetColorAndOpacity(FLinearColor::White)
+		.SetFont(DEFAULT_FONT("Bold", 10))
+		.SetShadowOffset(FVector2D(0, 1))
+		.SetShadowColorAndOpacity(FLinearColor(0, 0, 0, 0.9f));
+
+	Style->Set("NiagaraEditor.NewAssetDialog.SubHeaderText", NewAssetDialogSubHeaderText);
+
+	Style->Set("NiagaraEditor.NewAssetDialog.AddButton", FButtonStyle()
+		.SetNormal(BOX_CORE_BRUSH("Common/FlatButton", 2.0f / 8.0f, FLinearColor(0, 0, 0, .25f)))
+		.SetHovered(BOX_CORE_BRUSH("Common/FlatButton", 2.0f / 8.0f, FEditorStyle::GetSlateColor("SelectionColor")))
+		.SetPressed(BOX_CORE_BRUSH("Common/FlatButton", 2.0f / 8.0f, FEditorStyle::GetSlateColor("SelectionColor_Pressed")))
+	);
 
 	// Emitter Header
 	FTextBlockStyle HeadingText = FTextBlockStyle(NormalText)
