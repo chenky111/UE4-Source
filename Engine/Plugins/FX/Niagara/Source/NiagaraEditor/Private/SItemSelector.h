@@ -58,13 +58,24 @@ private:
 		Item
 	};
 
-	class FItemSelectorViewModel;
+	class IItemSelectorItemViewModelUtilities
+	{
+	public:
+		virtual ~IItemSelectorItemViewModelUtilities()
+		{
+		}
+
+		virtual bool DoesItemMatchFilterText(const ItemType& InItem) const = 0;
+		virtual bool CompareCategoriesForEquality(const CategoryType& CategoryA, const CategoryType& CategoryB) const = 0;
+		virtual const FOnCompareCategoriesForSorting& GetOnCompareCategoriesForSorting() const = 0;
+		virtual const FOnCompareItemsForSorting& GetOnCompareItemsForSorting() const = 0;
+	};
 
 	class FItemSelectorItemViewModel
 	{
 	public:
-		FItemSelectorItemViewModel(TSharedRef<FItemSelectorViewModel> InOwningViewModel, EItemSelectorItemViewModelType InType)
-			: OwningViewModel(InOwningViewModel)
+		FItemSelectorItemViewModel(TSharedRef<IItemSelectorItemViewModelUtilities> InItemUtilities, EItemSelectorItemViewModelType InType)
+			: ItemUtilities(InItemUtilities)
 			, Type(InType)
 		{
 		}
@@ -73,11 +84,11 @@ private:
 		{
 		}
 
-		TSharedRef<FItemSelectorViewModel> GetOwningViewModel() const
+		TSharedRef<IItemSelectorItemViewModelUtilities> GetItemUtilities() const
 		{
-			TSharedPtr<FItemSelectorViewModel> OwningViewModelPinned = OwningViewModel.Pin();
-			checkf(OwningViewModel.IsValid(), TEXT("Owning view model deleted before children."));
-			return OwningViewModelPinned.ToSharedRef();
+			TSharedPtr<IItemSelectorItemViewModelUtilities> ItemUtilitiesPinned = ItemUtilities.Pin();
+			checkf(ItemUtilities.IsValid(), TEXT("Item utilities deleted before item."));
+			return ItemUtilitiesPinned.ToSharedRef();
 		}
 
 		EItemSelectorItemViewModelType GetType() const
@@ -110,14 +121,14 @@ private:
 
 	private:
 		EItemSelectorItemViewModelType Type;
-		TWeakPtr<FItemSelectorViewModel> OwningViewModel;
+		TWeakPtr<IItemSelectorItemViewModelUtilities> ItemUtilities;
 	};
 
 	class FItemSelectorItemContainerViewModel : public FItemSelectorItemViewModel
 	{
 	public:
-		FItemSelectorItemContainerViewModel(TSharedRef<FItemSelectorViewModel> InOwningViewModel, const ItemType& InItem)
-			: FItemSelectorItemViewModel(InOwningViewModel, EItemSelectorItemViewModelType::Item)
+		FItemSelectorItemContainerViewModel(TSharedRef<IItemSelectorItemViewModelUtilities> InItemUtilities, const ItemType& InItem)
+			: FItemSelectorItemViewModel(InItemUtilities, EItemSelectorItemViewModelType::Item)
 			, Item(InItem)
 		{
 		}
@@ -129,7 +140,7 @@ private:
 
 		virtual bool PassesFilter() const
 		{
-			return GetOwningViewModel()->DoesItemMatchFilterText(Item);
+			return GetItemUtilities()->DoesItemMatchFilterText(Item);
 		}
 
 	private:
@@ -139,8 +150,8 @@ private:
 	class FItemSelectorItemCategoryViewModel : public FItemSelectorItemViewModel
 	{
 	public:
-		FItemSelectorItemCategoryViewModel(TSharedRef<FItemSelectorViewModel> InOwningViewModel, const CategoryType& InCategory)
-			: FItemSelectorItemViewModel(InOwningViewModel, EItemSelectorItemViewModelType::Category)
+		FItemSelectorItemCategoryViewModel(TSharedRef<IItemSelectorItemViewModelUtilities> InItemUtilities, const CategoryType& InCategory)
+			: FItemSelectorItemViewModel(InItemUtilities, EItemSelectorItemViewModelType::Category)
 			, Category(InCategory)
 		{
 		}
@@ -152,21 +163,21 @@ private:
 
 		TSharedRef<FItemSelectorItemCategoryViewModel> AddCategory(const CategoryType& InCategory)
 		{
-			TSharedRef<FItemSelectorItemCategoryViewModel> NewCategoryViewModel = MakeShared<FItemSelectorItemCategoryViewModel>(GetOwningViewModel(), InCategory);
+			TSharedRef<FItemSelectorItemCategoryViewModel> NewCategoryViewModel = MakeShared<FItemSelectorItemCategoryViewModel>(GetItemUtilities(), InCategory);
 			ChildCategoryViewModels.Add(NewCategoryViewModel);
 			return NewCategoryViewModel;
 		}
 
 		void AddItem(const ItemType& InItem)
 		{
-			ChildItemViewModels.Add(MakeShared<FItemSelectorItemContainerViewModel>(GetOwningViewModel(), InItem));
+			ChildItemViewModels.Add(MakeShared<FItemSelectorItemContainerViewModel>(GetItemUtilities(), InItem));
 		}
 
 		TSharedPtr<FItemSelectorItemCategoryViewModel> FindChildCategory(const CategoryType& InCategory)
 		{
 			for (TSharedRef<FItemSelectorItemCategoryViewModel> ChildCategoryViewModel : ChildCategoryViewModels)
 			{
-				if (GetOwningViewModel()->CompareCategoriesForEquality(ChildCategoryViewModel->GetCategory(), InCategory))
+				if (GetItemUtilities()->CompareCategoriesForEquality(ChildCategoryViewModel->GetCategory(), InCategory))
 				{
 					return ChildCategoryViewModel;
 				}
@@ -176,20 +187,20 @@ private:
 
 		void SortChildren()
 		{
-			TSharedRef<FItemSelectorViewModel> Owner = GetOwningViewModel();
-			if (ChildCategoryViewModels.Num() > 0 && Owner->GetOnCompareCategoriesForSorting().IsBound())
+			TSharedRef<IItemSelectorItemViewModelUtilities> Utilities = GetItemUtilities();
+			if (ChildCategoryViewModels.Num() > 0 && Utilities->GetOnCompareCategoriesForSorting().IsBound())
 			{
-				ChildCategoryViewModels.Sort([Owner](const TSharedRef<FItemSelectorItemCategoryViewModel>& CategoryViewModelA, const TSharedRef<FItemSelectorItemCategoryViewModel>& CategoryViewModelB)
+				ChildCategoryViewModels.Sort([Utilities](const TSharedRef<FItemSelectorItemCategoryViewModel>& CategoryViewModelA, const TSharedRef<FItemSelectorItemCategoryViewModel>& CategoryViewModelB)
 				{
-					return Owner->GetOnCompareCategoriesForSorting().Execute(CategoryViewModelA->GetCategory(), CategoryViewModelB->GetCategory());
+					return Utilities->GetOnCompareCategoriesForSorting().Execute(CategoryViewModelA->GetCategory(), CategoryViewModelB->GetCategory());
 				});
 
 			}
-			if (ChildItemViewModels.Num() > 0 && Owner->GetOnCompareItemsForSorting().IsBound())
+			if (ChildItemViewModels.Num() > 0 && Utilities->GetOnCompareItemsForSorting().IsBound())
 			{
-				ChildItemViewModels.Sort([Owner](const TSharedRef<FItemSelectorItemContainerViewModel>& ItemViewModelA, const TSharedRef<FItemSelectorItemContainerViewModel>& ItemViewModelB)
+				ChildItemViewModels.Sort([Utilities](const TSharedRef<FItemSelectorItemContainerViewModel>& ItemViewModelA, const TSharedRef<FItemSelectorItemContainerViewModel>& ItemViewModelB)
 				{
-					return Owner->GetOnCompareItemsForSorting().Execute(ItemViewModelA->GetItem(), ItemViewModelB->GetItem());
+					return Utilities->GetOnCompareItemsForSorting().Execute(ItemViewModelA->GetItem(), ItemViewModelB->GetItem());
 				});
 			}
 
@@ -231,7 +242,7 @@ private:
 		TArray<TSharedRef<FItemSelectorItemContainerViewModel>> ChildItemViewModels;
 	};
 
-	class FItemSelectorViewModel : public TSharedFromThis<FItemSelectorViewModel>
+	class FItemSelectorViewModel : public IItemSelectorItemViewModelUtilities, public TSharedFromThis<FItemSelectorViewModel>
 	{
 	public:
 		FItemSelectorViewModel(TArray<ItemType> InItems, FOnGetCategoriesForItem InOnGetCategoriesForItem, FOnCompareCategoriesForEquality InOnCompareCategoriesForEquality, FOnCompareCategoriesForSorting InOnCompareCategoriesForSorting, FOnCompareItemsForSorting InOnCompareItemsForSorting, FOnDoesItemMatchFilterText InOnDoesItemMatchFilterText)
@@ -299,22 +310,22 @@ private:
 			RootCategoryViewModel->GetChildren(RootTreeCategories);
 		}
 
-		bool DoesItemMatchFilterText(const ItemType& InItem)
+		virtual bool DoesItemMatchFilterText(const ItemType& InItem) const override
 		{
 			return FilterText.IsEmpty() || OnDoesItemMatchFilterText.IsBound() == false || OnDoesItemMatchFilterText.Execute(FilterText, InItem);
 		}
 
-		bool CompareCategoriesForEquality(const CategoryType& CategoryA, const CategoryType& CategoryB)
+		virtual bool CompareCategoriesForEquality(const CategoryType& CategoryA, const CategoryType& CategoryB) const override
 		{
 			return OnCompareCategoriesForEquality.Execute(CategoryA, CategoryB);
 		}
 
-		const FOnCompareCategoriesForSorting& GetOnCompareCategoriesForSorting()
+		virtual const FOnCompareCategoriesForSorting& GetOnCompareCategoriesForSorting() const override
 		{
 			return OnCompareCategoriesForSorting;
 		}
 
-		const FOnCompareItemsForSorting& GetOnCompareItemsForSorting()
+		virtual const FOnCompareItemsForSorting& GetOnCompareItemsForSorting() const override
 		{
 			return OnCompareItemsForSorting;
 		}
