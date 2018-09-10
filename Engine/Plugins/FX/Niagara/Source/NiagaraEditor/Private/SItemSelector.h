@@ -120,8 +120,8 @@ private:
 		}
 
 	private:
-		EItemSelectorItemViewModelType Type;
 		TWeakPtr<IItemSelectorItemViewModelUtilities> ItemUtilities;
+		EItemSelectorItemViewModelType Type;
 	};
 
 	class FItemSelectorItemContainerViewModel : public FItemSelectorItemViewModel
@@ -140,7 +140,7 @@ private:
 
 		virtual bool PassesFilter() const
 		{
-			return GetItemUtilities()->DoesItemMatchFilterText(Item);
+			return this->GetItemUtilities()->DoesItemMatchFilterText(Item);
 		}
 
 	private:
@@ -163,21 +163,21 @@ private:
 
 		TSharedRef<FItemSelectorItemCategoryViewModel> AddCategory(const CategoryType& InCategory)
 		{
-			TSharedRef<FItemSelectorItemCategoryViewModel> NewCategoryViewModel = MakeShared<FItemSelectorItemCategoryViewModel>(GetItemUtilities(), InCategory);
+			TSharedRef<FItemSelectorItemCategoryViewModel> NewCategoryViewModel = MakeShared<FItemSelectorItemCategoryViewModel>(this->GetItemUtilities(), InCategory);
 			ChildCategoryViewModels.Add(NewCategoryViewModel);
 			return NewCategoryViewModel;
 		}
 
 		void AddItem(const ItemType& InItem)
 		{
-			ChildItemViewModels.Add(MakeShared<FItemSelectorItemContainerViewModel>(GetItemUtilities(), InItem));
+			ChildItemViewModels.Add(MakeShared<FItemSelectorItemContainerViewModel>(this->GetItemUtilities(), InItem));
 		}
 
 		TSharedPtr<FItemSelectorItemCategoryViewModel> FindChildCategory(const CategoryType& InCategory)
 		{
 			for (TSharedRef<FItemSelectorItemCategoryViewModel> ChildCategoryViewModel : ChildCategoryViewModels)
 			{
-				if (GetItemUtilities()->CompareCategoriesForEquality(ChildCategoryViewModel->GetCategory(), InCategory))
+				if (this->GetItemUtilities()->CompareCategoriesForEquality(ChildCategoryViewModel->GetCategory(), InCategory))
 				{
 					return ChildCategoryViewModel;
 				}
@@ -187,7 +187,7 @@ private:
 
 		void SortChildren()
 		{
-			TSharedRef<IItemSelectorItemViewModelUtilities> Utilities = GetItemUtilities();
+			TSharedRef<IItemSelectorItemViewModelUtilities> Utilities = this->GetItemUtilities();
 			if (ChildCategoryViewModels.Num() > 0 && Utilities->GetOnCompareCategoriesForSorting().IsBound())
 			{
 				ChildCategoryViewModels.Sort([Utilities](const TSharedRef<FItemSelectorItemCategoryViewModel>& CategoryViewModelA, const TSharedRef<FItemSelectorItemCategoryViewModel>& CategoryViewModelB)
@@ -357,7 +357,9 @@ private:
 		FText FilterText;
 	};
 
-	class SItemSelectorItemContainerTableRow : public STableRow<TSharedRef<FItemSelectorItemViewModel>>
+	typedef STableRow<TSharedRef<FItemSelectorItemViewModel>> SItemSelectorTableRow;
+
+	class SItemSelectorItemContainerTableRow : public SItemSelectorTableRow
 	{
 	public:
 		SLATE_BEGIN_ARGS(SItemSelectorItemContainerTableRow)
@@ -367,12 +369,9 @@ private:
 
 		void Construct(const FArguments& InArgs, const TSharedRef<STableViewBase>& OwnerTree)
 		{
-			STableRow<TSharedRef<FItemSelectorItemViewModel>>::Construct(
-				STableRow<TSharedRef<FItemSelectorItemViewModel>>::FArguments()
-				[
-					InArgs._Content.Widget
-				],
-				OwnerTree);
+			typename SItemSelectorTableRow::FArguments Arguments;
+			Arguments[InArgs._Content.Widget];
+			SItemSelectorTableRow::Construct(Arguments,	OwnerTree);
 		}
 
 		virtual int32 GetIndentLevel() const override
