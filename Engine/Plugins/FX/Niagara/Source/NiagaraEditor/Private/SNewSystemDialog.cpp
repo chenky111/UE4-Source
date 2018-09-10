@@ -68,7 +68,7 @@ void SNewSystemDialog::Construct(const FArguments& InArgs)
 					[
 						SNew(STextBlock)
 						.TextStyle(FNiagaraEditorStyle::Get(), "NiagaraEditor.NewAssetDialog.SubHeaderText")
-						.Text(LOCTEXT("SelectedEmittersLabel", "Emitters to Add to System:"))
+						.Text(LOCTEXT("SelectedEmittersLabel", "Emitters to Add:"))
 					]
 					+ SHorizontalBox::Slot()
 					.HAlign(HAlign_Right)
@@ -184,28 +184,35 @@ FReply SNewSystemDialog::AddEmittersToSelectionButtonClicked()
 			SelectedEmitterBox->AddSlot()
 				.Padding(FMargin(0, 0, 5, 0))
 				[
-					SAssignNew(SelectedEmitterWidget, SHorizontalBox)
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
+					SNew(SBorder)
+					.BorderImage(FNiagaraEditorStyle::Get().GetBrush("NiagaraEditor.NewAssetDialog.SubBorder"))
+					.BorderBackgroundColor(FNiagaraEditorStyle::Get().GetColor("NiagaraEditor.NewAssetDialog.SubBorderColor"))
 					[
-						SNew(STextBlock)
-						.Text(FText::FromName(SelectedEmitterAsset.AssetName))
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					[
-						SNew(SButton)
-						.ButtonStyle(FEditorStyle::Get(), "HoverHintOnly")
-						.OnClicked(this, &SNewSystemDialog::RemoveEmitterFromSelectionButtonClicked, SelectedEmitterAsset)
-						.ToolTipText(LOCTEXT("RemoveSelectedEmitterToolTip", "Remove the selected emitter from the collection\n of emitters to be added to the new system."))
+						SAssignNew(SelectedEmitterWidget, SHorizontalBox)
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						.VAlign(VAlign_Center)
+						.Padding(5, 0, 0, 0)
 						[
 							SNew(STextBlock)
-							.TextStyle(FEditorStyle::Get(), "NormalText.Important")
-							.Font(FEditorStyle::Get().GetFontStyle("FontAwesome.10"))
-							.Text(FText::FromString(FString(TEXT("\xf057"))) /*times-circle*/)
-							.ColorAndOpacity(FLinearColor(.8f, .2f, .2f, 1.0f))
+							.Text(FText::FromName(SelectedEmitterAsset.AssetName))
+						]
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						.VAlign(VAlign_Center)
+						.Padding(2, 0, 0, 0)
+						[
+							SNew(SButton)
+							.ButtonStyle(FEditorStyle::Get(), "HoverHintOnly")
+							.OnClicked(this, &SNewSystemDialog::RemoveEmitterFromSelectionButtonClicked, SelectedEmitterAsset)
+							.ToolTipText(LOCTEXT("RemoveSelectedEmitterToolTip", "Remove the selected emitter from the collection\n of emitters to be added to the new system."))
+							[
+								SNew(STextBlock)
+								//.TextStyle(FEditorStyle::Get(), "NormalText.Important")
+								.Font(FEditorStyle::Get().GetFontStyle("FontAwesome.10"))
+								.Text(FText::FromString(FString(TEXT("\xf057"))) /*times-circle*/)
+								.ColorAndOpacity(FLinearColor(.8f, .2f, .2f, 1.0f))
+							]
 						]
 					]
 				];

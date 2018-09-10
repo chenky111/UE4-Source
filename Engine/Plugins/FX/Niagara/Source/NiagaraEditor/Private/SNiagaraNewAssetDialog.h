@@ -48,9 +48,13 @@ protected:
 private:
 	void OnWindowClosed(const TSharedRef<SWindow>& Window);
 
+	FSlateColor GetOptionBorderColor(int32 OptionIndex) const;
+
 	ECheckBoxState GetOptionCheckBoxState(int32 OptionIndex) const;
 
 	void OptionCheckBoxStateChanged(ECheckBoxState InCheckBoxState, int32 OptionIndex);
+
+	FSlateColor GetOptionTextColor(int32 OptionIndex) const;
 
 	FText GetAssetPickersLabelText() const;
 

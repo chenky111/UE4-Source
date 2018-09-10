@@ -85,7 +85,7 @@ TSharedRef< FSlateStyleSet > FNiagaraEditorStyle::Create()
 
 	// New Asset Dialog
 	FTextBlockStyle NewAssetDialogOptionText = FTextBlockStyle(NormalText)
-		.SetFont(DEFAULT_FONT("Regular", 10));
+		.SetFont(DEFAULT_FONT("Bold", 11));
 
 	Style->Set("NiagaraEditor.NewAssetDialog.OptionText", NewAssetDialogOptionText);
 
@@ -110,6 +110,11 @@ TSharedRef< FSlateStyleSet > FNiagaraEditorStyle::Create()
 		.SetHovered(BOX_CORE_BRUSH("Common/FlatButton", 2.0f / 8.0f, FEditorStyle::GetSlateColor("SelectionColor")))
 		.SetPressed(BOX_CORE_BRUSH("Common/FlatButton", 2.0f / 8.0f, FEditorStyle::GetSlateColor("SelectionColor_Pressed")))
 	);
+
+	Style->Set("NiagaraEditor.NewAssetDialog.SubBorderColor", FLinearColor(FColor(48, 48, 48)));
+	Style->Set("NiagaraEditor.NewAssetDialog.ActiveOptionBorderColor", FLinearColor(FColor(96, 96, 96)));
+
+	Style->Set("NiagaraEditor.NewAssetDialog.SubBorder", new BOX_CORE_BRUSH("Common/GroupBorderLight", FMargin(4.0f / 16.0f)));
 
 	// Emitter Header
 	FTextBlockStyle HeadingText = FTextBlockStyle(NormalText)

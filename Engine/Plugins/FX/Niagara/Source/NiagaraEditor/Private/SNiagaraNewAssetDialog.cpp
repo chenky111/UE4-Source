@@ -48,7 +48,7 @@ void SNiagaraNewAssetDialog::Construct(const FArguments& InArgs, FName InSaveCon
 			[
 				SNew(STextBlock)
 				.TextStyle(FNiagaraEditorStyle::Get(), "NiagaraEditor.NewAssetDialog.HeaderText")
-				.Text(LOCTEXT("OptionsLabel", "Options"))
+				.Text(LOCTEXT("OptionsLabel", "Select an Option"))
 			]
 		]
 
@@ -136,17 +136,23 @@ void SNiagaraNewAssetDialog::Construct(const FArguments& InArgs, FName InSaveCon
 			.Padding(0, 0, 0, OptionIndex < Options.Num() - 1 ? 7 : 0)
 			.AutoHeight()
 			[
-				SNew(SCheckBox)
-				.Style(FCoreStyle::Get(), "RadioButton")
-				.CheckBoxContentUsesAutoWidth(false)
-				.IsChecked(this, &SNiagaraNewAssetDialog::GetOptionCheckBoxState, OptionIndex)
-				.OnCheckStateChanged(this, &SNiagaraNewAssetDialog::OptionCheckBoxStateChanged, OptionIndex)
-				.Content()
+				SNew(SBorder)
+				.BorderImage(FNiagaraEditorStyle::Get().GetBrush("NiagaraEditor.NewAssetDialog.SubBorder"))
+				.BorderBackgroundColor(this, &SNiagaraNewAssetDialog::GetOptionBorderColor, OptionIndex)
 				[
-					SNew(STextBlock)
-					.TextStyle(FNiagaraEditorStyle::Get(), "NiagaraEditor.NewAssetDialog.OptionText")
-					.Text(Option.OptionText)
-					.AutoWrapText(true)
+					SNew(SCheckBox)
+					.Style(FCoreStyle::Get(), "RadioButton")
+					.CheckBoxContentUsesAutoWidth(false)
+					.IsChecked(this, &SNiagaraNewAssetDialog::GetOptionCheckBoxState, OptionIndex)
+					.OnCheckStateChanged(this, &SNiagaraNewAssetDialog::OptionCheckBoxStateChanged, OptionIndex)
+					.Content()
+					[
+						SNew(STextBlock)
+						.TextStyle(FNiagaraEditorStyle::Get(), "NiagaraEditor.NewAssetDialog.OptionText")
+						.ColorAndOpacity(this, &SNiagaraNewAssetDialog::GetOptionTextColor, OptionIndex)
+						.Text(Option.OptionText)
+						.AutoWrapText(true)
+					]
 				]
 			];
 
@@ -186,6 +192,20 @@ const TArray<FAssetData>& SNiagaraNewAssetDialog::GetSelectedAssets() const
 void SNiagaraNewAssetDialog::OnWindowClosed(const TSharedRef<SWindow>& Window)
 {
 	SaveConfig();
+}
+
+FSlateColor SNiagaraNewAssetDialog::GetOptionBorderColor(int32 OptionIndex) const
+{
+	return SelectedOptionIndex == OptionIndex
+		? FNiagaraEditorStyle::Get().GetColor("NiagaraEditor.NewAssetDialog.ActiveOptionBorderColor")
+		: FSlateColor(FLinearColor::Transparent);
+}
+
+FSlateColor SNiagaraNewAssetDialog::GetOptionTextColor(int32 OptionIndex) const
+{
+	return SelectedOptionIndex == OptionIndex
+		? FSlateColor(FLinearColor::White)
+		: FSlateColor::UseForeground();
 }
 
 ECheckBoxState SNiagaraNewAssetDialog::GetOptionCheckBoxState(int32 OptionIndex) const
@@ -243,7 +263,7 @@ void SNiagaraNewAssetDialog::SaveConfig()
 {
 	FNiagaraNewAssetDialogConfig Config;
 	Config.SelectedOptionIndex = SelectedOptionIndex;
-	Config.WindowSize = GetClientSizeInScreen();
+	Config.WindowSize = GetClientSizeInScreen() / GetDPIScaleFactor();
 
 	GetMutableDefault<UNiagaraEditorSettings>()->SetNewAssetDialogConfig(SaveConfigKey, Config);
 }
