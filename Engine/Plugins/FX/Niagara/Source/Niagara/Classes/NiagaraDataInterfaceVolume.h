@@ -88,14 +88,10 @@ public:
 	virtual int32 PerInstanceDataSize()const override { return sizeof(FNDIVolume_InstanceData); }
 	//UNiagaraDataInterface Interface End
 
-	template<typename XType, typename YType/*, typename ZType*/>
 	void SampleVolumeTexture(FVectorVMContext& Context);
 
-	template<typename XType, typename YType/*, typename ZType*/>
 	void WriteToVolumeTexture(FVectorVMContext& Context);
 
-
-	template<typename XType, typename YType/*, typename ZType*/>
 	void ReadFromClosestVolumeCellTexture(FVectorVMContext& Context);
 
 	virtual bool Equals(const UNiagaraDataInterface* Other) const override;

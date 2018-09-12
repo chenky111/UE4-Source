@@ -381,9 +381,9 @@ void UNiagaraDataInterfaceVolume::GetFunctions(TArray<FNiagaraFunctionSignature>
 	}
 }
 
-DEFINE_NDI_RAW_FUNC_BINDER(UNiagaraDataInterfaceVolume, SampleVolumeTexture);
-DEFINE_NDI_RAW_FUNC_BINDER(UNiagaraDataInterfaceVolume, WriteToVolumeTexture);
-DEFINE_NDI_RAW_FUNC_BINDER(UNiagaraDataInterfaceVolume, ReadFromClosestVolumeCellTexture);
+DEFINE_NDI_DIRECT_FUNC_BINDER(UNiagaraDataInterfaceVolume, SampleVolumeTexture);
+DEFINE_NDI_DIRECT_FUNC_BINDER(UNiagaraDataInterfaceVolume, WriteToVolumeTexture);
+DEFINE_NDI_DIRECT_FUNC_BINDER(UNiagaraDataInterfaceVolume, ReadFromClosestVolumeCellTexture);
 void UNiagaraDataInterfaceVolume::GetVMExternalFunction(const FVMExternalFunctionBindingInfo& BindingInfo, void* InstanceData, FVMExternalFunction &OutFunc)
 {
 	// Whatever are we going to do on CPU?
@@ -392,46 +392,43 @@ void UNiagaraDataInterfaceVolume::GetVMExternalFunction(const FVMExternalFunctio
 	if (BindingInfo.Name == SampleVolumeName)
 	{
 		//check(BindingInfo.GetNumInputs() == 3 && BindingInfo.GetNumOutputs() == 3);
-		TNDIParamBinder<0, float, TNDIParamBinder<1, float, NDI_RAW_FUNC_BINDER(UNiagaraDataInterfaceVolume, SampleVolumeTexture)>>::Bind(this, BindingInfo, InstanceData, OutFunc);
+		NDI_FUNC_BINDER(UNiagaraDataInterfaceVolume, SampleVolumeTexture)::Bind(this, OutFunc);
 	}
 	else if(BindingInfo.Name == WriteToVolumeName)
 	{
 		//check(BindingInfo.GetNumInputs() == 6 && BindingInfo.GetNumOutputs() == 3);
-		TNDIParamBinder<0, float, TNDIParamBinder<1, float, NDI_RAW_FUNC_BINDER(UNiagaraDataInterfaceVolume, WriteToVolumeTexture)>>::Bind(this, BindingInfo, InstanceData, OutFunc);
+		NDI_FUNC_BINDER(UNiagaraDataInterfaceVolume, WriteToVolumeTexture)::Bind(this, OutFunc);
 	}
 	else if (BindingInfo.Name == ReadFromClosestVolumeCellName)
 	{
 		//check(BindingInfo.GetNumInputs() == 6 && BindingInfo.GetNumOutputs() == 3);
-		TNDIParamBinder<0, float, TNDIParamBinder<1, float, NDI_RAW_FUNC_BINDER(UNiagaraDataInterfaceVolume, ReadFromClosestVolumeCellTexture)>>::Bind(this, BindingInfo, InstanceData, OutFunc);
+		NDI_FUNC_BINDER(UNiagaraDataInterfaceVolume, ReadFromClosestVolumeCellTexture)::Bind(this, OutFunc);
 	}
 
 
 }
 
 
-template<typename XType, typename YType/*, typename ZType*/>
 void UNiagaraDataInterfaceVolume::WriteToVolumeTexture(FVectorVMContext& Context)
 {
 	// Do we even want this func?
 }
 
-template<typename XType, typename YType/*, typename ZType*/>
 void UNiagaraDataInterfaceVolume::ReadFromClosestVolumeCellTexture(FVectorVMContext& Context)
 {
 	// Do we even want this func?
 }
 
-template<typename XType, typename YType/*, typename ZType*/>
 void UNiagaraDataInterfaceVolume::SampleVolumeTexture(FVectorVMContext& Context)
 {
 	// Do we even want this func?
 
-	XType XParam(Context);
-	YType YParam(Context);
+	VectorVM::FExternalFuncInputHandler<float> XParam(Context);
+	VectorVM::FExternalFuncInputHandler<float> YParam(Context);
 	//ZType ZParam(Context);
-	FRegisterHandler<float> OutSampleR(Context);
-	FRegisterHandler<float> OutSampleG(Context);
-	FRegisterHandler<float> OutSampleB(Context);
+	VectorVM::FExternalFuncRegisterHandler<float> OutSampleR(Context);
+	VectorVM::FExternalFuncRegisterHandler<float> OutSampleG(Context);
+	VectorVM::FExternalFuncRegisterHandler<float> OutSampleB(Context);
 
 	//if (CPUTextureData.GetAllocatedSize() == 0 /*|| Texture == nullptr*/)
 	//{
