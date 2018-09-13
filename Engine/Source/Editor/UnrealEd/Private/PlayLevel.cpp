@@ -454,8 +454,8 @@ void UEditorEngine::EndPlayMap()
 
 	// Clean up any PIE world objects
 	{
-		// The trans buffer should never have a PIE object in it.  If it does though, as a s
-		if( GEditor->Trans->ContainsPieObject() )
+		// The trans buffer should never have a PIE object in it.  If it does though, reset it, which may happen sometimes with selection objects
+		if( GEditor->Trans->ContainsPieObjects() )
 		{
 			GEditor->ResetTransaction( NSLOCTEXT("UnrealEd", "TransactionContainedPIEObject", "A PIE object was in the transaction buffer and had to be destroyed") );
 		}
@@ -2922,7 +2922,7 @@ UGameInstance* UEditorEngine::CreatePIEGameInstance(int32 InPIEInstance, bool bI
 	GameInstanceParams.bSimulateInEditor = bInSimulateInEditor;
 	GameInstanceParams.bStartInSpectatorMode = bStartInSpectatorMode;
 	GameInstanceParams.bRunAsDedicated = bRunAsDedicated;
-
+	GameInstanceParams.WorldFeatureLevel = DefaultWorldFeatureLevel;
 	
 	const FGameInstancePIEResult InitializeResult = GameInstance->InitializeForPlayInEditor(InPIEInstance, GameInstanceParams);
 	if (!InitializeResult.IsSuccess())

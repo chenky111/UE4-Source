@@ -771,8 +771,20 @@ void FStaticMeshRenderData::Serialize(FArchive& Ar, UStaticMesh* Owner, bool bCo
 	// Inline the distance field derived data for cooked builds
 	if (bCooked)
 	{
-		FStripDataFlags StripFlags( Ar );
-		if ( !StripFlags.IsDataStrippedForServer() )
+		// Defined class flags for possible stripping
+		const uint8 DistanceFieldDataStripFlag = 1;
+
+		// Actual flags used during serialization
+		uint8 ClassDataStripFlags = 0;
+
+#if WITH_EDITOR
+		const bool bWantToStripDistanceFieldData = Ar.IsCooking() && (!Ar.CookingTarget()->SupportsFeature(ETargetPlatformFeatures::DeferredRendering) || !Ar.CookingTarget()->SupportsFeature(ETargetPlatformFeatures::DistanceFieldAO));
+
+		ClassDataStripFlags |= (bWantToStripDistanceFieldData ? DistanceFieldDataStripFlag : 0);
+#endif
+
+		FStripDataFlags StripFlags(Ar, ClassDataStripFlags);
+		if (!StripFlags.IsDataStrippedForServer() && !StripFlags.IsClassDataStripped(DistanceFieldDataStripFlag))
 		{
 			if (Ar.IsSaving())
 			{
@@ -783,13 +795,7 @@ void FStaticMeshRenderData::Serialize(FArchive& Ar, UStaticMesh* Owner, bool bCo
 			{
 				FStaticMeshLODResources& LOD = LODResources[ResourceIndex];
 				
-				bool bStripDistanceFields = false;
-				if (Ar.IsCooking())
-				{
-					bStripDistanceFields = !Ar.CookingTarget()->SupportsFeature(ETargetPlatformFeatures::DeferredRendering);
-				}
-				
-				bool bValid = (LOD.DistanceFieldData != NULL) && !bStripDistanceFields;
+				bool bValid = (LOD.DistanceFieldData != NULL);
 
 				Ar << bValid;
 
@@ -3158,6 +3164,34 @@ bool UStaticMesh::RemoveUVChannel(int32 LODIndex, int32 UVChannelIndex)
 		}
 	}
 	return false;
+}
+
+bool UStaticMesh::SetUVChannel(int32 LODIndex, int32 UVChannelIndex, const TArray<FVector2D>& TexCoords)
+{
+	FMeshDescription* MeshDescription = GetOriginalMeshDescription(LODIndex);
+	if (!MeshDescription)
+	{
+		return false;
+	}
+
+	if (TexCoords.Num() < MeshDescription->VertexInstances().Num())
+	{
+		return false;
+	}
+
+	Modify();
+
+	int32 TextureCoordIndex = 0;
+	TMeshAttributesRef<FVertexInstanceID, FVector2D> UVs = MeshDescription->VertexInstanceAttributes().GetAttributesRef<FVector2D>(MeshAttribute::VertexInstance::TextureCoordinate);
+	for (const FVertexInstanceID& VertexInstanceID : MeshDescription->VertexInstances().GetElementIDs())
+	{
+		UVs.Set(VertexInstanceID, UVChannelIndex, TexCoords[TextureCoordIndex++]);
+	}
+
+	CommitOriginalMeshDescription(LODIndex);
+	PostEditChange();
+
+	return true;
 }
 
 #endif

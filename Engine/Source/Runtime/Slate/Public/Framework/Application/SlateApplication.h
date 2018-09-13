@@ -646,6 +646,9 @@ public:
 	/** Gets a delegate that is invoked in the editor when a windows dpi scale changes or when a widget window may have changed and DPI scale info needs to be checked */
 	DECLARE_EVENT_OneParam(FSlateApplication, FOnWindowDPIScaleChanged, TSharedRef<SWindow>);
 	FOnWindowDPIScaleChanged& OnWindowDPIScaleChanged() { return OnWindowDPIScaleChangedEvent; }
+
+	/** Event used to signal that a DPI change is about to happen */
+	FOnWindowDPIScaleChanged& OnSystemSignalsDPIChanged() { return OnSignalSystemDPIChangedEvent; }
 #endif //WITH_EDITOR
 
 	/**
@@ -866,6 +869,12 @@ public:
 	void EnableMenuAnimations( const bool bEnableAnimations );
 
 	void SetPlatformApplication(const TSharedRef<class GenericApplication>& InPlatformApplication);
+
+	/**
+	 * Replace the current platform application with a custom version.
+	 * @param InPlatformApplication - The replacement platform application.
+	 */
+	void OverridePlatformApplication(TSharedPtr<class GenericApplication> InPlatformApplication);
 
 	/** Set the global application icon */
 	void SetAppIcon(const FSlateBrush* const InAppIcon);
@@ -1326,6 +1335,8 @@ public:
 	void SetAllowTooltips(bool bCanShow);
 	bool GetAllowTooltips() const;
 	
+	bool IsRenderingOffScreen() const { return bRenderOffScreen; }
+
 public:
 
 	//~ Begin FSlateApplicationBase Interface
@@ -1446,6 +1457,7 @@ public:
 	virtual void OnResizingWindow( const TSharedRef< FGenericWindow >& PlatformWindow ) override;
 	virtual bool BeginReshapingWindow( const TSharedRef< FGenericWindow >& PlatformWindow ) override;
 	virtual void FinishedReshapingWindow( const TSharedRef< FGenericWindow >& PlatformWindow ) override;
+	virtual void SignalSystemDPIChanged(const TSharedRef<FGenericWindow>& Window) override;
 	virtual void HandleDPIScaleChanged(const TSharedRef<FGenericWindow>& Window) override;
 	virtual void OnMovedWindow( const TSharedRef< FGenericWindow >& PlatformWindow, const int32 X, const int32 Y ) override;
 	virtual bool OnWindowActivationChanged( const TSharedRef< FGenericWindow >& PlatformWindow, const EWindowActivation ActivationType ) override;
@@ -1707,6 +1719,9 @@ private:
 
 	/** true if any slate window is currently active (not just top level windows) */
 	bool bSlateWindowActive;
+
+	/** true if rendering windows even when they are set to invisible */
+	bool bRenderOffScreen;
 
 	/** Application-wide scale for supporting monitors of varying pixel density */
 	float Scale;
@@ -2212,6 +2227,11 @@ private:
 	 * User Function cannot mark the input as handled.
 	 */
 	FOnApplicationMousePreInputButtonDownListener OnApplicationMousePreInputButtonDownListenerEvent;
+
+	/**
+	* Called before the dpi scale of a particular window is about to changed
+	*/
+	FOnWindowDPIScaleChanged OnSignalSystemDPIChangedEvent;
 
 	/**
 	 * Called when an editor window dpi scale is changed
