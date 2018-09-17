@@ -67,6 +67,10 @@ public:
 	UPROPERTY()
 	FVector2D Resolution2D;
 
+	UPROPERTY(EditAnywhere, Category = "Velocity Settings", meta = (DisplayName = "Offset"))
+	FVector VelocityOffset;
+
+
 	void SetDimensions(ENiagaraVolumeDimensions Dims);
 
 	//UObject Interface

@@ -506,6 +506,21 @@ struct FNiagaraVariableAttributeBinding
 	FNiagaraVariable DefaultValueIfNonExistent;
 };
 
+USTRUCT()
+struct FNiagaraVariableDataInterfaceBinding
+{
+	GENERATED_USTRUCT_BODY();
+
+	FNiagaraVariableDataInterfaceBinding() {}
+	FNiagaraVariableDataInterfaceBinding(const FNiagaraVariable& InVar) : BoundVariable(InVar)
+	{
+		check(InVar.IsDataInterface() == true);
+	}
+
+	UPROPERTY()
+	FNiagaraVariable BoundVariable;
+};
+
 
 namespace FNiagaraUtilities
 {
