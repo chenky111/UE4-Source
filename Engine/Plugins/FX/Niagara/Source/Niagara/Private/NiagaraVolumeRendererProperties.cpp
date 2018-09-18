@@ -99,10 +99,10 @@ void UNiagaraVolumeRendererProperties::FixMaterial(UMaterial* InMaterial)
 {
 }
 
-#undef LOCTEXT_NAMESPACE
 
 #endif // WITH_EDITORONLY_DATA
 
 
+#undef LOCTEXT_NAMESPACE
 
 

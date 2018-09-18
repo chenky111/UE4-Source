@@ -388,8 +388,9 @@ namespace VectorVM
 	public:
 		FORCEINLINE FExternalFuncRegisterHandler(FVectorVMContext& Context)
 			: RegisterIndex(DecodeU16(Context) & VVM_EXT_FUNC_INPUT_LOC_MASK)
-			, Register(IsValid() ? (T*)Context.RegisterTable[RegisterIndex] : &Dummy)
 			, AdvanceOffset(IsValid() ? 1 : 0)
+			, Register(IsValid() ? (T*)Context.RegisterTable[RegisterIndex] : &Dummy)
+
 		{}
 		FORCEINLINE bool IsValid() const { return RegisterIndex != (uint16)VVM_EXT_FUNC_INPUT_LOC_MASK; }
 

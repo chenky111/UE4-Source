@@ -17,14 +17,15 @@ extern int32 GbNiagaraParallelEmitterRenderers;
 
 
 
+#define LOCTEXT_NAMESPACE "NiagaraRendererVolumes"
 
-class FNiagaraMeshCollectorResourcesMesh : public FOneFrameResource
+class FNiagaraVolumeMeshCollectorResourcesMesh : public FOneFrameResource
 {
 public:
 	FNiagaraMeshVertexFactory VertexFactory;
 	FNiagaraMeshUniformBufferRef UniformBuffer;
 
-	virtual ~FNiagaraMeshCollectorResourcesMesh()
+	virtual ~FNiagaraVolumeMeshCollectorResourcesMesh()
 	{
 		VertexFactory.ReleaseResource();
 	}
@@ -296,3 +297,6 @@ const TArray<FNiagaraVariable>& NiagaraRendererVolumes::GetOptionalAttributes()
 }
 
 #endif
+
+
+#undef LOCTEXT_NAMESPACE
