@@ -620,7 +620,7 @@ bool FNiagaraSystemSimulation::Tick(float DeltaSeconds)
 	{
 		SCOPE_CYCLE_COUNTER(STAT_NiagaraSystemSim_PostSimulate);
 
-		if (GbParallelSystemPostTick)
+		if (GbParallelSystemPostTick && FApp::ShouldUseThreadingForPerformance())
 		{
 			ParallelFor(SystemInstances.Num(),
 				[&](int32 SystemIndex)
