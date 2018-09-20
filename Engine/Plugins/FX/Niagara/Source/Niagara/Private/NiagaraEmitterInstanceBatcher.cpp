@@ -32,11 +32,12 @@ void NiagaraEmitterInstanceBatcher::Queue(FNiagaraComputeExecutionContext *InCon
 			uint32, QueueIndex, CurQueueIndex,
 			FNiagaraComputeExecutionContext*, ExecContext, InContext,
 			{
+				const uint32 QueueIndexMask = (1 << QueueIndex);
 				//Don't queue the same context for execution multiple times. TODO: possibly try to combine/accumulate the tick info if we happen to have > 1 before it's executed.
-				if (!ExecContext->bPendingExecution)
+				if (!(ExecContext->PendingExecutionQueueMask & QueueIndexMask))
 				{
 					Queue[QueueIndex].Add(ExecContext);
-					ExecContext->bPendingExecution = true;
+					ExecContext->PendingExecutionQueueMask |= QueueIndexMask;
 				}
 			});
 }
@@ -58,12 +59,20 @@ void NiagaraEmitterInstanceBatcher::ExecuteAll(FRHICommandListImmediate &RHICmdL
 {
 	SCOPED_DRAW_EVENT(RHICmdList, NiagaraEmitterInstanceBatcher_ExecuteAll);
 
-	TArray<FNiagaraComputeExecutionContext*> &WorkQueue = SimulationQueue[CurQueueIndex ^ 0x1];
+	const uint32 TickedQueueIndex = (CurQueueIndex ^ 0x1);
+	const uint32 TickedQueueIndexMask = (1 << TickedQueueIndex);
+
+	TArray<FNiagaraComputeExecutionContext*> &WorkQueue = SimulationQueue[TickedQueueIndex];
 	for (FNiagaraComputeExecutionContext *Context : WorkQueue)
 	{
-		// need to call RenderThreadInit on data interfaces
-		//ExecuteSingle(Context, RHICmdList);
-		TickSingle(Context, RHICmdList, ViewUniformBuffer);
+		if (Context)
+		{
+			// need to call RenderThreadInit on data interfaces
+			//ExecuteSingle(Context, RHICmdList);
+			TickSingle(Context, RHICmdList, ViewUniformBuffer);
+			Context->PendingExecutionQueueMask &= ~TickedQueueIndexMask;
+		}
+
 	}
 	WorkQueue.Empty();
 }
@@ -74,7 +83,6 @@ void NiagaraEmitterInstanceBatcher::TickSingle(FNiagaraComputeExecutionContext *
 
 	check(IsInRenderingThread());
 	Context->MainDataSet->Tick();
-	Context->bPendingExecution = false;
 
 	FNiagaraComputeExecutionContext::TickCounter++;
 

@@ -99,7 +99,7 @@ struct FNiagaraComputeExecutionContext
 		, PerInstanceData(nullptr)
 		, PerInstanceDataSize(0)
 		, PerInstanceDataInterfaceOffsets(nullptr)
-		, bPendingExecution(0)
+		, PendingExecutionQueueMask(0)
 	{
 	}
 
@@ -114,7 +114,7 @@ struct FNiagaraComputeExecutionContext
 	void Reset()
 	{
 		AccumulatedSpawnRate = 0;
-		bPendingExecution = 0;
+		PendingExecutionQueueMask = 0;
 		if (GPUDataReadback)
 		{
 			delete GPUDataReadback;
@@ -215,8 +215,8 @@ struct FNiagaraComputeExecutionContext
 	uint32 PerInstanceDataSize; // Size of data stored on parent system instance in bytes
 	TMap<TWeakObjectPtr<UNiagaraDataInterface>, int32>* PerInstanceDataInterfaceOffsets;
 
-	/** Ensures we only enqueue each context once before they're dispatched. */
-	uint32 bPendingExecution : 1;
+	/** Ensures we only enqueue each context once per queue before they're dispatched. See SIMULATION_QUEUE_COUNT */
+	uint32 PendingExecutionQueueMask;
 
 
 };
