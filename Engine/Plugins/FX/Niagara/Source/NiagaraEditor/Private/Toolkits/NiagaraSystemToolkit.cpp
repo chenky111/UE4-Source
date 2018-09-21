@@ -998,6 +998,7 @@ void FNiagaraSystemToolkit::UpdateOriginalEmitter()
 		// overwrite the original script in place by constructing a new one with the same name
 		Emitter = (UNiagaraEmitter*)StaticDuplicateObject(EditableEmitter, Emitter->GetOuter(),
 			Emitter->GetFName(), RF_AllFlags, Emitter->GetClass());
+		Emitter->PostEditChange();
 
 		// Record the last synced change id to detect future changes.
 		LastSyncedEmitterChangeId = EditableEmitter->GetChangeId();
@@ -1020,6 +1021,7 @@ void FNiagaraSystemToolkit::UpdateOriginalEmitter()
 	{
 		Emitter->MarkPackageDirty();
 		Emitter->ThumbnailImage = (UTexture2D*)StaticDuplicateObject(EditableEmitter->ThumbnailImage, Emitter);
+		Emitter->PostEditChange();
 		bEmitterThumbnailUpdated = false;
 	}
 }
