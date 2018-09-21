@@ -4424,6 +4424,10 @@ void FFXSystem::InitGPUResources()
 			FParticleSimulationResources *, ParticleSimulationResources, ParticleSimulationResources,
 			{
 				ParticleSimulationResources->ParticleSortBuffers.InitRHI();
+
+				// Initialize SortedVertexBuffer to a valid resource, ensuring it can be used in GetDynamicMeshElementsEmitter() 
+				ParticleSimulationResources->SortedVertexBuffer.VertexBufferRHI = ParticleSimulationResources->ParticleSortBuffers.GetSortedVertexBufferRHI(0);
+				ParticleSimulationResources->SortedVertexBuffer.VertexBufferSRV = ParticleSimulationResources->ParticleSortBuffers.GetSortedVertexBufferSRV(0);
 			}
 		);
 	}
