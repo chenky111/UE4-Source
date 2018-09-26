@@ -280,7 +280,7 @@ void USynthComponent::OnUnregister()
 bool USynthComponent::IsReadyForOwnerToAutoDestroy() const
 {
 	const bool bIsAudioComponentReadyForDestroy = !AudioComponent || (AudioComponent && !AudioComponent->IsPlaying());
-	const bool bIsSynthSoundReadyForDestroy = !Synth || !Synth->GetNumSoundsActive();
+	const bool bIsSynthSoundReadyForDestroy = !Synth || !Synth->IsGenerating();
 	return bIsAudioComponentReadyForDestroy && bIsSynthSoundReadyForDestroy;
 }
 
@@ -355,9 +355,11 @@ void USynthComponent::Start()
 	// We will also ensure that this synth was initialized before attempting to play.
 	Initialize();
 
+	// If there is no Synth USoundBase, we can't start. This can happen if start is called in a cook, a server, or 
+	// if the audio engine is set to "noaudio".
+	// TODO: investigate if this should be handled elsewhere before this point
 	if (Synth == nullptr)
 	{
-		UE_LOG(LogAudio, Warning, TEXT("Warning: SynthComponent failed to start due to failiure in initialization."));
 		return;
 	}
 
