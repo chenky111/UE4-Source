@@ -2061,11 +2061,11 @@ void FDynamicRHI::UnlockIndexBuffer_RenderThread(class FRHICommandListImmediate&
 
 void* FDynamicRHI::RHILockStagingBuffer(FStagingBufferRHIParamRef StagingBuffer, uint32 Offset, uint32 SizeRHI)
 {
-	return RHILockVertexBuffer(StagingBuffer->GetBackingBuffer(), Offset, SizeRHI, RLM_ReadOnly);
+	return GDynamicRHI->RHILockVertexBuffer(StagingBuffer->GetBackingBuffer(), Offset, SizeRHI, RLM_ReadOnly);
 }
 void FDynamicRHI::RHIUnlockStagingBuffer(FStagingBufferRHIParamRef StagingBuffer)
 {
-	RHIUnlockVertexBuffer(StagingBuffer->GetBackingBuffer());
+	GDynamicRHI->RHIUnlockVertexBuffer(StagingBuffer->GetBackingBuffer());
 }
 
 void* FDynamicRHI::LockStagingBuffer_RenderThread(class FRHICommandListImmediate& RHICmdList, FStagingBufferRHIParamRef StagingBuffer, uint32 Offset, uint32 SizeRHI)
@@ -2074,7 +2074,7 @@ void* FDynamicRHI::LockStagingBuffer_RenderThread(class FRHICommandListImmediate
 	check(IsInRenderingThread());
 
 	FScopedRHIThreadStaller StallRHIThread(RHICmdList);
-	return RHILockStagingBuffer(StagingBuffer, Offset, SizeRHI);
+	return GDynamicRHI->RHILockStagingBuffer(StagingBuffer, Offset, SizeRHI);
 }
 void FDynamicRHI::UnlockStagingBuffer_RenderThread(class FRHICommandListImmediate& RHICmdList, FStagingBufferRHIParamRef StagingBuffer)
 {
@@ -2082,7 +2082,7 @@ void FDynamicRHI::UnlockStagingBuffer_RenderThread(class FRHICommandListImmediat
 	check(IsInRenderingThread());
 	
 	FScopedRHIThreadStaller StallRHIThread(RHICmdList);
-	RHIUnlockStagingBuffer(StagingBuffer);
+	GDynamicRHI->RHIUnlockStagingBuffer(StagingBuffer);
 }
 
 FTexture2DRHIRef FDynamicRHI::AsyncReallocateTexture2D_RenderThread(class FRHICommandListImmediate& RHICmdList, FTexture2DRHIParamRef Texture2D, int32 NewMipCount, int32 NewSizeX, int32 NewSizeY, FThreadSafeCounter* RequestStatus)
@@ -2428,12 +2428,3 @@ void FDynamicRHI::RHICopySubTextureRegion_RenderThread(class FRHICommandListImme
 	FScopedRHIThreadStaller StallRHIThread(RHICmdList);
 	return GDynamicRHI->RHICopySubTextureRegion(SourceTexture, DestinationTexture, SourceBox, DestinationBox);
 }
-
-void FDynamicRHI::RHIEnqueueStagedRead(FStagingBufferRHIParamRef StagingBuffer, FGPUFenceRHIParamRef Fence, uint32 Offset, uint32 NumBytes)
-{
-	IRHICommandContext* Context = RHIGetDefaultContext();
-	check(Context);
-	check(Fence);
-	Context->RHIInsertGPUFence(Fence);
-}
-
