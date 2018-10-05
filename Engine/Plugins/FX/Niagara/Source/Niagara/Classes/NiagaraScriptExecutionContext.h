@@ -100,6 +100,14 @@ struct FNiagaraComputeExecutionContext
 		, PerInstanceDataSize(0)
 		, PerInstanceDataInterfaceOffsets(nullptr)
 		, PendingExecutionQueueMask(0)
+#if WITH_EDITORONLY_DATA
+		, GPUDebugDataReadbackFloat(nullptr)
+		, GPUDebugDataReadbackInt(nullptr)
+		, GPUDebugDataReadbackCounts(nullptr)
+		, GPUDebugDataCurrBufferIdx(0xFFFFFFFF)
+		, GPUDebugDataFloatSize(0)
+		, GPUDebugDataIntSize(0)
+#endif	  
 	{
 	}
 
@@ -108,7 +116,26 @@ struct FNiagaraComputeExecutionContext
 		if (GPUDataReadback)
 		{
 			delete GPUDataReadback;
+			GPUDataReadback = nullptr;
 		}
+
+#if WITH_EDITORONLY_DATA
+		if (GPUDebugDataReadbackFloat)
+		{
+			delete GPUDebugDataReadbackFloat;
+			GPUDebugDataReadbackFloat = nullptr;
+		}
+		if (GPUDebugDataReadbackInt)
+		{
+			delete GPUDebugDataReadbackInt;
+			GPUDebugDataReadbackInt = nullptr;
+		}
+		if (GPUDebugDataReadbackCounts)
+		{
+			delete GPUDebugDataReadbackCounts;
+			GPUDebugDataReadbackCounts = nullptr;
+		}
+#endif
 	}
 
 	void Reset()
@@ -120,6 +147,24 @@ struct FNiagaraComputeExecutionContext
 			delete GPUDataReadback;
 		}
 		GPUDataReadback = nullptr;
+
+#if WITH_EDITORONLY_DATA
+		if (GPUDebugDataReadbackFloat)
+		{
+			delete GPUDebugDataReadbackFloat;
+			GPUDebugDataReadbackFloat = nullptr;
+		}
+		if (GPUDebugDataReadbackInt)
+		{
+			delete GPUDebugDataReadbackInt;
+			GPUDebugDataReadbackInt = nullptr;
+		}
+		if (GPUDebugDataReadbackCounts)
+		{
+			delete GPUDebugDataReadbackCounts;
+			GPUDebugDataReadbackCounts = nullptr;
+		}
+#endif
 	}
 
 	void InitParams(UNiagaraScript* InGPUComputeScript, UNiagaraScript* InSpawnScript, UNiagaraScript *InUpdateScript, ENiagaraSimTarget InSimTarget, const FString& InDebugSimName)
@@ -219,4 +264,13 @@ struct FNiagaraComputeExecutionContext
 	uint32 PendingExecutionQueueMask;
 
 
+#if WITH_EDITORONLY_DATA
+	mutable FRHIGPUMemoryReadback *GPUDebugDataReadbackFloat;
+	mutable FRHIGPUMemoryReadback *GPUDebugDataReadbackInt;
+	mutable FRHIGPUMemoryReadback *GPUDebugDataReadbackCounts;
+	mutable int32 GPUDebugDataCurrBufferIdx;
+	mutable uint32 GPUDebugDataFloatSize;
+	mutable uint32 GPUDebugDataIntSize;
+	mutable TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfo;
+#endif
 };

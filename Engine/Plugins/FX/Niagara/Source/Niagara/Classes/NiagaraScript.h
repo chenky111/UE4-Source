@@ -72,6 +72,8 @@ struct FNiagaraScriptDebuggerInfo
 	FNiagaraScriptDebuggerInfo();
 	FNiagaraScriptDebuggerInfo(FName InName, ENiagaraScriptUsage InUsage, const FGuid& InUsageId);
 
+	bool bWaitForGPU;
+
 	FName HandleName;
 
 	ENiagaraScriptUsage Usage;
@@ -83,6 +85,8 @@ struct FNiagaraScriptDebuggerInfo
 	FNiagaraDataSet Frame;
 
 	FNiagaraParameterStore Parameters;
+
+	TAtomic<bool> bWritten;
 };
 
 

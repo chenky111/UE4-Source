@@ -139,6 +139,8 @@ bool FNiagaraSystemInstance::RequestCapture(const FGuid& RequestId)
 		return false;
 	}
 
+	UE_LOG(LogNiagara, Warning, TEXT("Capture requested!"));
+
 	bWasSoloPriorToCaptureRequest = bSolo;
 	SetSolo(true);
 
@@ -156,7 +158,10 @@ bool FNiagaraSystemInstance::RequestCapture(const FGuid& RequestId)
 
 		for (UNiagaraScript* Script : Scripts)
 		{
-			TempCaptureHolder->Add(MakeShared<FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe>(Handle.GetIdName(), Script->GetUsage(), Script->GetUsageId()));
+			TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfoPtr = MakeShared<FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe>(Handle.GetIdName(), Script->GetUsage(), Script->GetUsageId());
+			DebugInfoPtr->bWritten = false;
+
+			TempCaptureHolder->Add(DebugInfoPtr);
 		}
 	}
 	CapturedFrames.Add(RequestId, TempCaptureHolder);
@@ -190,6 +195,27 @@ bool FNiagaraSystemInstance::QueryCaptureResults(const FGuid& RequestId, TArray<
 		TArray<TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe>>* Array = FoundEntry->Get();
 		OutCaptureResults.SetNum(Array->Num());
 
+		bool bWaitForGPU = false;
+		{
+			for (int32 i = 0; i < FoundEntry->Get()->Num(); i++)
+			{
+				if ((*Array)[i]->bWaitForGPU && (*Array)[i]->bWritten == false)
+				{
+					bWaitForGPU = true;
+				}
+			}
+			
+			if (bWaitForGPU)
+			{
+				for (TSharedRef<FNiagaraEmitterInstance> CachedEmitter : Emitters)
+				{
+					CachedEmitter->WaitForDebugInfo();
+				}
+				return false;
+			}
+		}
+
+
 		for (int32 i = 0; i < FoundEntry->Get()->Num(); i++)
 		{
 			OutCaptureResults[i] = (*Array)[i];
@@ -206,7 +232,7 @@ TArray<TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe>>* FNia
 	return CurrentCapture.Get();
 }
 
-FNiagaraScriptDebuggerInfo* FNiagaraSystemInstance::GetActiveCaptureWrite(const FName& InHandleName, ENiagaraScriptUsage InUsage, const FGuid& InUsageId)
+TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> FNiagaraSystemInstance::GetActiveCaptureWrite(const FName& InHandleName, ENiagaraScriptUsage InUsage, const FGuid& InUsageId)
 {
 	if (CurrentCapture.IsValid())
 	{
@@ -217,7 +243,7 @@ FNiagaraScriptDebuggerInfo* FNiagaraSystemInstance::GetActiveCaptureWrite(const 
 
 		if (FoundEntry != nullptr)
 		{
-			return FoundEntry->Get();
+			return *FoundEntry;
 		}
 	}
 	return nullptr;

@@ -830,11 +830,29 @@ void FNiagaraEmitterInstance::PreTick()
 	ParticleDataSet->SetIDAcquireTag(TickCount);
 }
 
+bool FNiagaraEmitterInstance::WaitForDebugInfo()
+{
+	if (CachedEmitter->SimTarget == ENiagaraSimTarget::GPUComputeSim)
+	{
+		
+		FNiagaraComputeExecutionContext* DebugContext = &GPUExecContext;
+
+		ENQUEUE_RENDER_COMMAND(CaptureCommand)([DebugContext](FRHICommandListImmediate& RHICmdList)
+			{
+				NiagaraEmitterInstanceBatcher::Get()->ProcessDebugInfo(RHICmdList, DebugContext);
+			}
+		);
+		return true;
+	}
+	return false;
+}
+
 
 void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraTick);
 	SimpleTimer TickTime;
+
 
 	if (HandleCompletion())
 	{
@@ -845,6 +863,9 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 	checkSlow(ParticleDataSet);
 	FNiagaraDataSet& Data = *ParticleDataSet;
 	Age += DeltaSeconds;
+
+
+	//UE_LOG(LogNiagara, Warning, TEXT("Emitter Tick %f"), Age);
 
 	if (ExecutionState == ENiagaraExecutionState::InactiveClear)
 	{
@@ -949,7 +970,20 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 		GPUExecContext.SpawnRateInstances = SpawnTotal;
 		GPUExecContext.EventSpawnTotal = EventSpawnTotal;
 		GPUExecContext.NumIndicesPerInstance = CachedEmitter->GetRenderers()[0]->GetNumIndicesPerInstance();
-
+		
+#if WITH_EDITORONLY_DATA
+		if (ParentSystemInstance->ShouldCaptureThisFrame())
+		{
+			TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleGPUComputeScript, FGuid());
+			if (DebugInfo)
+			{
+				//Data.Dump(DebugInfo->Frame, true, 0, OrigNumParticles);
+				//DebugInfo->Frame.Dump(true, 0, OrigNumParticles);
+				DebugInfo->Parameters = GPUExecContext.CombinedParamStore;
+				GPUExecContext.DebugInfo = DebugInfo;
+			}
+		}
+#endif
 		ParentSystemInstance->GetPerInstanceDataAndOffsets(GPUExecContext.PerInstanceData, GPUExecContext.PerInstanceDataSize, GPUExecContext.PerInstanceDataInterfaceOffsets);
 
 		bool bOnlySetOnce = false;
@@ -1035,7 +1069,7 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 	//TODO: These current limits can be improved relatively easily. Though perf in at these counts will obviously be an issue anyway.
 	if (CachedEmitter->SimTarget == ENiagaraSimTarget::CPUSim && AllocationSize > GMaxNiagaraCPUParticlesPerEmitter)
 	{
-		UE_LOG(LogNiagara, Warning, TEXT("Emitter %s has attemted to exceed the max CPU particle count! | Max: %d | Requested: %u"), *CachedEmitter->GetUniqueEmitterName(), GMaxNiagaraCPUParticlesPerEmitter, AllocationSize);
+		UE_LOG(LogNiagara, Warning, TEXT("Emitter %s has attempted to exceed the max CPU particle count! | Max: %d | Requested: %u"), *CachedEmitter->GetUniqueEmitterName(), GMaxNiagaraCPUParticlesPerEmitter, AllocationSize);
 		//For now we completely bail out of spawning new particles. Possibly should improve this in future.
 		AllocationSize = OrigNumParticles;
 		SpawnTotal = 0;
@@ -1095,12 +1129,13 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 #if WITH_EDITORONLY_DATA
 	if (ParentSystemInstance->ShouldCaptureThisFrame())
 	{
-		FNiagaraScriptDebuggerInfo* DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleUpdateScript, FGuid());
+		TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleUpdateScript, FGuid());
 		if (DebugInfo)
 		{
 			Data.Dump(DebugInfo->Frame, true, 0, OrigNumParticles);
 			//DebugInfo->Frame.Dump(true, 0, OrigNumParticles);
 			DebugInfo->Parameters = UpdateExecContext.Parameters;
+			DebugInfo->bWritten = true;
 		}
 	}
 #endif
@@ -1181,12 +1216,13 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 	int32 TotalNumSpawned = NumAfterSpawn - NumBeforeSpawn;
 	if (ParentSystemInstance->ShouldCaptureThisFrame())
 	{
-		FNiagaraScriptDebuggerInfo* DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleSpawnScript, FGuid());
+		TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleSpawnScript, FGuid());
 		if (DebugInfo)
 		{
 			Data.Dump(DebugInfo->Frame, true, NumBeforeSpawn, TotalNumSpawned);
 			//DebugInfo->Frame.Dump(true, 0, Num);
 			DebugInfo->Parameters = SpawnExecContext.Parameters;
+			DebugInfo->bWritten = true;
 		}
 	}
 #endif
@@ -1239,12 +1275,13 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 					if (ParentSystemInstance->ShouldCaptureThisFrame())
 					{
 						FGuid EventGuid = EventExecContexts[EventScriptIdx].Script->GetUsageId();
-						FNiagaraScriptDebuggerInfo* DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleEventScript, EventGuid);
+						TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleEventScript, EventGuid);
 						if (DebugInfo)
 						{
 							Data.Dump(DebugInfo->Frame, true, EventSpawnStart, ActualEventNumToSpawn);		
 							//DebugInfo->Frame.Dump(true, 0, ActualEventNumToSpawn);
 							DebugInfo->Parameters = EventExecContexts[EventScriptIdx].Parameters;
+							DebugInfo->bWritten = true;
 						}
 					}
 #endif
@@ -1302,12 +1339,13 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 					if (ParentSystemInstance->ShouldCaptureThisFrame())
 					{
 						FGuid EventGuid = EventExecContexts[EventScriptIdx].Script->GetUsageId();
-						FNiagaraScriptDebuggerInfo* DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleEventScript, EventGuid);
+						TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleEventScript, EventGuid);
 						if (DebugInfo)
 						{
 							Data.Dump(DebugInfo->Frame, true, 0, NumInstancesPrev);
 							//DebugInfo->Frame.Dump(true, 0, NumInstancesPrev);
 							DebugInfo->Parameters = EventExecContexts[EventScriptIdx].Parameters;
+							DebugInfo->bWritten = true;
 						}
 					}
 #endif
@@ -1361,7 +1399,7 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 // 					if (ParentSystemInstance->ShouldCaptureThisFrame())
 // 					{
 // 						FGuid EventGuid = EventExecContexts[EventScriptIdx].Script->GetUsageId();
-// 						FNiagaraScriptDebuggerInfo* DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleEventScript, EventGuid);
+// 						TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfo = ParentSystemInstance->GetActiveCaptureWrite(CachedIDName, ENiagaraScriptUsage::ParticleEventScript, EventGuid);
 // 						if (DebugInfo)
 // 						{
 // 							Data.Dump(DebugInfo->Frame, true, Index, 1);

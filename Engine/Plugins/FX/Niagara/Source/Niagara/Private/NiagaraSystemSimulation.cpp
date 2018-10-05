@@ -456,12 +456,13 @@ bool FNiagaraSystemSimulation::Tick(float DeltaSeconds)
 #if WITH_EDITORONLY_DATA
 			if (SoloSystemInstance && SoloSystemInstance->ShouldCaptureThisFrame())
 			{
-				FNiagaraScriptDebuggerInfo* DebugInfo = SoloSystemInstance->GetActiveCaptureWrite(NAME_None, ENiagaraScriptUsage::SystemSpawnScript, FGuid());
+				TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfo = SoloSystemInstance->GetActiveCaptureWrite(NAME_None, ENiagaraScriptUsage::SystemSpawnScript, FGuid());
 				if (DebugInfo)
 				{
 					DataSet.Dump(DebugInfo->Frame, true, OrigNum, SpawnNum);
 					//DebugInfo->Frame.Dump(true, 0, SpawnNum);
 					DebugInfo->Parameters = SpawnExecContext.Parameters;
+					DebugInfo->bWritten = true;
 				}
 			}
 #endif
@@ -524,12 +525,13 @@ bool FNiagaraSystemSimulation::Tick(float DeltaSeconds)
 #if WITH_EDITORONLY_DATA
 			if (SoloSystemInstance && SoloSystemInstance->ShouldCaptureThisFrame())
 			{
-				FNiagaraScriptDebuggerInfo* DebugInfo = SoloSystemInstance->GetActiveCaptureWrite(NAME_None, ENiagaraScriptUsage::SystemUpdateScript, FGuid());
+				TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> DebugInfo = SoloSystemInstance->GetActiveCaptureWrite(NAME_None, ENiagaraScriptUsage::SystemUpdateScript, FGuid());
 				if (DebugInfo)
 				{
 					DataSet.Dump(DebugInfo->Frame, true, 0, NewNum);
 					//DebugInfo->Frame.Dump(true, 0, OrigNum);
 					DebugInfo->Parameters = UpdateExecContext.Parameters;
+					DebugInfo->bWritten = true;
 				}
 			}
 #endif

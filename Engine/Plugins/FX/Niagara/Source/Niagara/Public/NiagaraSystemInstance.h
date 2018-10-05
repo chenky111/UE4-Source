@@ -191,7 +191,7 @@ public:
 	bool ShouldCaptureThisFrame() const;
 
 	/** Only call from within the script execution states. Value is nullptr if not capturing a frame.*/
-	FNiagaraScriptDebuggerInfo* GetActiveCaptureWrite(const FName& InHandleName, ENiagaraScriptUsage InUsage, const FGuid& InUsageId);
+	TSharedPtr<struct FNiagaraScriptDebuggerInfo, ESPMode::ThreadSafe> GetActiveCaptureWrite(const FName& InHandleName, ENiagaraScriptUsage InUsage, const FGuid& InUsageId);
 
 #endif
 
