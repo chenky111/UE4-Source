@@ -15,6 +15,17 @@ NiagaraSimulationShader.usf:
 
 #include "Definitions.usf"
 
+// Most of the vector implementations work this way. This helps us keep proper precision.
+float4 ModuloPrecise(float4 x, float4 y){ return x - y * trunc(x/y); }
+float3 ModuloPrecise(float3 x, float3 y){ return x - y * trunc(x/y); }
+float2 ModuloPrecise(float2 x, float2 y){ return x - y * trunc(x/y);}
+float ModuloPrecise(float x, float y){ return x - y * trunc(x/y); }
+	
+// using rcp is only 12 bits of precision, we should usually pay for perf
+float4 Reciprocal(float4 x){ return 1.0f/x;}
+float3 Reciprocal(float3 x){ return 1.0f/x; }
+float2 Reciprocal(float2 x){ return 1.0f/x;}
+float Reciprocal(float x){ return 1.0f/x; }
 
 /* -----------------------------------------------------------------
  * GPU simulation utility functions
@@ -34,7 +45,6 @@ NiagaraSimulationShader.usf:
 	float3 Modulo(float3 x, float3 y){ return fmod(x,y); }
 	float2 Modulo(float2 x, float2 y){ return fmod(x,y); }
 	float Modulo(float x, float y){ return fmod(x,y); }
-
 
 	// 4D random number generator inspired by PCGs (permuted congruential generator)
 	// COPY FROM RANDOM.USH, which we can't easily include here due to a sizable dependency chain
