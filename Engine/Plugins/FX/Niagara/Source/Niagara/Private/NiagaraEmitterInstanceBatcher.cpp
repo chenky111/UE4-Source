@@ -93,10 +93,12 @@ void NiagaraEmitterInstanceBatcher::TickSingle(FNiagaraComputeExecutionContext *
 		return;
 	}
 
+#if WITH_EDITORONLY_DATA
 	if (Context->DebugInfo.IsValid())
 	{
 		ProcessDebugInfo(RHICmdList, Context);
 	}
+#endif // WITH_EDITORONLY_DATA
 
 	uint32 PrevNumInstances = Context->MainDataSet->PrevData().GetNumInstances();
 	uint32 NewNumInstances = Context->SpawnRateInstances + Context->EventSpawnTotal + PrevNumInstances;
@@ -228,6 +230,7 @@ void NiagaraEmitterInstanceBatcher::ResolveDatasetWrites(FRHICommandList &RHICmd
 
 void NiagaraEmitterInstanceBatcher::ProcessDebugInfo(FRHICommandList &RHICmdList, const FNiagaraComputeExecutionContext *Context) const
 {
+#if WITH_EDITORONLY_DATA
 	// This method may be called from one of two places: in the tick or as part of a paused frame looking for the debug info that was submitted previously...
 	// Note that PrevData is where we expect the data to be for rendering, as per NiagaraEmitterInstanceBatcher::TickSingle
 	if (Context->DebugInfo.IsValid())
@@ -295,6 +298,7 @@ void NiagaraEmitterInstanceBatcher::ProcessDebugInfo(FRHICommandList &RHICmdList
 			Context->DebugInfo.Reset();
 		}
 	}
+#endif // WITH_EDITORONLY_DATA
 }
 
 
@@ -484,6 +488,7 @@ void NiagaraEmitterInstanceBatcher::Run(const FNiagaraComputeExecutionContext *C
 		DispatchComputeShader(RHICmdList, Shader, NumThreadGroups, 1, 1);
 	}
 
+#if WITH_EDITORONLY_DATA
 	// Check to see if we need to queue up a debug dump..
 	if (Context->DebugInfo.IsValid())
 	{
@@ -515,6 +520,7 @@ void NiagaraEmitterInstanceBatcher::Run(const FNiagaraComputeExecutionContext *C
 			Context->GPUDebugDataReadbackCounts->Insert(RHICmdList);
 		}
 	}
+#endif // WITH_EDITORONLY_DATA
 
 	// Unset UAV parameters and transition resources (TODO: resource transition should be moved to the renderer)
 	// 
