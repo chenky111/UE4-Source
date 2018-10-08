@@ -1230,8 +1230,15 @@ void UNiagaraComponent::SetAsset(UNiagaraSystem* InAsset)
 
 #if WITH_EDITOR
 		SynchronizeWithSourceSystem();
-		AssetExposedParametersChangedHandle = Asset->GetExposedParameters().AddOnChangedHandler(
-			FNiagaraParameterStore::FOnChanged::FDelegate::CreateUObject(this, &UNiagaraComponent::AssetExposedParametersChanged));
+		if (Asset != nullptr)
+		{
+			AssetExposedParametersChangedHandle = Asset->GetExposedParameters().AddOnChangedHandler(
+				FNiagaraParameterStore::FOnChanged::FDelegate::CreateUObject(this, &UNiagaraComponent::AssetExposedParametersChanged));
+		}
+		else
+		{
+			AssetExposedParametersChangedHandle.Reset();
+		}
 #endif
 
 		//Force a reinit.
