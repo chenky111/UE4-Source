@@ -140,31 +140,13 @@ struct FNiagaraComputeExecutionContext
 
 	void Reset()
 	{
-		AccumulatedSpawnRate = 0;
-		PendingExecutionQueueMask = 0;
-		if (GPUDataReadback)
-		{
-			delete GPUDataReadback;
-		}
-		GPUDataReadback = nullptr;
-
-#if WITH_EDITORONLY_DATA
-		if (GPUDebugDataReadbackFloat)
-		{
-			delete GPUDebugDataReadbackFloat;
-			GPUDebugDataReadbackFloat = nullptr;
-		}
-		if (GPUDebugDataReadbackInt)
-		{
-			delete GPUDebugDataReadbackInt;
-			GPUDebugDataReadbackInt = nullptr;
-		}
-		if (GPUDebugDataReadbackCounts)
-		{
-			delete GPUDebugDataReadbackCounts;
-			GPUDebugDataReadbackCounts = nullptr;
-		}
-#endif
+		ENQUEUE_UNIQUE_RENDER_COMMAND_ONEPARAMETER(
+			ResetRT,
+			FNiagaraComputeExecutionContext*, Context, this,
+			{
+				Context->ResetInternal();
+			}
+		);
 	}
 
 	void InitParams(UNiagaraScript* InGPUComputeScript, UNiagaraScript* InSpawnScript, UNiagaraScript *InUpdateScript, ENiagaraSimTarget InSimTarget, const FString& InDebugSimName)
@@ -228,6 +210,38 @@ struct FNiagaraComputeExecutionContext
 		return true;
 	}
 
+private:
+	void ResetInternal()
+	{
+		checkf(IsInRenderingThread(), TEXT("Can only reset the gpu context from the render thread"));
+		AccumulatedSpawnRate = 0;
+		PendingExecutionQueueMask = 0;
+		if (GPUDataReadback)
+		{
+			delete GPUDataReadback;
+			GPUDataReadback = nullptr;
+		}
+
+#if WITH_EDITORONLY_DATA
+		if (GPUDebugDataReadbackFloat)
+		{
+			delete GPUDebugDataReadbackFloat;
+			GPUDebugDataReadbackFloat = nullptr;
+		}
+		if (GPUDebugDataReadbackInt)
+		{
+			delete GPUDebugDataReadbackInt;
+			GPUDebugDataReadbackInt = nullptr;
+		}
+		if (GPUDebugDataReadbackCounts)
+		{
+			delete GPUDebugDataReadbackCounts;
+			GPUDebugDataReadbackCounts = nullptr;
+		}
+#endif
+	}
+
+public:
 	const TArray<FNiagaraEventScriptProperties> &GetEventHandlers() const { return EventHandlerScriptProps; }
 	FString DebugSimName;
 	class FNiagaraDataSet *MainDataSet;
