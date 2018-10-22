@@ -304,7 +304,7 @@ protected:
 
 	/**
 	Map of Pins to compiled code chunks. Allows easy reuse of previously compiled pins.
-	A stack so that we can track pin reuse within function calls but not have cached pins cross talk with subsequent calls to the same funciton.
+	A stack so that we can track pin reuse within function calls but not have cached pins cross talk with subsequent calls to the same function.
 	*/
 	TArray<TMap<UEdGraphPin*, int32>> PinToCodeChunks;
 
