@@ -696,10 +696,16 @@ const FNiagaraTranslateResults &FHlslNiagaraTranslator::Translate(const FNiagara
 		return TranslateResults;
 	}
 
+    bool bNeedsPersistentIDs = CompileOptions.AdditionalDefines.Contains(TEXT("RequiresPersistentIDs"));
+    if (bNeedsPersistentIDs && CompilationTarget == ENiagaraSimTarget::GPUComputeSim) {
+        Error(LOCTEXT("GPUPersistentIDFail", "GPU particles do not support persistent IDs. Change to a CPU simulation or disable persistent IDs."), nullptr, nullptr);
+        return TranslateResults;
+    }
+
 	TranslationStages.Empty();
 	ActiveStageIdx = 0;
 
-	bool bHasInterpolatedSpawn = InCompileOptions.AdditionalDefines.Contains(TEXT("InterpolatedSpawn"));
+	bool bHasInterpolatedSpawn = CompileOptions.AdditionalDefines.Contains(TEXT("InterpolatedSpawn"));
 	ParamMapHistories.Empty();
 	ParamMapSetVariablesToChunks.Empty();
 
@@ -784,7 +790,6 @@ const FNiagaraTranslateResults &FHlslNiagaraTranslator::Translate(const FNiagara
 			UNiagaraNodeOutput* TargetOutputNode = TranslationStages[ParamMapIdx].OutputNode;
 			if (FoundHistory.GetFinalOutputNode() == TargetOutputNode)
 			{
-				bool bNeedsPersistentIDs = InCompileOptions.AdditionalDefines.Contains(TEXT("RequiresPersistentIDs"));
 				if (bNeedsPersistentIDs)
 				{
 					//TODO: Setup alias for current level to decouple from "Particles". Would we ever want emitter or system persistent IDs?
@@ -2323,7 +2328,7 @@ int32 FHlslNiagaraTranslator::AddUniformChunk(FString SymbolName, const FNiagara
 		Chunk.SymbolName = GetSanitizedSymbolName(SymbolName);
 		Chunk.Type = Type;
 
-		if (CompileOptions.TargetUsage == ENiagaraScriptUsage::ParticleGPUComputeScript)
+		if (UNiagaraScript::IsGPUScript(CompileOptions.TargetUsage))
 		{
 			if (Type == FNiagaraTypeDefinition::GetVec2Def())
 			{
