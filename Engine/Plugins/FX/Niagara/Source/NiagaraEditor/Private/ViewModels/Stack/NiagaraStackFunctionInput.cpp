@@ -1285,6 +1285,8 @@ void UNiagaraStackFunctionInput::RenameInput(FName NewName)
 {
 	if (OwningAssignmentNode.IsValid() && InputParameterHandlePath.Num() == 1 && InputParameterHandle.GetName() != NewName)
 	{
+		FScopedTransaction ScopedTransaction(LOCTEXT("RenameInput", "Rename this function's input."));
+
 		FInputValues OldInputValues = InputValues;
 		UEdGraphPin* OriginalOverridePin = GetOverridePin();
 
@@ -1301,10 +1303,17 @@ void UNiagaraStackFunctionInput::RenameInput(FName NewName)
 		check(FoundIdx != INDEX_NONE);
 		FNiagaraParameterHandle TargetHandle(OwningAssignmentNode->GetAssignmentTargetName(FoundIdx));
 
+		OwningAssignmentNode->Modify();
+		if (OwningAssignmentNode->FunctionScript != nullptr)
+		{
+			OwningAssignmentNode->FunctionScript->Modify();
+			OwningAssignmentNode->FunctionScript->GetSource()->Modify();
+		}
 		if (OwningAssignmentNode->SetAssignmentTargetName(FoundIdx, NewName))
 		{
 			OwningAssignmentNode->RefreshFromExternalChanges();
 		}
+
 		InputParameterHandle = FNiagaraParameterHandle(InputParameterHandle.GetNamespace(), NewName);
 		InputParameterHandlePath.Empty(1);
 		InputParameterHandlePath.Add(InputParameterHandle);
@@ -1318,6 +1327,7 @@ void UNiagaraStackFunctionInput::RenameInput(FName NewName)
 
 			for (TWeakObjectPtr<UNiagaraScript> Script : AffectedScripts)
 			{
+				Script->Modify();
 				Script->RapidIterationParameters.RenameParameter(OldRapidIterationParameter, *RapidIterationParameter.GetName().ToString());
 			}
 
