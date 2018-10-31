@@ -14,6 +14,14 @@
 #define VULKAN_SHOULD_USE_COMMANDWRAPPERS			VULKAN_SHOULD_USE_LLM //LLM on Vulkan needs command wrappers to account for vkallocs
 #define VULKAN_ENABLE_LRU_CACHE						1
 #define VULKAN_SUPPORTS_GOOGLE_DISPLAY_TIMING		1
+#define VULKAN_FREEPAGE_FOR_TYPE					1
+#define VULKAN_PURGE_SHADER_MODULES					1
+
+// Android's hashes currently work fine as the problematic cases are:
+//	VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL = 1000117000,
+//	VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL = 1000117001,
+#define VULKAN_USE_REAL_RENDERPASS_COMPATIBILITY	0
+
 
 #define ENUM_VK_ENTRYPOINTS_PLATFORM_BASE(EnumMacro)
 
@@ -82,6 +90,8 @@ public:
 
 	//#todo-rco: Detect Mali? Doing a clear on ColorAtt layout on empty cmd buffer causes issues
 	static bool RequiresSwapchainGeneralInitialLayout() { return true; }
+
+	static bool RequiresWaitingForFrameCompletionEvent() { return false; }
 
 protected:
 	static void* VulkanLib;

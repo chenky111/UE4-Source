@@ -226,7 +226,7 @@ bool RunWithUI(FPlatformErrorReport ErrorReport)
 
 		// Update the display metrics
 		FDisplayMetrics DisplayMetrics;
-		FDisplayMetrics::GetDisplayMetrics(DisplayMetrics);
+		FDisplayMetrics::RebuildDisplayMetrics(DisplayMetrics);
 		FSlateApplication::Get().GetPlatformApplication()->OnDisplayMetricsChanged().Broadcast(DisplayMetrics);
 	}
 
@@ -245,13 +245,11 @@ bool RunWithUI(FPlatformErrorReport ErrorReport)
 	// open up the app window	
 	TSharedRef<SCrashReportClient> ClientControl = SNew(SCrashReportClient, CrashReportClient);
 
-	const FSlateRect WorkArea = FSlateApplicationBase::Get().GetPreferredWorkArea();
-
 	auto Window = FSlateApplication::Get().AddWindow(
 		SNew(SWindow)
 		.Title(NSLOCTEXT("CrashReportClient", "CrashReportClientAppName", "Unreal Engine 4 Crash Reporter"))
 		.HasCloseButton(FCrashReportClientConfig::Get().IsAllowedToCloseWithoutSending())
-		.ClientSize(InitialWindowDimensions * FPlatformApplicationMisc::GetDPIScaleFactorAtPoint(WorkArea.Left, WorkArea.Top))
+		.ClientSize(InitialWindowDimensions)
 		[
 			ClientControl
 		]);

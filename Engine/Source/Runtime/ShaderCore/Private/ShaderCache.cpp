@@ -651,6 +651,8 @@ static bool ShaderPlatformCanPrebindBoundShaderState(EShaderPlatform Platform)
 		case SP_PCD3D_ES2:
 		case SP_METAL:
 		case SP_METAL_MRT:
+		case SP_METAL_TVOS:
+		case SP_METAL_MRT_TVOS:
 		case SP_METAL_MRT_MAC:
 		case SP_METAL_SM5:
 		case SP_METAL_SM5_NOTESS:
@@ -678,7 +680,7 @@ static bool ShaderPlatformCanPrebindBoundShaderState(EShaderPlatform Platform)
 
 static inline bool ShaderPlatformPrebindRequiresResource(EShaderPlatform Platform)
 {
-	return IsOpenGLPlatform(Platform);
+	return IsOpenGLPlatform(Platform) || IsSwitchPlatform(Platform);
 }
 
 static inline bool ShaderPlatformPSOOnly(EShaderPlatform Platform)
@@ -2351,7 +2353,7 @@ void FShaderCache::InternalPrebindShader(FShaderCacheKey const& Key, FShaderCach
 		CacheState->bIsPreBind = true;
 		
 		// This only applies to OpenGL.
-		if(IsOpenGLPlatform(CurrentPlatform))
+		if(IsOpenGLPlatform(CurrentPlatform) || IsSwitchPlatform(CurrentPlatform))
 		{
 			TSet<FShaderPipelineKey> const* ShaderPipelines = Pipelines.Find(Key);
 			if(ShaderPipelines && bCanPreBind)

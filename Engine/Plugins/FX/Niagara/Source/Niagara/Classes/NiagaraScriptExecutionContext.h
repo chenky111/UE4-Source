@@ -113,6 +113,7 @@ struct FNiagaraComputeExecutionContext
 
 	~FNiagaraComputeExecutionContext()
 	{
+		checkf(IsInRenderingThread(), TEXT("Can only delete the gpu readback from the render thread"));
 		if (GPUDataReadback)
 		{
 			delete GPUDataReadback;

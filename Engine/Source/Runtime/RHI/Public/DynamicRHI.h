@@ -1051,6 +1051,8 @@ public:
 
 	virtual void RHICalibrateTimers() {}
 
+	virtual bool RHIIsTypedUAVLoadSupported(EPixelFormat PixelFormat) { return true; }
+
 protected:
 	TArray<uint32> PixelFormatBlockBytes;
 };

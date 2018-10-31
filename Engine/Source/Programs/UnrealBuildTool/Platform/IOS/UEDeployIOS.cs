@@ -160,17 +160,8 @@ namespace UnrealBuildTool
 				}
 				else
 				{
-					// get the changelist from version.h
-					string EngineVersionFile = Path.Combine(EngineDirectory, "Source", "Runtime", "Launch", "Resources", "Version.h");
-					string[] EngineVersionLines = File.ReadAllLines(EngineVersionFile);
-					for (int i = 0; i < EngineVersionLines.Length; ++i)
-					{
-						if (EngineVersionLines[i].StartsWith("#define BUILT_FROM_CHANGELIST"))
-						{
-							CFBundleVersion = EngineVersionLines[i].Split(new char[] { ' ', '\t' })[2].Trim(' ');
-							break;
-						}
-					}
+                    // get the changelist
+                    CFBundleVersion = BuildVersion.ReadDefault().Changelist.ToString();
 
 				}
 
@@ -318,18 +309,19 @@ namespace UnrealBuildTool
 				switch (MinVersion)
 				{
 				case "IOS_61":
-					Log.TraceWarning("IOS 6 is no longer supported in UE4 as 4.11");
+					Log.TraceWarning("IOS 6 is no longer supported in UE4 as of 4.11");
 					MinVersion = "7.0";
 					break;
 				case "IOS_7":
-					Log.TraceWarning("IOS 7 is no longer supported in UE4 as 4.15");
+					Log.TraceWarning("IOS 7 is no longer supported in UE4 as of 4.15");
 					MinVersion = "7.0";
 					break;
 				case "IOS_8":
-					Log.TraceWarning("IOS 8 is no longer supported in UE4 as 4.18");
+					Log.TraceWarning("IOS 8 is no longer supported in UE4 as of 4.18");
 					MinVersion = "8.0";
 					break;
 				case "IOS_9":
+					Log.TraceWarning("IOS 9 is no longer supported in UE4 as of 4.21");
 					MinVersion = "9.0";
 					break;
 				case "IOS_10":
@@ -337,6 +329,9 @@ namespace UnrealBuildTool
 					break;
 				case "IOS_11":
 					MinVersion = "11.0";
+					break;
+				case "IOS_12":
+					MinVersion = "12.0";
 					break;
 				}
 			}
@@ -368,6 +363,10 @@ namespace UnrealBuildTool
 			// Add remote-notifications as background mode
 			bool bRemoteNotificationsSupported = false;
 			Ini.GetBool("/Script/IOSRuntimeSettings.IOSRuntimeSettings", "bEnableRemoteNotificationsSupport", out bRemoteNotificationsSupported);
+
+            // Add background fetch as background mode
+            bool bBackgroundFetch = false;
+            Ini.GetBool("/Script/IOSRuntimeSettings.IOSRuntimeSettings", "bEnableBackgroundFetch", out bBackgroundFetch);
 
 			// Get any Location Services permission descriptions added
 			string LocationAlwaysUsageDescription = "";
@@ -564,6 +563,10 @@ namespace UnrealBuildTool
 					"Default-568h.png", "Portrait", "{320, 568}", "7.0",
 					"Default-IPhoneX-Landscape.png", "Landscape", "{375, 812}",  "11.0",
 					"Default-IPhoneX-Portrait.png", "Portrait", "{375, 812}",  "11.0",
+					"Default-IPhoneXSMax-Landscape.png", "Landscape", "{414, 896}",  "12.0",
+					"Default-IPhoneXSMax-Portrait.png", "Portrait", "{414, 896}",  "12.0",
+					"Default-IPhoneXR-Landscape.png", "Landscape", "{276, 597}",  "12.0",
+					"Default-IPhoneXR-Portrait.png", "Portrait", "{276, 597}",  "12.0",
 				};
 
 				Text.AppendLine("\t<key>UILaunchImages~iphone</key>");
@@ -674,11 +677,18 @@ namespace UnrealBuildTool
 			}
 
 			// Add remote-notifications as background mode
-			if (bRemoteNotificationsSupported)
+			if (bRemoteNotificationsSupported || bBackgroundFetch)
 			{
 				Text.AppendLine("\t<key>UIBackgroundModes</key>");
 				Text.AppendLine("\t<array>");
-				Text.AppendLine("\t\t<string>remote-notification</string>");
+                if (bRemoteNotificationsSupported)
+                {
+				    Text.AppendLine("\t\t<string>remote-notification</string>");
+                }
+                if (bBackgroundFetch)
+                {
+                    Text.AppendLine("\t\t<string>fetch</string>");
+                }
 				Text.AppendLine("\t</array>");
 			}
 
@@ -763,7 +773,7 @@ namespace UnrealBuildTool
 
 		protected virtual void CopyCloudResources(string InEngineDir, string AppDirectory)
 		{
-			CopyFiles(InEngineDir + "/Build/IOS/Cloud", AppDirectory, "*.json", true);
+			CopyFiles(InEngineDir + "/Build/IOS/Cloud", AppDirectory, "*.*", true);
 		}
 		protected virtual void CopyGraphicsResources(bool bSkipDefaultPNGs, bool bSkipIcons, string InEngineDir, string AppDirectory, string BuildDirectory, string IntermediateDir, bool bSupportsPortrait, bool bSupportsLandscape)
 		{
@@ -791,6 +801,8 @@ namespace UnrealBuildTool
 					//                    CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-Portrait-1336.png", true);
 					CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-Portrait-1336@2x.png", true);
 					CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-IPhoneX-Portrait.png", true);
+					CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-IPhoneXSMax-Portrait.png", true);
+					CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-IPhoneXR-Portrait.png", true);
 				}
 				if (bSupportsLandscape)
 				{
@@ -801,6 +813,8 @@ namespace UnrealBuildTool
 					//                    CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-Landscape-1336.png", true);
 					CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-Landscape-1336@2x.png", true);
 					CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-IPhoneX-Landscape.png", true);
+					CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-IPhoneXSMax-Landscape.png", true);
+					CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default-IPhoneXR-Landscape.png", true);
 				}
 				//                CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default.png", true);
 				CopyFiles(InEngineDir + "/Build/IOS/Resources/Graphics", AppDirectory, "Default@2x.png", true);
@@ -823,6 +837,8 @@ namespace UnrealBuildTool
 					//                    CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-Portrait-1336.png", true);
 					CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-Portrait-1336@2x.png", true);
 					CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-IPhoneX-Portrait.png", true);
+					CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-IPhoneXSMax-Portrait.png", true);
+					CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-IPhoneXR-Portrait.png", true);
 				}
 				if (bSupportsLandscape)
 				{
@@ -833,6 +849,8 @@ namespace UnrealBuildTool
 					//                    CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-Landscape-1336.png", true);
 					CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-Landscape-1336@2x.png", true);
 					CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-IPhoneX-Landscape.png", true);
+					CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-IPhoneXSMax-Landscape.png", true);
+					CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default-IPhoneXR-Landscape.png", true);
 				}
 				//                CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default.png", true);
 				CopyFiles(BuildDirectory + "/Resources/Graphics", AppDirectory, "Default@2x.png", true);

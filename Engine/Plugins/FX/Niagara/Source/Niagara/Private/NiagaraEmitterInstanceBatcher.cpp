@@ -53,6 +53,7 @@ void NiagaraEmitterInstanceBatcher::Remove(FNiagaraComputeExecutionContext *InCo
 			{
 				Queue[i].Remove(ExecContext);
 			}
+			ExecContext->PendingExecutionQueueMask = 0;
 		});
 }
 

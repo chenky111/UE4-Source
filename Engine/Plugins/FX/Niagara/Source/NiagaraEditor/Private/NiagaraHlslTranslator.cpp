@@ -128,7 +128,8 @@ void FNiagaraShaderQueueTickable::ProcessQueue()
 			TRefCountPtr<FShaderCompilerEnvironment> CompilerEnvironment = new FShaderCompilerEnvironment();
 
 			FString ShaderCode = CompilableScript->GetVMExecutableData().LastHlslTranslationGPU;
-			const bool bSynchronousCompile = false;
+			// When not running in the editor, the shaders are created in-sync in the postload.
+			const bool bSynchronousCompile = !GIsEditor;
 
 			// Compile the shaders for the script.
 			NewShaderMap->Compile(ShaderScript, Item.ShaderMapId, CompilerEnvironment, NewCompilationOutput, Item.Platform, bSynchronousCompile, Item.bApply);
@@ -578,7 +579,7 @@ FString FHlslNiagaraTranslator::BuildParameterMapHlslDefinitions(TArray<FNiagara
 			{
 				FString FinalName = StructNameArray[StructNameArray.Num() - 1];
 				StructNameArray.RemoveAt(StructNameArray.Num() - 1);
-				FString StructType = FString::Printf(TEXT("FParamMap%d_%s"), UniqueParamMapIdx, *FString::Join<FString>(StructNameArray, TEXT("_")));
+				FString StructType = FString::Printf(TEXT("FParamMap%d_%s"), UniqueParamMapIdx, *FString::Join(StructNameArray, TEXT("_")));
 				if (StructNameArray.Num() == 0)
 				{
 					StructType = FString::Printf(TEXT("FParamMap%d"), UniqueParamMapIdx);
@@ -588,7 +589,7 @@ FString FHlslNiagaraTranslator::BuildParameterMapHlslDefinitions(TArray<FNiagara
 				FString VarName = GetSanitizedSymbolName(*FinalName);
 				if (NumFound > StructNameArray.Num() + 1 && StructNameArray.Num() != 0)
 				{
-					TypeName = FString::Printf(TEXT("FParamMap%d_%s_%s"), UniqueParamMapIdx, *FString::Join<FString>(StructNameArray, TEXT("_")), *GetSanitizedSymbolName(*FinalName));
+					TypeName = FString::Printf(TEXT("FParamMap%d_%s_%s"), UniqueParamMapIdx, *FString::Join(StructNameArray, TEXT("_")), *GetSanitizedSymbolName(*FinalName));
 				}
 				else if (StructNameArray.Num() == 0)
 				{
@@ -2173,7 +2174,7 @@ FString FHlslNiagaraTranslator::GetSanitizedSymbolName(FString SymbolName, bool 
 	}
 
 	// Gather back into single string..
-	Ret = FString::Join<FString>(SplitName, TEXT("."));
+	Ret = FString::Join(SplitName, TEXT("."));
 
 	/*
 	Ret.ReplaceInline(TEXT("\\"), TEXT("_"));
@@ -2478,7 +2479,7 @@ int32 FHlslNiagaraTranslator::GetRapidIterationParameter(const FNiagaraVariable&
 {
 	if (!AddStructToDefinitionSet(Parameter.GetType()))
 	{
-		Error(FText::Format(LOCTEXT("GetRapidIterationParameterTypeFail", "Cannot handle type {0}! Variable: {1}"), Parameter.GetType().GetNameText(), FText::FromName(Parameter.GetName())), nullptr, nullptr);
+		Error(FText::Format(LOCTEXT("GetRapidIterationParameterTypeFail_InvalidType", "Cannot handle type {0}! Variable: {1}"), Parameter.GetType().GetNameText(), FText::FromName(Parameter.GetName())), nullptr, nullptr);
 		return INDEX_NONE;
 	}
 
@@ -2498,7 +2499,7 @@ int32 FHlslNiagaraTranslator::GetRapidIterationParameter(const FNiagaraVariable&
 		}
 		else
 		{
-			Error(FText::Format(LOCTEXT("GetRapidIterationParameterTypeFail", "Variable: {0} cannot be a RapidIterationParameter input node because it isn't a supported type {1}"), FText::FromName(Parameter.GetName()), Parameter.GetType().GetNameText()), nullptr, nullptr);
+			Error(FText::Format(LOCTEXT("GetRapidIterationParameterTypeFail_UnsupportedInput", "Variable: {0} cannot be a RapidIterationParameter input node because it isn't a supported type {1}"), FText::FromName(Parameter.GetName()), Parameter.GetType().GetNameText()), nullptr, nullptr);
 			return INDEX_NONE;
 		}
 	}
@@ -3002,7 +3003,7 @@ void FHlslNiagaraTranslator::ParameterMapSet(UNiagaraNodeParameterMapSet* SetNod
 
 			if (ParamMapHistoryIdx == -1)
 			{
-				Error(LOCTEXT("NoParamMapIdx", "Cannot find parameter map for input!"), SetNode, nullptr);
+				Error(LOCTEXT("NoParamMapIdxForInput", "Cannot find parameter map for input!"), SetNode, nullptr);
 				for (int32 j = 0; j < Outputs.Num(); j++)
 				{
 					Outputs[j] = INDEX_NONE;
@@ -3452,7 +3453,7 @@ void FHlslNiagaraTranslator::ParameterMapGet(UNiagaraNodeParameterMapGet* GetNod
 
 	if (ParamMapHistoryIdx == -1)
 	{
-		Error(LOCTEXT("NoParamMapIdx", "Cannot find parameter map for input!"), GetNode, nullptr);
+		Error(LOCTEXT("NoParamMapIdxForInput", "Cannot find parameter map for input!"), GetNode, nullptr);
 		for (int32 i = 0; i < Outputs.Num(); i++)
 		{
 			Outputs[i] = INDEX_NONE;
@@ -3461,7 +3462,7 @@ void FHlslNiagaraTranslator::ParameterMapGet(UNiagaraNodeParameterMapGet* GetNod
 	}
 	else if (ParamMapHistoryIdx >= ParamMapHistories.Num())
 	{
-		Error(FText::Format(LOCTEXT("InvalidParamMapIdx", "Invalid parameter map index for input {0} of {1}!"), ParamMapHistoryIdx, ParamMapHistories.Num()), GetNode, nullptr);
+		Error(FText::Format(LOCTEXT("InvalidParamMapIdxForInput", "Invalid parameter map index for input {0} of {1}!"), ParamMapHistoryIdx, ParamMapHistories.Num()), GetNode, nullptr);
 		for (int32 i = 0; i < Outputs.Num(); i++)
 		{
 			Outputs[i] = INDEX_NONE;
@@ -3792,7 +3793,7 @@ void FHlslNiagaraTranslator::ReadDataSet(const FNiagaraDataSetID DataSet, const 
 
 	if (ParamMapHistoryIdx == -1)
 	{
-		Error(LOCTEXT("NoParamMapIdx", "Cannot find parameter map for input to ReadDataSet!"), nullptr, nullptr);
+		Error(LOCTEXT("NoParamMapIdxToReadDataSet", "Cannot find parameter map for input to ReadDataSet!"), nullptr, nullptr);
 		for (int32 i = 0; i < Outputs.Num(); i++)
 		{
 			Outputs[i] = INDEX_NONE;
@@ -3801,7 +3802,7 @@ void FHlslNiagaraTranslator::ReadDataSet(const FNiagaraDataSetID DataSet, const 
 	}
 	else if (ParamMapHistoryIdx >= ParamMapHistories.Num())
 	{
-		Error(FText::Format(LOCTEXT("InvalidParamMapIdx", "Invalid parameter map index for ReadDataSet input {0} of {1}!"), ParamMapHistoryIdx, ParamMapHistories.Num()), nullptr, nullptr);
+		Error(FText::Format(LOCTEXT("InvalidParamMapIdxToReadDataSet", "Invalid parameter map index for ReadDataSet input {0} of {1}!"), ParamMapHistoryIdx, ParamMapHistories.Num()), nullptr, nullptr);
 		for (int32 i = 0; i < Outputs.Num(); i++)
 		{
 			Outputs[i] = INDEX_NONE;
@@ -3851,7 +3852,7 @@ void FHlslNiagaraTranslator::WriteDataSet(const FNiagaraDataSetID DataSet, const
 
 	if (ParamMapHistoryIdx == -1)
 	{
-		Error(LOCTEXT("NoParamMapIdx", "Cannot find parameter map for input to WriteDataSet!"), nullptr, nullptr);
+		Error(LOCTEXT("NoParamMapIdxToWriteDataSet", "Cannot find parameter map for input to WriteDataSet!"), nullptr, nullptr);
 		for (int32 i = 0; i < Outputs.Num(); i++)
 		{
 			Outputs[i] = INDEX_NONE;
@@ -3860,7 +3861,7 @@ void FHlslNiagaraTranslator::WriteDataSet(const FNiagaraDataSetID DataSet, const
 	}
 	else if (ParamMapHistoryIdx >= ParamMapHistories.Num())
 	{
-		Error(FText::Format(LOCTEXT("InvalidParamMapIdx", "Invalid parameter map index for WriteDataSet input {0} of {1}!"), ParamMapHistoryIdx, ParamMapHistories.Num()), nullptr, nullptr);
+		Error(FText::Format(LOCTEXT("InvalidParamMapIdxToWriteDataSet", "Invalid parameter map index for WriteDataSet input {0} of {1}!"), ParamMapHistoryIdx, ParamMapHistories.Num()), nullptr, nullptr);
 		for (int32 i = 0; i < Outputs.Num(); i++)
 		{
 			Outputs[i] = INDEX_NONE;
@@ -4297,7 +4298,7 @@ void FHlslNiagaraTranslator::HandleCustomHlslNode(UNiagaraNodeCustomHlsl* Custom
 
 	// Now reassemble the tokens into the final hlsl output
 	OutSignature.Outputs = SigOutputs;
-	OutCustomHlsl = FString::Join<FString>(Tokens, TEXT(""));
+	OutCustomHlsl = FString::Join(Tokens, TEXT(""));
 
 	// Dynamic inputs are assumed to be of the form 
 	// "20.0f * Particles.Velocity.x + length(Particles.Velocity)", i.e. a mix of native functions, constants, operations, and variable names.

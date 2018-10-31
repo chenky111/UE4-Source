@@ -70,11 +70,12 @@ public:
 };
 
 
-class FVulkanShader
+class FVulkanShader : public IRefCountedObject
 {
 public:
 	FVulkanShader(FVulkanDevice* InDevice, EShaderFrequency InFrequency, VkShaderStageFlagBits InStageFlag)
-		: StageFlag(InStageFlag)
+		: ShaderKey(0)
+		, StageFlag(InStageFlag)
 		, Frequency(InFrequency)
 		, Device(InDevice)
 	{
@@ -82,7 +83,9 @@ public:
 
 	virtual ~FVulkanShader();
 
-	void Setup(const TArray<uint8>& InShaderHeaderAndCode);
+	void PurgeShaderModules();
+
+	void Setup(const TArray<uint8>& InShaderHeaderAndCode, uint64 InShaderKey);
 
 	VkShaderModule GetOrCreateHandle(const FVulkanLayout* Layout, uint32 LayoutHash)
 	{
@@ -107,16 +110,17 @@ public:
 		return CodeHeader;
 	}
 
-	inline VkShaderModule GetDefaultShaderModule() const
+	inline uint64 GetShaderKey() const
 	{
-		return DefaultShaderModule;
+		return ShaderKey;
 	}
 
 protected:
+	uint64							ShaderKey;
+
 	/** External bindings for this shader. */
 	FVulkanShaderHeader				CodeHeader;
 	TMap<uint32, VkShaderModule>	ShaderModules;
-	VkShaderModule					DefaultShaderModule;
 	const VkShaderStageFlagBits		StageFlag;
 	EShaderFrequency				Frequency;
 
@@ -130,18 +134,20 @@ protected:
 	friend class FVulkanPipelineStateCacheManager;
 	friend class FVulkanComputeShaderState;
 	friend class FVulkanComputePipeline;
+	friend class FVulkanShaderFactory;
 };
 
 /** This represents a vertex shader that hasn't been combined with a specific declaration to create a bound shader. */
 template<typename BaseResourceType, EShaderFrequency ShaderType, VkShaderStageFlagBits StageFlagBits>
-class TVulkanBaseShader : public BaseResourceType, public IRefCountedObject, public FVulkanShader
+class TVulkanBaseShader : public BaseResourceType, public FVulkanShader
 {
-public:
+private:
 	TVulkanBaseShader(FVulkanDevice* InDevice) :
 		FVulkanShader(InDevice, ShaderType, StageFlagBits)
 	{
 	}
-
+	friend class FVulkanShaderFactory;
+public:
 	enum { StaticFrequency = ShaderType };
 
 	// IRefCountedObject interface.
@@ -165,6 +171,21 @@ typedef TVulkanBaseShader<FRHIHullShader, SF_Hull, VK_SHADER_STAGE_TESSELLATION_
 typedef TVulkanBaseShader<FRHIDomainShader, SF_Domain, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT>	FVulkanDomainShader;
 typedef TVulkanBaseShader<FRHIComputeShader, SF_Compute, VK_SHADER_STAGE_COMPUTE_BIT>				FVulkanComputeShader;
 typedef TVulkanBaseShader<FRHIGeometryShader, SF_Geometry, VK_SHADER_STAGE_GEOMETRY_BIT>			FVulkanGeometryShader;
+
+class FVulkanShaderFactory
+{
+public:
+	~FVulkanShaderFactory();
+	
+	template <typename ShaderType> 
+	ShaderType* CreateShader(const TArray<uint8>& Code, FVulkanDevice* Device);
+	
+	void OnDeleteShader(const FVulkanShader& Shader);
+
+private:
+	FRWLock Lock;
+	TMap<uint64, FVulkanShader*> ShaderMap[SF_NumFrequencies];
+};
 
 class FVulkanBoundShaderState : public FRHIBoundShaderState
 {
@@ -335,7 +356,10 @@ public:
 		{
 			return ResourceAllocation->GetHandle();
 		}
-		return VK_NULL_HANDLE;
+		else
+		{
+			return VK_NULL_HANDLE;
+		}
 	}
 
 	inline uint64 GetAllocationOffset() const
@@ -899,6 +923,23 @@ private:
 	bool GetResult(FVulkanDevice* Device, uint64& OutResult, bool bWait);
 };
 */
+/*
+class FVulkanRenderQuery : public FRHIRenderQuery
+{
+public:
+	FVulkanRenderQuery(FVulkanDevice* Device, ERenderQueryType InQueryType);
+	virtual ~FVulkanRenderQuery();
+
+	inline bool HasQueryBeenEmitted() const
+	{
+		return State == EState::InEnd;
+	}
+
+	uint32 LastPoolReset = 0;
+
+private:
+};
+*/
 
 struct FVulkanBufferView : public FRHIResource, public VulkanRHI::FDeviceChild
 {
@@ -1092,7 +1133,13 @@ protected:
 	VkBufferUsageFlags BufferUsageFlags;
 	uint32 NumBuffers;
 	uint32 DynamicBufferIndex;
-	TRefCountPtr<VulkanRHI::FBufferSuballocation> Buffers[NUM_RENDER_BUFFERS];
+
+	enum
+	{
+		NUM_BUFFERS = 3,
+	};
+
+	TRefCountPtr<VulkanRHI::FBufferSuballocation> Buffers[NUM_BUFFERS];
 	struct
 	{
 		VulkanRHI::FBufferSuballocation* SubAlloc = nullptr;
@@ -1324,8 +1371,8 @@ public:
 		}
 
 		OutPackedUniformBufferStagingMask = ((uint64)1 << (uint64)InCodeHeader.PackedUBs.Num()) - 1;
-		EmulatedUBsCopyInfo = &InCodeHeader.EmulatedUBsCopyInfo;
-		EmulatedUBsCopyRanges = &InCodeHeader.EmulatedUBCopyRanges;
+		EmulatedUBsCopyInfo = InCodeHeader.EmulatedUBsCopyInfo;
+		EmulatedUBsCopyRanges = InCodeHeader.EmulatedUBCopyRanges;
 	}
 
 	inline void SetPackedGlobalParameter(uint32 BufferIndex, uint32 ByteOffset, uint32 NumBytes, const void* RESTRICT NewValue, uint64& InOutPackedUniformBufferStagingDirty)
@@ -1351,15 +1398,15 @@ public:
 	inline void SetEmulatedUniformBufferIntoPacked(uint32 BindPoint, const TArray<uint8>& ConstantData, uint64& NEWPackedUniformBufferStagingDirty)
 	{
 		// Emulated UBs. Assumes UniformBuffersCopyInfo table is sorted by CopyInfo.SourceUBIndex
-		if (BindPoint < (uint32)EmulatedUBsCopyRanges->Num())
+		if (BindPoint < (uint32)EmulatedUBsCopyRanges.Num())
 		{
-			uint32 Range = (*EmulatedUBsCopyRanges)[BindPoint];
+			uint32 Range = EmulatedUBsCopyRanges[BindPoint];
 			uint16 Start = (Range >> 16) & 0xffff;
 			uint16 Count = Range & 0xffff;
 			const uint8* RESTRICT SourceData = ConstantData.GetData();
 			for (int32 Index = Start; Index < Start + Count; ++Index)
 			{
-				const CrossCompiler::FUniformBufferCopyInfo& CopyInfo = (*EmulatedUBsCopyInfo)[Index];
+				const CrossCompiler::FUniformBufferCopyInfo& CopyInfo = EmulatedUBsCopyInfo[Index];
 				check(CopyInfo.SourceUBIndex == BindPoint);
 				FPackedBuffer& StagingBuffer = PackedUniformBuffers[(int32)CopyInfo.DestUBIndex];
 				//check(ByteOffset + NumBytes <= (uint32)StagingBuffer.Num());
@@ -1385,9 +1432,9 @@ public:
 protected:
 	TArray<FPackedBuffer>									PackedUniformBuffers;
 
-	// Pointers to Shader Code Header
-	const TArray<CrossCompiler::FUniformBufferCopyInfo>*	EmulatedUBsCopyInfo;
-	const TArray<uint32>*									EmulatedUBsCopyRanges;
+	// Copies to Shader Code Header (shaders may be deleted when we use this object again)
+	TArray<CrossCompiler::FUniformBufferCopyInfo>			EmulatedUBsCopyInfo;
+	TArray<uint32>											EmulatedUBsCopyRanges;
 };
 
 class FVulkanStagingBuffer : public FRHIStagingBuffer

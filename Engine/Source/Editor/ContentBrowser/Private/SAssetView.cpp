@@ -156,7 +156,7 @@ void SAssetView::Construct( const FArguments& InArgs )
 
 	// Get desktop metrics
 	FDisplayMetrics DisplayMetrics;
-	FSlateApplication::Get().GetDisplayMetrics( DisplayMetrics );
+	FSlateApplication::Get().GetCachedDisplayMetrics( DisplayMetrics );
 
 	const FVector2D DisplaySize(
 		DisplayMetrics.PrimaryDisplayWorkAreaRect.Right - DisplayMetrics.PrimaryDisplayWorkAreaRect.Left,
@@ -3948,6 +3948,12 @@ TSharedPtr<SWidget> SAssetView::OnGetContextMenuContent()
 {
 	if ( CanOpenContextMenu() )
 	{
+		if (IsRenamingAsset())
+		{
+			RenamingAsset.Pin()->RenameCanceledEvent.ExecuteIfBound();
+			RenamingAsset.Reset();
+		}
+
 		const TArray<FString> SelectedFolders = GetSelectedFolders();
 		if(SelectedFolders.Num() > 0)
 		{

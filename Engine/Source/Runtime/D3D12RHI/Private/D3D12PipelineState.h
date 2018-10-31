@@ -287,22 +287,10 @@ public:
 		return *this;
 	}
 
-	// Indicates this PSO should be added to any disk caches.
-	void MarkForDiskCacheAdd()
-	{
-		bAddToDiskCache = PipelineState.GetReference() ? true : false;
-	}
-
-	bool ShouldAddToDiskCache() const
-	{
-		return bAddToDiskCache;
-	}
-
 protected:
 	TRefCountPtr<ID3D12PipelineState> PipelineState;
 	FAsyncTask<FD3D12PipelineStateWorker>* Worker;
 	volatile int32 PendingWaitOnWorkerCalls;
-	bool bAddToDiskCache;
 };
 
 struct FD3D12GraphicsPipelineState : public FRHIGraphicsPipelineState
@@ -340,6 +328,29 @@ struct FD3D12ComputePipelineState : public FRHIComputePipelineState
 	FD3D12PipelineState* const PipelineState;
 };
 
+struct FInitializerToGPSOMapKey
+{
+	const FGraphicsPipelineStateInitializer* Initializer;
+	uint32 Hash;
+
+	FInitializerToGPSOMapKey() = default;
+
+	FInitializerToGPSOMapKey(const FGraphicsPipelineStateInitializer* InInitializer, uint32 InHash) :
+		Initializer(InInitializer),
+		Hash(InHash)
+	{}
+
+	inline bool operator==(const FInitializerToGPSOMapKey& Other) const
+	{
+		return *Initializer == *Other.Initializer;
+	}
+};
+
+inline uint32 GetTypeHash(const FInitializerToGPSOMapKey& Key)
+{
+	return Key.Hash;
+}
+
 class FD3D12PipelineStateCacheBase : public FD3D12AdapterChild
 {
 protected:
@@ -374,7 +385,7 @@ protected:
 	template <typename TDesc, typename TValue = FD3D12PipelineState*>
 	using TPipelineCache = TMap<TDesc, TValue, FDefaultSetAllocator, TStateCacheKeyFuncs<TDesc, TValue>>;
 
-	TMap<uint32, FD3D12GraphicsPipelineState*> InitializerToGraphicsPipelineMap;
+	TMap<FInitializerToGPSOMapKey, FD3D12GraphicsPipelineState*> InitializerToGraphicsPipelineMap;
 	TMap<FD3D12ComputeShader*, FD3D12ComputePipelineState*> ComputeShaderToComputePipelineMap;
 
 	TPipelineCache<FD3D12LowLevelGraphicsPipelineStateDesc> LowLevelGraphicsPipelineStateCache;

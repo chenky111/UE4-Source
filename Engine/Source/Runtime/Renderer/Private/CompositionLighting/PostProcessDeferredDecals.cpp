@@ -175,56 +175,71 @@ FBlendStateRHIParamRef GetDecalBlendState(const ERHIFeatureLevel::Type SMFeature
 				return TStaticBlendState<
 					CW_RGBA, BO_Add, BF_One,  BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
 					CW_RGB, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
-					CW_RGBA, BO_Add, BF_One,  BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha
+					CW_RGBA, BO_Add, BF_One,  BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
+					CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One // DBuffer mask
 				>::GetRHI();
 
 			case DBM_DBuffer_ColorNormalRoughness:
 				return TStaticBlendState<
 					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
 					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
-					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha >::GetRHI();
+					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
+					CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One // DBuffer mask
+				>::GetRHI();
 
 			case DBM_DBuffer_Color:
 				// we can optimize using less MRT later
 				return TStaticBlendState<
 					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
 					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
-					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One>::GetRHI();
+					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
+					CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One // DBuffer mask
+				>::GetRHI();
 
 			case DBM_DBuffer_ColorNormal:
 				// we can optimize using less MRT later
 				return TStaticBlendState<
 					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
 					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
-					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One >::GetRHI();
+					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
+					CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One // DBuffer mask
+				>::GetRHI();
 
 			case DBM_DBuffer_ColorRoughness:
 				// we can optimize using less MRT later
 				return TStaticBlendState<
 					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
 					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
-					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha >::GetRHI();
+					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
+					CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One // DBuffer mask
+				>::GetRHI();
 
 			case DBM_DBuffer_Normal:
 				// we can optimize using less MRT later
 				return TStaticBlendState<
 					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
 					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
-					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One>::GetRHI();
+					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
+					CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One // DBuffer mask
+				>::GetRHI();
 
 			case DBM_DBuffer_NormalRoughness:
 				// we can optimize using less MRT later
 				return TStaticBlendState<
 					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
 					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
-					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha >::GetRHI();
+					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
+					CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One // DBuffer mask
+				>::GetRHI();
 
 			case DBM_DBuffer_Roughness:
 				// we can optimize using less MRT later
 				return TStaticBlendState<
 					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
 					CW_RGBA, BO_Add, BF_Zero, BF_One, BO_Add, BF_Zero, BF_One,
-					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha >::GetRHI();
+					CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha,
+					CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One // DBuffer mask
+				>::GetRHI();
 
 			default:
 				// the decal type should not be rendered in this pass - internal error
@@ -409,14 +424,6 @@ bool RenderPreStencil(FRenderingCompositePassContext& Context, const FMatrix& Co
 
 	return true;
 }
-
-bool IsDBufferEnabled()
-{
-	static auto* CVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.DBuffer"));
-
-	return CVar->GetValueOnRenderThread() > 0;
-}
-
 
 static EDecalRasterizerState ComputeDecalRasterizerState(bool bInsideDecal, bool bIsInverted, const FViewInfo& View)
 {
@@ -660,7 +667,8 @@ void FRCPassPostProcessDeferredDecals::Process(FRenderingCompositePassContext& C
 	FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
 
 	const bool bShaderComplexity = Context.View.Family->EngineShowFlags.ShaderComplexity;
-	const bool bDBuffer = IsDBufferEnabled();
+	const bool bDBuffer = IsUsingDBuffers(Context.View.GetShaderPlatform());
+	const bool bPerPixelDBufferMask = IsUsingPerPixelDBufferMask(Context.View.GetShaderPlatform());
 	const bool bStencilSizeThreshold = CVarStencilSizeThreshold.GetValueOnRenderThread() >= 0;
 
 	SCOPED_DRAW_EVENTF(RHICmdList, DeferredDecals, TEXT("DeferredDecals %s"), GetStageName(CurrentStage));
@@ -726,6 +734,17 @@ void FRCPassPostProcessDeferredDecals::Process(FRenderingCompositePassContext& C
 				GRenderTargetPool.FindFreeElement(RHICmdList, Desc, SceneContext.DBufferC, TEXT("DBufferC"));
 			}
 
+			if (bPerPixelDBufferMask)
+			{
+				// Note: 32bpp format is used here to utilize color compression hardware (same as other DBuffer targets).
+				// This significantly reduces bandwidth for clearing, writing and reading on some GPUs.
+				// While a smaller format, such as R8_UINT, will use less video memory, it will result in slower clears and higher bandwidth requirements.
+				check(Desc.Format == PF_B8G8R8A8);
+				Desc.Flags = TexCreate_None;
+				Desc.ClearValue = FClearValueBinding::Transparent;
+				GRenderTargetPool.FindFreeElement(RHICmdList, Desc, SceneContext.DBufferMask, TEXT("DBufferMask"));
+			}
+
 			// we assume views are non overlapping, then we need to clear only once in the beginning, otherwise we would need to set scissor rects
 			// and don't get FastClear any more.
 			bool bFirstView = Context.View.Family->Views[0] == &Context.View || ViewFamily.bMultiGPUForkAndJoin;
@@ -734,14 +753,22 @@ void FRCPassPostProcessDeferredDecals::Process(FRenderingCompositePassContext& C
 			{
 				SCOPED_DRAW_EVENT(RHICmdList, DBufferClear);
 
-				FRHIRenderTargetView RenderTargets[3];
+				FRHIRenderTargetView RenderTargets[4];
+
 				RenderTargets[0] = FRHIRenderTargetView(SceneContext.DBufferA->GetRenderTargetItem().TargetableTexture, 0, -1, ERenderTargetLoadAction::EClear, ERenderTargetStoreAction::EStore);
 				RenderTargets[1] = FRHIRenderTargetView(SceneContext.DBufferB->GetRenderTargetItem().TargetableTexture, 0, -1, ERenderTargetLoadAction::EClear, ERenderTargetStoreAction::EStore);
 				RenderTargets[2] = FRHIRenderTargetView(SceneContext.DBufferC->GetRenderTargetItem().TargetableTexture, 0, -1, ERenderTargetLoadAction::EClear, ERenderTargetStoreAction::EStore);
+				uint32 RTCount = 3;
+
+				if (bPerPixelDBufferMask)
+				{
+					RenderTargets[3] = FRHIRenderTargetView(SceneContext.DBufferMask->GetRenderTargetItem().TargetableTexture, 0, -1, ERenderTargetLoadAction::EClear, ERenderTargetStoreAction::EStore);
+					RTCount = 4;
+				}
 
 				FRHIDepthRenderTargetView DepthView(SceneContext.GetSceneDepthTexture(), ERenderTargetLoadAction::ELoad, ERenderTargetStoreAction::ENoAction, ERenderTargetLoadAction::ELoad, ERenderTargetStoreAction::ENoAction, FExclusiveDepthStencil(FExclusiveDepthStencil::DepthRead_StencilWrite));
 
-				FRHISetRenderTargetsInfo Info(3, RenderTargets, DepthView);
+				FRHISetRenderTargetsInfo Info(RTCount, RenderTargets, DepthView);
 				RHICmdList.SetRenderTargetsAndClear(Info);
 			}
 		} // if ( bNeedsDBufferTargets )
@@ -834,7 +861,7 @@ void FRCPassPostProcessDeferredDecals::Process(FRenderingCompositePassContext& C
 					{
 						LastRenderTargetMode = CurrentRenderTargetMode;
 
-						RenderTargetManager.SetRenderTargetMode(CurrentRenderTargetMode, DecalData.bHasNormal);
+						RenderTargetManager.SetRenderTargetMode(CurrentRenderTargetMode, DecalData.bHasNormal, bPerPixelDBufferMask);
 						Context.SetViewportAndCallRHI(Context.View.ViewRect);
 						RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
 					}
@@ -907,10 +934,19 @@ void FRCPassPostProcessDeferredDecals::Process(FRenderingCompositePassContext& C
 					RHICmdList.DrawIndexedPrimitive(GetUnitCubeIndexBuffer(), PT_TriangleList, 0, 0, 8, 0, ARRAY_COUNT(GCubeIndices) / 3, 1);
 					RenderTargetManager.bGufferADirty |= (RenderTargetManager.TargetsToResolve[FDecalRenderTargetManager::GBufferAIndex] != nullptr);
 				}
+			}
 
+			if ((Scene.Decals.Num() > 0) && CurrentStage == DRS_Emissive)
+			{
 				// we don't modify stencil but if out input was having stencil for us (after base pass - we need to clear)
 				// Clear stencil to 0, which is the assumed default by other passes
-				DrawClearQuad(RHICmdList, false, FLinearColor(), false, 0, true, 0, SceneContext.GetSceneDepthSurface()->GetSizeXY(), FIntRect());
+				FRHIDepthRenderTargetView DepthView(SceneContext.GetSceneDepthTexture(), 
+													ERenderTargetLoadAction::ENoAction, ERenderTargetStoreAction::ENoAction, 
+													ERenderTargetLoadAction::EClear,	ERenderTargetStoreAction::EStore, 
+													FExclusiveDepthStencil(FExclusiveDepthStencil::DepthNop_StencilWrite));
+				FRHISetRenderTargetsInfo Info(0, nullptr, DepthView);
+				RHICmdList.SetRenderTargetsAndClear(Info);
+				//DrawClearQuad(RHICmdList, false, FLinearColor(), false, 0, true, 0, SceneContext.GetSceneDepthSurface()->GetSizeXY(), FIntRect());
 			}
 
 			// This stops the targets from being resolved and decoded until the last view is rendered.
@@ -927,11 +963,18 @@ void FRCPassPostProcessDeferredDecals::Process(FRenderingCompositePassContext& C
 				};
 				RenderTargetManager.FlushMetaData(Textures, 3);
 
-				if (GSupportsRenderTargetWriteMask && bLastView)
+				if (bLastView)
 				{
-					DecodeRTWriteMask(Context);
-					GRenderTargetPool.VisualizeTexture.SetCheckPoint(RHICmdList, SceneContext.DBufferMask);
-					bHasValidDBufferMask = true;
+					if (GSupportsRenderTargetWriteMask)
+					{
+						DecodeRTWriteMask(Context);
+					}
+
+					if (SceneContext.DBufferMask)
+					{
+						GRenderTargetPool.VisualizeTexture.SetCheckPoint(RHICmdList, SceneContext.DBufferMask);
+						bHasValidDBufferMask = true;
+					}
 				}
 			}
 
@@ -1045,7 +1088,7 @@ FDecalRenderTargetManager::FDecalRenderTargetManager(FRHICommandList& InRHICmdLi
 	}
 }
 
-void FDecalRenderTargetManager::SetRenderTargetMode(FDecalRenderingCommon::ERenderTargetMode CurrentRenderTargetMode, bool bHasNormal)
+void FDecalRenderTargetManager::SetRenderTargetMode(FDecalRenderingCommon::ERenderTargetMode CurrentRenderTargetMode, bool bHasNormal, bool bPerPixelDBufferMask)
 {
 	FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
 
@@ -1094,11 +1137,21 @@ void FDecalRenderTargetManager::SetRenderTargetMode(FDecalRenderingCommon::ERend
 		break;
 
 	case FDecalRenderingCommon::RTM_DBuffer:
+	{
 		TargetsToResolve[DBufferAIndex] = SceneContext.DBufferA->GetRenderTargetItem().TargetableTexture;
 		TargetsToResolve[DBufferBIndex] = SceneContext.DBufferB->GetRenderTargetItem().TargetableTexture;
 		TargetsToResolve[DBufferCIndex] = SceneContext.DBufferC->GetRenderTargetItem().TargetableTexture;
-		SetRenderTargets(RHICmdList, 3, &TargetsToResolve[DBufferAIndex], SceneContext.GetSceneDepthTexture(), ESimpleRenderTargetMode::EExistingColorAndDepth, FExclusiveDepthStencil::DepthRead_StencilWrite, TargetsToTransitionWritable[CurrentRenderTargetMode]);
+		uint32 RTCount = 3;
+
+		if (bPerPixelDBufferMask)
+		{
+			TargetsToResolve[DBufferMaskIndex] = SceneContext.DBufferMask->GetRenderTargetItem().TargetableTexture;
+			RTCount = 4;
+		}
+
+		SetRenderTargets(RHICmdList, RTCount, &TargetsToResolve[DBufferAIndex], SceneContext.GetSceneDepthSurface(), ESimpleRenderTargetMode::EExistingColorAndDepth, FExclusiveDepthStencil::DepthRead_StencilWrite, TargetsToTransitionWritable[CurrentRenderTargetMode]);
 		break;
+	}
 
 	case FDecalRenderingCommon::RTM_AmbientOcclusion:
 	{

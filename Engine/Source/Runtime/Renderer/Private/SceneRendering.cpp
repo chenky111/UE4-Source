@@ -1800,13 +1800,12 @@ FSceneRenderer::FSceneRenderer(const FSceneViewFamily* InViewFamily,FHitProxyCon
 	bHasRequestedToggleFreeze = const_cast<FRenderTarget*>(InViewFamily->RenderTarget)->HasToggleFreezeCommand();
 
 	FeatureLevel = Scene->GetFeatureLevel();
+	ShaderPlatform = Scene->GetShaderPlatform();
 }
 
 // static
 FIntPoint FSceneRenderer::ApplyResolutionFraction(const FSceneViewFamily& ViewFamily, const FIntPoint& UnscaledViewSize, float ResolutionFraction)
 {
-	check(FSceneViewScreenPercentageConfig::IsValidResolutionFraction(ResolutionFraction));
-
 	FIntPoint ViewSize;
 
 	// CeilToInt so tha view size is at least 1x1 if ResolutionFraction == FSceneViewScreenPercentageConfig::kMinResolutionFraction.
@@ -1951,6 +1950,8 @@ void FSceneRenderer::PrepareViewRectsForRendering()
 		// Make sure the screen percentage interface has not lied to the renderer about the upper bound.
 		checkf(PrimaryResolutionFraction <= ViewFamily.GetPrimaryResolutionFractionUpperBound(),
 			TEXT("ISceneViewFamilyScreenPercentage::GetPrimaryResolutionFractionUpperBound() should not lie to the renderer."));
+		
+		check(FSceneViewScreenPercentageConfig::IsValidResolutionFraction(PrimaryResolutionFraction));
 
 		// Compute final resolution fraction.
 		float ResolutionFraction = PrimaryResolutionFraction * ViewFamily.SecondaryViewFraction;

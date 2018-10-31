@@ -1733,6 +1733,11 @@ struct FRHICommandSubmitCommandsHint final : public FRHICommand<FRHICommandSubmi
 	RHI_API void Execute(FRHICommandListBase& CmdList);
 };
 
+struct FRHICommandPollOcclusionQueries final : public FRHICommand<FRHICommandPollOcclusionQueries>
+{
+	RHI_API void Execute(FRHICommandListBase& CmdList);
+};
+
 struct FRHICommandBeginScene final : public FRHICommand<FRHICommandBeginScene>
 {
 	FORCEINLINE_DEBUGGABLE FRHICommandBeginScene()
@@ -2596,6 +2601,16 @@ public:
 		new (AllocCommand<FRHICommandSubmitCommandsHint<ECmdList::EGfx>>()) FRHICommandSubmitCommandsHint<ECmdList::EGfx>();
 	}
 
+	FORCEINLINE_DEBUGGABLE void PollOcclusionQueries()
+	{
+		if (Bypass())
+		{
+			CMD_CONTEXT(RHIPollOcclusionQueries)();
+			return;
+		}
+		new (AllocCommand<FRHICommandPollOcclusionQueries>()) FRHICommandPollOcclusionQueries();
+	}
+
 	FORCEINLINE_DEBUGGABLE void TransitionResource(EResourceTransitionAccess TransitionType, FTextureRHIParamRef InTexture)
 	{
 		FTextureRHIParamRef Texture = InTexture;
@@ -3124,7 +3139,7 @@ public:
 class RHI_API FRHICommandListImmediate : public FRHICommandList
 {
 	template <typename LAMBDA>
-	struct TRHILambdaCommand : public FRHICommandBase
+	struct TRHILambdaCommand final : public FRHICommandBase
 	{
 		LAMBDA Lambda;
 

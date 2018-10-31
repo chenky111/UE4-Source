@@ -101,7 +101,7 @@ void UNiagaraDataInterfaceTexture::GetFunctions(TArray<FNiagaraFunctionSignature
 		Sig.bRequiresContext = false;
 		Sig.Inputs.Add(FNiagaraVariable(FNiagaraTypeDefinition(GetClass()), TEXT("Texture")));
 		Sig.Inputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetVec2Def(), TEXT("UV")));
-		Sig.SetDescription(LOCTEXT("TextureSampleDesc", "Sample mip level 0 of the input 2d texture at the specified UV coordinates. The UV origin (0,0) is in the upper left hand corner of the image."));
+		Sig.SetDescription(LOCTEXT("TextureSampleTexture2DDesc", "Sample mip level 0 of the input 2d texture at the specified UV coordinates. The UV origin (0,0) is in the upper left hand corner of the image."));
 		Sig.Outputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetVec4Def(), TEXT("Value")));
 		//Sig.Owner = *GetName();
 
@@ -115,7 +115,7 @@ void UNiagaraDataInterfaceTexture::GetFunctions(TArray<FNiagaraFunctionSignature
 	//	Sig.bRequiresContext = false;
 	//	Sig.Inputs.Add(FNiagaraVariable(FNiagaraTypeDefinition(GetClass()), TEXT("Texture")));
 	//	Sig.Inputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetVec3Def(), TEXT("UVW")));
-	//	Sig.SetDescription(LOCTEXT("TextureSampleDesc", "Sample mip level 0 of the input 3d texture at the specified UVW coordinates. The UVW origin (0,0) is in the bottom left hand corner of the volume."));
+	//	Sig.SetDescription(LOCTEXT("TextureSampleVolumeTextureDesc", "Sample mip level 0 of the input 3d texture at the specified UVW coordinates. The UVW origin (0,0) is in the bottom left hand corner of the volume."));
 	//	Sig.Outputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetVec4Def(), TEXT("Value")));
 	//	//Sig.Owner = *GetName();
 
@@ -136,7 +136,7 @@ void UNiagaraDataInterfaceTexture::GetFunctions(TArray<FNiagaraFunctionSignature
 		Sig.Inputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetVec2Def(), TEXT("DDX")));
 		Sig.Inputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetVec2Def(), TEXT("DDY")));
 		
-		Sig.SetDescription(LOCTEXT("TextureSampleDesc", "Return a pseudovolume texture sample.\n"
+		Sig.SetDescription(LOCTEXT("TextureSamplePseudoVolumeTextureDesc", "Return a pseudovolume texture sample.\n"
 			"Useful for simulating 3D texturing with a 2D texture or as a texture flipbook with lerped transitions.\n"
 			"Treats 2d layout of frames as a 3d texture and performs bilinear filtering by blending with an offset Z frame.\n"
 			"Texture = Input Texture Object storing Volume Data\n"
@@ -165,7 +165,9 @@ void UNiagaraDataInterfaceTexture::GetFunctions(TArray<FNiagaraFunctionSignature
 		OutFunctions.Add(Sig);
 	}
 }
+
 DEFINE_NDI_DIRECT_FUNC_BINDER(UNiagaraDataInterfaceTexture, SampleTexture);
+DEFINE_NDI_DIRECT_FUNC_BINDER(UNiagaraDataInterfaceTexture, SamplePseudoVolumeTexture)
 void UNiagaraDataInterfaceTexture::GetVMExternalFunction(const FVMExternalFunctionBindingInfo& BindingInfo, void* InstanceData, FVMExternalFunction &OutFunc)
 {
 	if (BindingInfo.Name == SampleTexture2DName)
@@ -175,21 +177,14 @@ void UNiagaraDataInterfaceTexture::GetVMExternalFunction(const FVMExternalFuncti
 	}
 	else if (BindingInfo.Name == SamplePseudoVolumeTextureName)
 	{
-		//check(BindingInfo.GetNumInputs() == 2 && BindingInfo.GetNumOutputs() == 4);
-		OutFunc = FVMExternalFunction::CreateUObject(this, &UNiagaraDataInterfaceTexture::NoOp);
-
+		check(BindingInfo.GetNumInputs() == 12 && BindingInfo.GetNumOutputs() == 4);
+		NDI_FUNC_BINDER(UNiagaraDataInterfaceTexture, SamplePseudoVolumeTexture)::Bind(this, OutFunc);
 	}
 	else if (BindingInfo.Name == TextureDimsName)
 	{
 		check(BindingInfo.GetNumInputs() == 0 && BindingInfo.GetNumOutputs() == 2);
 		OutFunc = FVMExternalFunction::CreateUObject(this, &UNiagaraDataInterfaceTexture::GetTextureDimensions);
 	}
-}
-
-
-void UNiagaraDataInterfaceTexture::NoOp(FVectorVMContext& Context)
-{
-
 }
 
 void UNiagaraDataInterfaceTexture::GetTextureDimensions(FVectorVMContext& Context)
@@ -236,6 +231,61 @@ void UNiagaraDataInterfaceTexture::SampleTexture(FVectorVMContext& Context)
 		*OutSampleA.GetDestAndAdvance() = 1.0;
 	}
 
+}
+
+void UNiagaraDataInterfaceTexture::SamplePseudoVolumeTexture(FVectorVMContext& Context)
+{
+	// Noop handler which just returns magenta since this doesn't run on CPU.
+	VectorVM::FExternalFuncInputHandler<float> UVW_UParam(Context);
+	VectorVM::FExternalFuncInputHandler<float> UVW_VParam(Context);
+	VectorVM::FExternalFuncInputHandler<float> UVW_WParam(Context);
+
+	VectorVM::FExternalFuncInputHandler<float> XYNumFrames_XParam(Context);
+	VectorVM::FExternalFuncInputHandler<float> XYNumFrames_YParam(Context);
+	
+	VectorVM::FExternalFuncInputHandler<float> TotalNumFramesParam(Context);
+
+	VectorVM::FExternalFuncInputHandler<int32> MipModeParam(Context);
+
+	VectorVM::FExternalFuncInputHandler<float> MipLevelParam(Context);
+
+	VectorVM::FExternalFuncInputHandler<float> DDX_XParam(Context);
+	VectorVM::FExternalFuncInputHandler<float> DDX_YParam(Context);
+
+	VectorVM::FExternalFuncInputHandler<float> DDY_XParam(Context);
+	VectorVM::FExternalFuncInputHandler<float> DDY_YParam(Context);
+
+	VectorVM::FExternalFuncRegisterHandler<float> OutSampleR(Context);
+	VectorVM::FExternalFuncRegisterHandler<float> OutSampleG(Context);
+	VectorVM::FExternalFuncRegisterHandler<float> OutSampleB(Context);
+	VectorVM::FExternalFuncRegisterHandler<float> OutSampleA(Context);
+
+	for (int32 i = 0; i < Context.NumInstances; ++i)
+	{
+		UVW_UParam.Advance();
+		UVW_VParam.Advance();
+		UVW_WParam.Advance();
+
+		XYNumFrames_XParam.Advance();
+		XYNumFrames_YParam.Advance();
+
+		TotalNumFramesParam.Advance();
+
+		MipModeParam.Advance();
+
+		MipLevelParam.Advance();
+
+		DDX_XParam.Advance();
+		DDX_YParam.Advance();
+
+		DDY_XParam.Advance();
+		DDY_YParam.Advance();
+
+		*OutSampleR.GetDestAndAdvance() = 1.0;
+		*OutSampleG.GetDestAndAdvance() = 0.0;
+		*OutSampleB.GetDestAndAdvance() = 1.0;
+		*OutSampleA.GetDestAndAdvance() = 1.0;
+	}
 }
 
 bool UNiagaraDataInterfaceTexture::GetFunctionHLSL(const FName& DefinitionFunctionName, FString InstanceFunctionName, FNiagaraDataInterfaceGPUParamInfo& ParamInfo, FString& OutHLSL)

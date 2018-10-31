@@ -135,7 +135,7 @@ private:
 
 	FNiagaraScriptExecutionContext SpawnExecContext;
 	FNiagaraScriptExecutionContext UpdateExecContext;
-	FNiagaraComputeExecutionContext GPUExecContext;
+	FNiagaraComputeExecutionContext* GPUExecContext;
 	TArray<FNiagaraScriptExecutionContext> EventExecContexts;
 
 	FNiagaraParameterDirectBinding<float> SpawnIntervalBinding;

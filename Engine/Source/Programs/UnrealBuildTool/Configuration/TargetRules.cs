@@ -715,7 +715,7 @@ namespace UnrealBuildTool
 		/// Whether to disable debug info generation for generated files. This improves link times for modules that have a lot of generated glue code.
 		/// </summary>
 		[XmlConfigFile(Category = "BuildConfiguration")]
-		public bool bDisableDebugInfoForGeneratedCode = true;
+		public bool bDisableDebugInfoForGeneratedCode = false;
 
 		/// <summary>
 		/// Whether to disable debug info on PC in development builds (for faster developer iteration, as link times are extremely fast with debug info disabled).
@@ -935,10 +935,15 @@ namespace UnrealBuildTool
 		[CommandLine("-ToolChain")]
 		public string ToolChainName = null;
 
-        /// <summary>
-        /// Whether to load generated ini files in cooked build
-        /// </summary>
-        public bool bAllowGeneratedIniWhenCooked = true;
+		/// <summary>
+		/// Whether to load generated ini files in cooked build, (GameUserSettings.ini loaded either way)
+		/// </summary>
+		public bool bAllowGeneratedIniWhenCooked = true;
+
+		/// <summary>
+		/// Whether to load non-ufs ini files in cooked build, (GameUserSettings.ini loaded either way)
+		/// </summary>
+		public bool bAllowNonUFSIniWhenCooked = true;
 
 		/// <summary>
 		/// Add all the public folders as include paths for the compile environment.
@@ -1056,6 +1061,11 @@ namespace UnrealBuildTool
 		/// </summary>
 		[RequiresUniqueBuildEnvironment]
 		public string AdditionalLinkerArguments;
+
+		/// <summary>
+		/// When generating project files, specifies the name of the project file to use when there are multiple targets of the same type.
+		/// </summary>
+		public string GeneratedProjectName;
 
 		/// <summary>
 		/// Android-specific target settings.
@@ -1568,7 +1578,7 @@ namespace UnrealBuildTool
 
 		public bool bForceBuildShaderFormats
 		{
-			get { return Inner.bForceBuildTargetPlatforms; }
+			get { return Inner.bForceBuildShaderFormats; }
 		}
 
 		public bool bCompileSimplygon
@@ -2070,6 +2080,11 @@ namespace UnrealBuildTool
 			get { return Inner.AdditionalLinkerArguments; }
 		}
 
+		public string GeneratedProjectName
+		{
+			get { return Inner.GeneratedProjectName; }
+		}
+
 		public ReadOnlyAndroidTargetRules AndroidPlatform
 		{
 			get;
@@ -2131,6 +2146,11 @@ namespace UnrealBuildTool
 		public bool bGenerateProjectFiles
 		{
 			get { return Inner.bGenerateProjectFiles; }
+		}
+
+		public bool bIsEngineInstalled
+		{
+			get { return Inner.bIsEngineInstalled; }
 		}
 
 		#if !__MonoCS__

@@ -11,7 +11,11 @@
 class FVulkanDescriptorPool;
 class FVulkanDescriptorPoolsManager;
 class FVulkanCommandListContextImmediate;
+#if VULKAN_USE_NEW_QUERIES
 class FVulkanOcclusionQueryPool;
+#else
+class FOLDVulkanQueryPool;
+#endif
 
 struct FOptionalVulkanDeviceExtensions
 {
@@ -24,6 +28,7 @@ struct FOptionalVulkanDeviceExtensions
 	uint32 HasEXTValidationCache : 1;
 	uint32 HasAMDBufferMarker : 1;
 	uint32 HasGoogleDisplayTiming : 1;
+	uint32 HasYcbcrSampler : 1;
 };
 
 class FVulkanDevice
@@ -190,6 +195,10 @@ public:
 		return SamplerMap;
 	}
 
+	inline FVulkanShaderFactory& GetShaderFactory()
+	{
+		return ShaderFactory;
+	}
 
 	FVulkanCommandListContextImmediate& GetImmediateContext();
 
@@ -241,9 +250,6 @@ public:
 	void SubmitCommandsAndFlushGPU();
 
 	FVulkanOcclusionQueryPool* AcquireOcclusionQueryPool(uint32 NumQueries);
-/*
-	FVulkanTimestampQueryPool* PrepareTimestampQueryPool(bool& bOutRequiresReset);
-*/
 
 	inline class FVulkanPipelineStateCacheManager* GetPipelineStateCache()
 	{
@@ -301,6 +307,8 @@ private:
 
 	FVulkanDescriptorPoolsManager* DescriptorPoolsManager = nullptr;
 
+	FVulkanShaderFactory ShaderFactory;
+
 	FVulkanSamplerState* DefaultSampler;
 	FVulkanSurface* DefaultImage;
 	VkImageView DefaultImageView;
@@ -319,9 +327,6 @@ private:
 
 	TArray<FVulkanOcclusionQueryPool*> UsedOcclusionQueryPools;
 	TArray<FVulkanOcclusionQueryPool*> FreeOcclusionQueryPools;
-/*
-	FVulkanTimestampQueryPool* TimestampQueryPool = nullptr;
-*/
 
 	uint64 TimestampValidBitsMask = 0;
 
@@ -347,7 +352,9 @@ private:
 	FVulkanCommandListContextImmediate* ImmediateContext;
 	FVulkanCommandListContext* ComputeContext;
 	TArray<FVulkanCommandListContext*> CommandContexts;
+#if VULKAN_SUPPORTS_COLOR_CONVERSIONS
 	TMap<uint32, VkSamplerYcbcrConversion> SamplerColorConversionMap;
+#endif
 
 	void GetDeviceExtensionsAndLayers(TArray<const ANSICHAR*>& OutDeviceExtensions, TArray<const ANSICHAR*>& OutDeviceLayers, bool& bOutDebugMarkers);
 

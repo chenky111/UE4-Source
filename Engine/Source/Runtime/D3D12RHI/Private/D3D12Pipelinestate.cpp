@@ -40,7 +40,14 @@ FD3D12LowLevelGraphicsPipelineStateDesc GetLowLevelGraphicsPipelineStateDesc(con
 	Desc.Desc.DepthStencilState = Initializer.DepthStencilState ? CD3DX12_DEPTH_STENCIL_DESC1(FD3D12DynamicRHI::ResourceCast(Initializer.DepthStencilState)->Desc) : CD3DX12_DEPTH_STENCIL_DESC1(D3D12_DEFAULT);
 #endif // !D3D12_USE_DERIVED_PSO
 
-	Desc.Desc.PrimitiveTopologyType = D3D12PrimitiveTypeToTopologyType(TranslatePrimitiveType(Initializer.PrimitiveType));
+	if (BoundShaderState->GetHullShader() && BoundShaderState->GetDomainShader())
+	{
+		Desc.Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+	}
+	else
+	{
+		Desc.Desc.PrimitiveTopologyType = D3D12PrimitiveTypeToTopologyType(TranslatePrimitiveType(Initializer.PrimitiveType));
+	}
 
 	TranslateRenderTargetFormats(Initializer, Desc.Desc.RTFormatArray, Desc.Desc.DSVFormat);
 
@@ -225,7 +232,6 @@ FD3D12PipelineState::FD3D12PipelineState(FD3D12Adapter* Parent)
 	, FD3D12MultiNodeGPUObject(FRHIGPUMask::All(), FRHIGPUMask::All()) //Create on all, visible on all
 	, Worker(nullptr)
 	, PendingWaitOnWorkerCalls(0)
-	, bAddToDiskCache(false)
 {
 	INC_DWORD_STAT(STAT_D3D12NumPSOs);
 }
@@ -393,7 +399,7 @@ FD3D12GraphicsPipelineState* FD3D12PipelineStateCacheBase::AddToRuntimeCache(con
 
 	{
 		FRWScopeLock Lock(InitializerToGraphicsPipelineMapMutex, FRWScopeLockType::SLT_Write);
-		InitializerToGraphicsPipelineMap.Add(InitializerHash, GraphicsPipelineState);
+		InitializerToGraphicsPipelineMap.Add(FInitializerToGPSOMapKey(&GraphicsPipelineState->PipelineStateInitializer, InitializerHash), GraphicsPipelineState);
 	}
 
 	INC_DWORD_STAT(STAT_PSOGraphicsNumHighlevelCacheEntries);
@@ -550,7 +556,7 @@ FD3D12GraphicsPipelineState* FD3D12PipelineStateCacheBase::FindInRuntimeCache(co
 
 	{
 		FRWScopeLock Lock(InitializerToGraphicsPipelineMapMutex, FRWScopeLockType::SLT_ReadOnly);
-		FD3D12GraphicsPipelineState** GraphicsPipelineState = InitializerToGraphicsPipelineMap.Find(OutHash);
+		FD3D12GraphicsPipelineState** GraphicsPipelineState = InitializerToGraphicsPipelineMap.Find(FInitializerToGPSOMapKey(&Initializer, OutHash));
 		if (GraphicsPipelineState)
 		{
 			INC_DWORD_STAT(STAT_PSOGraphicsHighlevelCacheHit);
