@@ -43,6 +43,7 @@ public:
 		None
 	};
 
+	FORCEINLINE bool GetAreDataInterfacesInitialized() const { return bDataInterfacesInitialized; }
 
 	/** Creates a new niagara System instance with the supplied component. */
 	explicit FNiagaraSystemInstance(UNiagaraComponent* InComponent);
@@ -201,6 +202,7 @@ public:
 	bool GetPerInstanceDataAndOffsets(void*& OutData, uint32& OutDataSize, TMap<TWeakObjectPtr<UNiagaraDataInterface>, int32>*& OutOffsets);
 
 private:
+
 	/** Builds the emitter simulations. */
 	void InitEmitters();
 
@@ -308,4 +310,6 @@ private:
 
 	/** Copy of simulations internal state so that it can be passed to emitters etc. */
 	ENiagaraExecutionState ActualExecutionState;
+
+	bool bDataInterfacesInitialized;
 };
