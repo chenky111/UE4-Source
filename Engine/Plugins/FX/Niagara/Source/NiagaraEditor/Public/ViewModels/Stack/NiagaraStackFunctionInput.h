@@ -198,6 +198,15 @@ public:
 	/** Gets whether or not this input is used as an edit condition for another input and should be hidden. */
 	bool GetIsInlineEditConditionToggle() const;
 
+	/** Gets whether or not a dynamic input script reassignment is pending.  This can happen when trying to fix dynamic inputs which are missing their scripts. */
+	bool GetIsDynamicInputScriptReassignmentPending() const;
+
+	/** Gets whether or not a dynamic input script reassignment should be be pending. */
+	void SetIsDynamicInputScriptReassignmentPending(bool bIsPending);
+
+	/** Reassigns the function script for the current dynamic input without resetting the sub-inputs. */
+	void ReassignDynamicInputScript(UNiagaraScript* DynamicInputScript);
+
 protected:
 	//~ UNiagaraStackEntry interface
 	virtual void FinalizeInternal() override;
@@ -431,4 +440,7 @@ private:
 
 	/** Whether or not this input is an edit condition toggle. */
 	bool bIsInlineEditConditionToggle;
+
+	/** Whether or not the dynamic input for this input has a function script reassignment pending due to a request to fix a missing script. */
+	bool bIsDynamicInputScriptReassignmentPending;
 };

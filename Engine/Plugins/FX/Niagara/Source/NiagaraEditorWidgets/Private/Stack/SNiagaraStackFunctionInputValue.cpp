@@ -217,6 +217,15 @@ void SNiagaraStackFunctionInputValue::Construct(const FArguments& InArgs, UNiaga
 	];
 }
 
+void SNiagaraStackFunctionInputValue::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
+{
+	if (FunctionInput->GetIsDynamicInputScriptReassignmentPending())
+	{
+		FunctionInput->SetIsDynamicInputScriptReassignmentPending(false);
+		ShowReassignDynamicInputScriptMenu();
+	}
+}
+
 bool SNiagaraStackFunctionInputValue::GetInputEnabled() const
 {
 	return FunctionInput->GetHasEditCondition() == false || FunctionInput->GetEditConditionEnabled();
@@ -759,6 +768,51 @@ bool SNiagaraStackFunctionInputValue::OnFunctionInputAllowDrop(TSharedPtr<FDragD
 	}
 
 	return false;
+}
+
+void ReassignDynamicInputScript(UNiagaraStackFunctionInput* FunctionInput, UNiagaraScript* NewDynamicInputScript)
+{
+	FunctionInput->ReassignDynamicInputScript(NewDynamicInputScript);
+}
+
+void CollectDynamicInputActions(FGraphActionListBuilderBase& DynamicInputActions, UNiagaraStackFunctionInput* FunctionInput)
+{
+	const FText CategoryName = LOCTEXT("DynamicInputValueCategory", "Dynamic Inputs");
+	TArray<UNiagaraScript*> DynamicInputScripts;
+	FunctionInput->GetAvailableDynamicInputs(DynamicInputScripts);
+	for (UNiagaraScript* DynamicInputScript : DynamicInputScripts)
+	{
+		const FText DynamicInputText = FText::FromString(FName::NameToDisplayString(DynamicInputScript->GetName(), false));
+		const FText Tooltip = FNiagaraEditorUtilities::FormatScriptAssetDescription(DynamicInputScript->Description, *DynamicInputScript->GetPathName());
+		TSharedPtr<FNiagaraMenuAction> DynamicInputAction(new FNiagaraMenuAction(CategoryName, DynamicInputText, Tooltip, 0, DynamicInputScript->Keywords,
+			FNiagaraMenuAction::FOnExecuteStackAction::CreateStatic(&ReassignDynamicInputScript, FunctionInput, DynamicInputScript)));
+		DynamicInputActions.AddAction(DynamicInputAction);
+	}
+}
+
+void SNiagaraStackFunctionInputValue::ShowReassignDynamicInputScriptMenu()
+{
+	TSharedRef<SBorder> MenuWidget = SNew(SBorder)
+		.BorderImage(FEditorStyle::GetBrush("Menu.Background"))
+		.Padding(5)
+		[
+			SNew(SBox)
+			.WidthOverride(300)
+			.HeightOverride(400)
+			[
+				SNew(SGraphActionMenu)
+				.OnActionSelected(this, &SNiagaraStackFunctionInputValue::OnActionSelected)
+				.OnCollectAllActions_Static(CollectDynamicInputActions, FunctionInput)
+				.AutoExpandActionMenu(true)
+				.ShowFilterTextBox(true)
+				.OnCreateCustomRowExpander_Static(&CreateCustomNiagaraFunctionInputActionExpander)
+			]
+		];
+
+	FGeometry ThisGeometry = GetCachedGeometry();
+	bool bAutoAdjustForDpiScale = false; // Don't adjust for dpi scale because the push menu command is expecting an unscaled position.
+	FVector2D MenuPosition = FSlateApplication::Get().CalculatePopupWindowPosition(ThisGeometry.GetLayoutBoundingRect(), MenuWidget->GetDesiredSize(), bAutoAdjustForDpiScale);
+	FSlateApplication::Get().PushMenu(AsShared(), FWidgetPath(), MenuWidget, MenuPosition, FPopupTransitionEffect::ContextMenu);
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -121,6 +121,7 @@ UNiagaraStackModuleItem::UNiagaraStackModuleItem()
 	: FunctionCallNode(nullptr)
 	, bCanRefresh(false)
 	, InputCollection(nullptr)
+	, bIsModuleScriptReassignmentPending(false)
 {
 }
 
@@ -238,13 +239,11 @@ void UNiagaraStackModuleItem::RefreshChildrenInternal(const TArray<UNiagaraStack
 
 		NewChildren.Add(InputCollection);
 		NewChildren.Add(OutputCollection);
-
-		RefreshIsEnabled();
-
-		Super::RefreshChildrenInternal(CurrentChildren, NewChildren, NewIssues);
-
-		RefreshIssues(NewIssues);
 	}
+
+	RefreshIsEnabled();
+	Super::RefreshChildrenInternal(CurrentChildren, NewChildren, NewIssues);
+	RefreshIssues(NewIssues);
 }
 
 void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
@@ -256,12 +255,29 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 	}
 	if (FunctionCallNode != nullptr)
 	{
-		if (!FunctionCallNode->ScriptIsValid())
+		if(FunctionCallNode->FunctionScript == nullptr && FunctionCallNode->GetClass() == UNiagaraNodeFunctionCall::StaticClass())
+		{
+			NewIssues.Add(FStackIssue(
+				EStackIssueSeverity::Error,
+				LOCTEXT("ModuleScriptMissingShort", "Missing module script"),
+				FText::Format(LOCTEXT("ModuleScriptMissingLong", "The script asset for the assigned module {0} is missing."), FText::FromString(FunctionCallNode->GetFunctionName())),
+				GetStackEditorDataKey(),
+				false,
+				{
+					FStackIssueFix(
+						LOCTEXT("SelectNewModuleScriptFix", "Select a new module script"),
+						FStackIssueFixDelegate::CreateLambda([this]() { this->bIsModuleScriptReassignmentPending = true; })),
+				FStackIssueFix(
+					LOCTEXT("DeleteFix", "Delete this module"),
+					FStackIssueFixDelegate::CreateLambda([this]() { this->Delete(); }))
+				}));
+		}
+		else if (!FunctionCallNode->ScriptIsValid())
 		{
 			FStackIssue InvalidScriptError(
 				EStackIssueSeverity::Error,
 				LOCTEXT("InvalidModuleScriptErrorSummary", "Invalid module script."),
-				LOCTEXT("InvalidModuleScriptError", "The script this module is supposed to execute is missing or invalid for other reasons.  If it depends on an external script that no longer exists there will be load errors in the log."),
+				LOCTEXT("InvalidModuleScriptError", "The script this module is supposed to execute is missing or invalid for other reasons."),
 				GetStackEditorDataKey(),
 				false);
 
@@ -680,6 +696,29 @@ void UNiagaraStackModuleItem::AddInput(FNiagaraVariable InputParameter)
 		UNiagaraNodeAssignment* AssignmentNode = CastChecked<UNiagaraNodeAssignment>(FunctionCallNode);
 		AssignmentNode->AddParameter(InputParameter, FNiagaraConstants::GetAttributeDefaultValue(InputParameter));
 		FNiagaraStackGraphUtilities::InitializeStackFunctionInput(GetSystemViewModel(), GetEmitterViewModel(), GetStackEditorData(), *FunctionCallNode, *FunctionCallNode, InputParameter.GetName());
+	}
+}
+
+bool UNiagaraStackModuleItem::GetIsModuleScriptReassignmentPending() const
+{
+	return bIsModuleScriptReassignmentPending;
+}
+
+void UNiagaraStackModuleItem::SetIsModuleScriptReassignmentPending(bool bIsPending)
+{
+	bIsModuleScriptReassignmentPending = bIsPending;
+}
+
+void UNiagaraStackModuleItem::ReassignModuleScript(UNiagaraScript* ModuleScript)
+{
+	if (ensureMsgf(FunctionCallNode != nullptr && FunctionCallNode->GetClass() == UNiagaraNodeFunctionCall::StaticClass(),
+		TEXT("Can not reassign the module script when the module isn't a valid function call module.")))
+	{
+		FScopedTransaction ScopedTransaction(LOCTEXT("ReassignModuleTransaction", "Reassign module script"));
+		FunctionCallNode->Modify();
+		FunctionCallNode->FunctionScript = ModuleScript;
+		FunctionCallNode->MarkNodeRequiresSynchronization(TEXT("Module script reassigned."), true);
+		RefreshChildren();
 	}
 }
 

@@ -9,6 +9,7 @@
 class UNiagaraNodeFunctionCall;
 class UNiagaraStackFunctionInputCollection;
 class UNiagaraStackModuleItemOutputCollection;
+class UNiagaraScript;
 class INiagaraStackItemGroupAddUtilities;
 struct FAssetData;
 
@@ -55,6 +56,15 @@ public:
 
 	void AddInput(FNiagaraVariable InputParameter);
 
+	/** Gets whether or not a module script reassignment is pending.  This can happen when trying to fix modules which are missing their scripts. */
+	bool GetIsModuleScriptReassignmentPending() const;
+
+	/** Gets whether or not a module script reassignment should be be pending. */
+	void SetIsModuleScriptReassignmentPending(bool bIsPending);
+
+	/** Reassigns the function script for the module without resetting the inputs. */
+	void ReassignModuleScript(UNiagaraScript* ModuleScript);
+
 protected:
 	virtual void RefreshChildrenInternal(const TArray<UNiagaraStackEntry*>& CurrentChildren, TArray<UNiagaraStackEntry*>& NewChildren, TArray<FStackIssue>& NewIssues) override;
 
@@ -79,4 +89,6 @@ private:
 	UNiagaraStackModuleItemOutputCollection* OutputCollection;
 
 	INiagaraStackItemGroupAddUtilities* GroupAddUtilities;
+
+	bool bIsModuleScriptReassignmentPending;
 };

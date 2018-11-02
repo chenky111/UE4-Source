@@ -517,7 +517,11 @@ void UNiagaraStackEntry::RefreshStackErrorChildren()
 
 void UNiagaraStackEntry::IssueModified()
 {
-	RefreshChildren();
+	if (bIsFinalized == false)
+	{
+		// Fixing an issue may have caused this entry to be deleted and finalized, so don't refresh in that case.
+		RefreshChildren();
+	}
 }
 
 void UNiagaraStackEntry::BeginDestroy()

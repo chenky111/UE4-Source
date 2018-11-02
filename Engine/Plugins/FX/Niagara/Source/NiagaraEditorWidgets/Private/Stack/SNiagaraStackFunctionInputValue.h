@@ -25,6 +25,8 @@ public:
 
 	void Construct(const FArguments& InArgs, UNiagaraStackFunctionInput* InFunctionInput);
 
+	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
+
 private:
 
 	bool GetInputEnabled() const;
@@ -129,6 +131,8 @@ private:
 	FReply OnFunctionInputDrop(TSharedPtr<FDragDropOperation> DragDropOperation);
 
 	bool OnFunctionInputAllowDrop(TSharedPtr<FDragDropOperation> DragDropOperation);
+
+	void ShowReassignDynamicInputScriptMenu();
 
 private:
 	UNiagaraStackFunctionInput* FunctionInput;

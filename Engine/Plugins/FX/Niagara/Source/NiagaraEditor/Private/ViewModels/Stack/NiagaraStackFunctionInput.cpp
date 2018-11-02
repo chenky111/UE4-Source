@@ -50,6 +50,7 @@ UNiagaraStackFunctionInput::UNiagaraStackFunctionInput()
 	, bUpdatingLocalValueDirectly(false)
 	, bShowEditConditionInline(false)
 	, bIsInlineEditConditionToggle(false)
+	, bIsDynamicInputScriptReassignmentPending(false)
 {
 }
 
@@ -309,21 +310,41 @@ void UNiagaraStackFunctionInput::RefreshChildrenInternal(const TArray<UNiagaraSt
 
 	if (InputValues.Mode == EValueMode::Dynamic && InputValues.DynamicNode.IsValid())
 	{
-		UNiagaraStackFunctionInputCollection* DynamicInputEntry = FindCurrentChildOfTypeByPredicate<UNiagaraStackFunctionInputCollection>(CurrentChildren,
-			[=](UNiagaraStackFunctionInputCollection* CurrentFunctionInputEntry) 
-		{ 
-			return CurrentFunctionInputEntry->GetInputFunctionCallNode() == InputValues.DynamicNode.Get() &&
-				CurrentFunctionInputEntry->GetModuleNode() == OwningModuleNode.Get(); 
-		});
+		if (InputValues.DynamicNode->FunctionScript != nullptr)
+		{
+			UNiagaraStackFunctionInputCollection* DynamicInputEntry = FindCurrentChildOfTypeByPredicate<UNiagaraStackFunctionInputCollection>(CurrentChildren,
+				[=](UNiagaraStackFunctionInputCollection* CurrentFunctionInputEntry)
+			{
+				return CurrentFunctionInputEntry->GetInputFunctionCallNode() == InputValues.DynamicNode.Get() &&
+					CurrentFunctionInputEntry->GetModuleNode() == OwningModuleNode.Get();
+			});
 
-		if (DynamicInputEntry == nullptr)
-		{ 
-			DynamicInputEntry = NewObject<UNiagaraStackFunctionInputCollection>(this);
-			DynamicInputEntry->Initialize(CreateDefaultChildRequiredData(), *OwningModuleNode, *InputValues.DynamicNode.Get(), GetOwnerStackItemEditorDataKey());
-			DynamicInputEntry->SetShouldShowInStack(false);
+			if (DynamicInputEntry == nullptr)
+			{
+				DynamicInputEntry = NewObject<UNiagaraStackFunctionInputCollection>(this);
+				DynamicInputEntry->Initialize(CreateDefaultChildRequiredData(), *OwningModuleNode, *InputValues.DynamicNode.Get(), GetOwnerStackItemEditorDataKey());
+				DynamicInputEntry->SetShouldShowInStack(false);
+			}
+
+			NewChildren.Add(DynamicInputEntry);
 		}
-
-		NewChildren.Add(DynamicInputEntry);
+		else
+		{
+			NewIssues.Add(FStackIssue(
+				EStackIssueSeverity::Error,
+				LOCTEXT("DynamicInputScriptMissingShort", "Missing dynamic input script"),
+				FText::Format(LOCTEXT("DynamicInputScriptMissingLong", "The script asset for the assigned dynamic input {0} is missing."), FText::FromString(InputValues.DynamicNode->GetFunctionName())),
+				GetStackEditorDataKey(),
+				false,
+				{
+					FStackIssueFix(
+						LOCTEXT("SelectNewDynamicInputScriptFix", "Select a new dynamic input script"),
+						FStackIssueFixDelegate::CreateLambda([this]() { this->bIsDynamicInputScriptReassignmentPending = true; })),
+					FStackIssueFix(
+						LOCTEXT("ResetFix", "Reset this input to it's default value"),
+						FStackIssueFixDelegate::CreateLambda([this]() { this->Reset(); }))
+				}));
+		}
 	}
 
 	if (InputValues.Mode == EValueMode::Data && InputValues.DataObjects.GetValueObject() != nullptr)
@@ -1446,6 +1467,29 @@ bool UNiagaraStackFunctionInput::GetVisibleConditionEnabled() const
 bool UNiagaraStackFunctionInput::GetIsInlineEditConditionToggle() const
 {
 	return bIsInlineEditConditionToggle;
+}
+
+bool UNiagaraStackFunctionInput::GetIsDynamicInputScriptReassignmentPending() const
+{
+	return bIsDynamicInputScriptReassignmentPending;
+}
+
+void UNiagaraStackFunctionInput::SetIsDynamicInputScriptReassignmentPending(bool bIsPending)
+{
+	bIsDynamicInputScriptReassignmentPending = bIsPending;
+}
+
+void UNiagaraStackFunctionInput::ReassignDynamicInputScript(UNiagaraScript* DynamicInputScript)
+{
+	if (ensureMsgf(InputValues.Mode == EValueMode::Dynamic && InputValues.DynamicNode != nullptr && InputValues.DynamicNode->GetClass() == UNiagaraNodeFunctionCall::StaticClass(),
+		TEXT("Can not reassign the dynamic input script when tne input doesn't have a valid dynamic input.")))
+	{
+		FScopedTransaction ScopedTransaction(LOCTEXT("ReassignDynamicInputTransaction", "Reassign dynamic input script"));
+		InputValues.DynamicNode->Modify();
+		InputValues.DynamicNode->FunctionScript = DynamicInputScript;
+		InputValues.DynamicNode->MarkNodeRequiresSynchronization(TEXT("Dynamic input script reassigned."), true);
+		RefreshChildren();
+	}
 }
 
 void UNiagaraStackFunctionInput::OnGraphChanged(const struct FEdGraphEditAction& InAction)
