@@ -268,6 +268,7 @@ private:
 
 UVectorFieldStatic::UVectorFieldStatic(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
+	, bAllowCPUAccess(false)
 {
 }
 
@@ -280,18 +281,84 @@ void UVectorFieldStatic::InitInstance(FVectorFieldInstance* Instance, bool bPrev
 void UVectorFieldStatic::InitResource()
 {
 	check(Resource == NULL);
-	Resource = new FVectorFieldStaticResource( this );
-	BeginInitResource( Resource );
+
+	// Loads and copies the bulk data into CPUData if bAllowCPUAccess is set, otherwise clear CPUData. 
+	UpdateCPUData();
+
+	Resource = new FVectorFieldStaticResource(this);
+	BeginInitResource(Resource);
 }
 
 
 void UVectorFieldStatic::UpdateResource()
 {
 	check(Resource != NULL);
+
+	// Loads and copies the bulk data into CPUData if bAllowCPUAccess is set, otherwise clears CPUData. 
+	UpdateCPUData();
+
 	FVectorFieldStaticResource* StaticResource = (FVectorFieldStaticResource*)Resource;
 	StaticResource->UpdateResource(this);
 }
 
+#if WITH_ENGINE
+ENGINE_API void UVectorFieldStatic::SetCPUAccessEnabled()
+{
+	bAllowCPUAccess = true;
+	UpdateCPUData();
+}
+#endif // WITH_ENGINE
+
+void UVectorFieldStatic::UpdateCPUData() 
+{
+	if (bAllowCPUAccess)
+	{
+		// Grab a copy of the bulk vector data. 
+		// If the data is already loaded it makes a copy and discards the old content,
+		// otherwise it simply loads the data directly from file into the pointer after allocating.
+		FFloat16Color *Ptr = nullptr;
+		SourceData.GetCopy((void**)&Ptr, /* bDiscardInternalCopy */ true);
+		
+		// Make sure the data is actually valid. 
+		ensure(Ptr != nullptr); 
+
+		// Make sure the size actually match what we expect
+		ensure(SourceData.GetBulkDataSize() == (SizeX*SizeY*SizeZ) * sizeof(FFloat16Color));
+
+		// GetCopy should free/unload the data.
+		ensure(!SourceData.IsBulkDataLoaded());
+
+		// Convert from 16-bit to 32-bit floats.
+		// Use vec4s instead of vec3s because of alignment, which in principle would be better for 
+		// cache and automatic or manual vectorization, even if the memory usage is 33% larger. 
+		// Need to profile to to make sure.
+		CPUData.SetNumUninitialized(SizeX*SizeY*SizeZ);
+		for (size_t i = 0; i < SizeX*SizeY*SizeZ; i++)
+		{
+			CPUData[i] = FVector4(float(Ptr[i].R), float(Ptr[i].G), float(Ptr[i].B), 0.0f);
+		}
+
+		FMemory::Free(Ptr);
+	}
+	else
+	{
+		// If there's no need to access the CPU data just empty the array.
+		CPUData.Empty();
+	}
+}
+
+FTextureRHIParamRef UVectorFieldStatic::GetVolumeTextureRef()
+{
+	if (this && Resource)
+	{
+		return Resource->VolumeTextureRHI;
+	}
+	else
+	{	
+		// Fallback to a global 1x1x1 black texture when no vector field is loaded or unavailable
+		return GBlackVolumeTexture->TextureRHI;
+	}
+}
 
 void UVectorFieldStatic::ReleaseResource()
 {

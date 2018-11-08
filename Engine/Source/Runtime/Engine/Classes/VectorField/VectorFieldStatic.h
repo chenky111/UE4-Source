@@ -31,6 +31,9 @@ class UVectorFieldStatic : public UVectorField
 	UPROPERTY(Category=VectorFieldStatic, VisibleAnywhere)
 	int32 SizeZ;
 
+	/** Whether to keep vector field data accessible to the CPU. */
+	UPROPERTY(Category=VectorFieldStatic, EditAnywhere)
+	bool bAllowCPUAccess;
 
 public:
 	/** The resource for this vector field. */
@@ -38,6 +41,11 @@ public:
 
 	/** Source vector data. */
 	FByteBulkData SourceData;
+
+	/** Local copy of the source vector data. */
+	UPROPERTY(Transient)
+	TArray<FVector4> CPUData; 
+
 
 #if WITH_EDITORONLY_DATA
 	UPROPERTY()
@@ -68,6 +76,17 @@ public:
 	 * Initialize resources.
 	 */
 	ENGINE_API void InitResource();
+
+	/** Takes a local copy of the source bulk data so that it is readable at runtime on the CPU. */
+	ENGINE_API void UpdateCPUData();
+
+#if WITH_EDITOR
+	/** Sets the bAllowCPUAccess flag and calls UpdateCPUData(). */
+	ENGINE_API void SetCPUAccessEnabled();
+#endif // WITH_EDITOR
+
+	/** Returns a reference to a 3D texture handle for the GPU data. */
+	ENGINE_API FTextureRHIParamRef GetVolumeTextureRef();
 private:
 
 	/** Permit the factory class to update and release resources externally. */
@@ -84,5 +103,6 @@ private:
 	 */
 	ENGINE_API void ReleaseResource();
 
+	
 };
 
