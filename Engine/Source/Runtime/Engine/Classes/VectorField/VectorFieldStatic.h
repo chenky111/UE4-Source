@@ -13,6 +13,7 @@
 #include "VectorFieldStatic.generated.h"
 
 struct FPropertyChangedEvent;
+class FRHITexture;
 
 UCLASS(hidecategories=VectorFieldBounds, MinimalAPI)
 class UVectorFieldStatic : public UVectorField
@@ -86,7 +87,7 @@ public:
 #endif // WITH_EDITOR
 
 	/** Returns a reference to a 3D texture handle for the GPU data. */
-	ENGINE_API FTextureRHIParamRef GetVolumeTextureRef();
+	ENGINE_API FRHITexture* GetVolumeTextureRef();
 private:
 
 	/** Permit the factory class to update and release resources externally. */
