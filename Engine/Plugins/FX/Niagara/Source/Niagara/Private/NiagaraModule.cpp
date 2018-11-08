@@ -67,6 +67,7 @@ FNiagaraVariable INiagaraModule::Engine_Owner_XAxis;
 FNiagaraVariable INiagaraModule::Engine_Owner_YAxis;
 FNiagaraVariable INiagaraModule::Engine_Owner_ZAxis;
 FNiagaraVariable INiagaraModule::Engine_Owner_Scale;
+FNiagaraVariable INiagaraModule::Engine_Owner_Rotation;
 
 FNiagaraVariable INiagaraModule::Engine_Owner_SystemLocalToWorld;
 FNiagaraVariable INiagaraModule::Engine_Owner_SystemWorldToLocal;
@@ -162,6 +163,7 @@ void INiagaraModule::StartupModule()
 	Engine_Owner_YAxis = FNiagaraVariable(FNiagaraTypeDefinition::GetVec3Def(), TEXT("Engine.Owner.SystemYAxis"));
 	Engine_Owner_ZAxis = FNiagaraVariable(FNiagaraTypeDefinition::GetVec3Def(), TEXT("Engine.Owner.SystemZAxis"));
 	Engine_Owner_Scale = FNiagaraVariable(FNiagaraTypeDefinition::GetVec3Def(), TEXT("Engine.Owner.Scale"));
+	Engine_Owner_Rotation = FNiagaraVariable(FNiagaraTypeDefinition::GetQuatDef(), TEXT("Engine.Owner.Rotation"));
 
 	Engine_Owner_SystemLocalToWorld = FNiagaraVariable(FNiagaraTypeDefinition::GetMatrix4Def(), TEXT("Engine.Owner.SystemLocalToWorld"));
 	Engine_Owner_SystemWorldToLocal = FNiagaraVariable(FNiagaraTypeDefinition::GetMatrix4Def(), TEXT("Engine.Owner.SystemWorldToLocal"));

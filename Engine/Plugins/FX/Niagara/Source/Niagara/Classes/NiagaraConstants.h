@@ -29,6 +29,7 @@
 #define SYS_PARAM_ENGINE_X_AXIS						INiagaraModule::GetVar_Engine_Owner_XAxis()
 #define SYS_PARAM_ENGINE_Y_AXIS						INiagaraModule::GetVar_Engine_Owner_YAxis()
 #define SYS_PARAM_ENGINE_Z_AXIS						INiagaraModule::GetVar_Engine_Owner_ZAxis()
+#define SYS_PARAM_ENGINE_ROTATION					INiagaraModule::GetVar_Engine_Owner_Rotation()
 #define SYS_PARAM_ENGINE_SCALE						INiagaraModule::GetVar_Engine_Owner_Scale()
 
 #define SYS_PARAM_ENGINE_LOCAL_TO_WORLD				INiagaraModule::GetVar_Engine_Owner_SystemLocalToWorld()

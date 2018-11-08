@@ -269,6 +269,8 @@ private:
 	FNiagaraParameterDirectBinding<FVector> OwnerYAxisParam;
 	FNiagaraParameterDirectBinding<FVector> OwnerZAxisParam;
 
+	FNiagaraParameterDirectBinding<FQuat> OwnerRotationParam;
+
 	FNiagaraParameterDirectBinding<FMatrix> OwnerTransformParam;
 	FNiagaraParameterDirectBinding<FMatrix> OwnerInverseParam;
 	FNiagaraParameterDirectBinding<FMatrix> OwnerTransposeParam;

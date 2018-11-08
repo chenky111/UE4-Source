@@ -125,6 +125,7 @@ public:
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Engine_Owner_YAxis() { return Engine_Owner_YAxis; }
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Engine_Owner_ZAxis() { return Engine_Owner_ZAxis; }
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Engine_Owner_Scale() { return Engine_Owner_Scale; }
+	FORCEINLINE static const FNiagaraVariable&  GetVar_Engine_Owner_Rotation() { return Engine_Owner_Rotation; }
 
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Engine_Owner_SystemLocalToWorld() { return Engine_Owner_SystemLocalToWorld; }
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Engine_Owner_SystemWorldToLocal() { return Engine_Owner_SystemWorldToLocal; }
@@ -212,6 +213,7 @@ private:
 	static FNiagaraVariable Engine_Owner_YAxis;
 	static FNiagaraVariable Engine_Owner_ZAxis;
 	static FNiagaraVariable Engine_Owner_Scale;
+	static FNiagaraVariable Engine_Owner_Rotation;
 
 	static FNiagaraVariable Engine_Owner_SystemLocalToWorld;
 	static FNiagaraVariable Engine_Owner_SystemWorldToLocal;

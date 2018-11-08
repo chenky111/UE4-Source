@@ -604,6 +604,7 @@ void FNiagaraSystemInstance::ReInitInternal()
 	
 	InstanceParameters.Reset();
 	InstanceParameters.AddParameter(SYS_PARAM_ENGINE_POSITION, true, false);
+	InstanceParameters.AddParameter(SYS_PARAM_ENGINE_ROTATION, true, false);
 	InstanceParameters.AddParameter(SYS_PARAM_ENGINE_SCALE, true, false);
 	InstanceParameters.AddParameter(SYS_PARAM_ENGINE_VELOCITY, true, false);
 	InstanceParameters.AddParameter(SYS_PARAM_ENGINE_X_AXIS, true, false);
@@ -650,6 +651,8 @@ void FNiagaraSystemInstance::ReInitInternal()
 	OwnerXAxisParam.Init(InstanceParameters, SYS_PARAM_ENGINE_X_AXIS);
 	OwnerYAxisParam.Init(InstanceParameters, SYS_PARAM_ENGINE_Y_AXIS);
 	OwnerZAxisParam.Init(InstanceParameters, SYS_PARAM_ENGINE_Z_AXIS);
+
+	OwnerRotationParam.Init(InstanceParameters, SYS_PARAM_ENGINE_ROTATION);
 
 	OwnerTransformParam.Init(InstanceParameters, SYS_PARAM_ENGINE_LOCAL_TO_WORLD);
 	OwnerInverseParam.Init(InstanceParameters, SYS_PARAM_ENGINE_WORLD_TO_LOCAL);
@@ -946,6 +949,8 @@ void FNiagaraSystemInstance::TickInstanceParameters(float DeltaSeconds)
 	OwnerXAxisParam.SetValue(ComponentTrans.GetRotation().GetAxisX());
 	OwnerYAxisParam.SetValue(ComponentTrans.GetRotation().GetAxisY());
 	OwnerZAxisParam.SetValue(ComponentTrans.GetRotation().GetAxisZ());
+
+	OwnerRotationParam.SetValue(ComponentTrans.GetRotation());
 
 	FMatrix Transform = ComponentTrans.ToMatrixWithScale();
 	FMatrix Inverse = Transform.Inverse();
