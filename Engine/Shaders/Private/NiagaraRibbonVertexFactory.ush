@@ -502,13 +502,10 @@ void GetTangents(FVertexFactoryInput Input, FVertexFactoryIntermediates Intermed
 	float cosa = cos(Intermediates.Twist);
 	Facing = Facing * cosa + cross(Facing, NormDir) * sin(Intermediates.Twist) + NormDir * dot(NormDir, Facing) * (1-cosa);
 
-	if( abs(dot(NormDir, Facing)) < 0.999f)
+	RightDir = SafeNormalize(cross(NormDir, Facing));
+	if(!any(RightDir))
 	{
-		RightDir = SafeNormalize(cross(NormDir, Facing));
-	}
-	else
-	{
-		RightDir = SafeNormalize(cross(NormDir, float3(0.0f, 0.0f, -1.0f)));
+		RightDir = SafeNormalize(cross(NormDir, float3(0.0f, 0.0f, 1.0f)));
 	}
 
 	Right = RightDir;
