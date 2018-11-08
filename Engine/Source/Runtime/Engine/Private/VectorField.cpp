@@ -301,7 +301,7 @@ void UVectorFieldStatic::UpdateResource()
 	StaticResource->UpdateResource(this);
 }
 
-#if WITH_ENGINE
+#if WITH_EDITOR
 ENGINE_API void UVectorFieldStatic::SetCPUAccessEnabled()
 {
 	bAllowCPUAccess = true;
