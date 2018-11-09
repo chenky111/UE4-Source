@@ -244,19 +244,19 @@ public:
 			FVectorFieldStaticResource*, Resource, this,
 			FUpdateParams, UpdateParams, UpdateParams,
 		{
-			// Free any existing volume data on the resource.
-			FMemory::Free(Resource->VolumeData);
-			
-			// Update settings on this resource.
-			Resource->SizeX = UpdateParams.SizeX;
-			Resource->SizeY = UpdateParams.SizeY;
-			Resource->SizeZ = UpdateParams.SizeZ;
-			Resource->Intensity = UpdateParams.Intensity;
-			Resource->LocalBounds = UpdateParams.Bounds;
-			Resource->VolumeData = UpdateParams.VolumeData;
+				// Free any existing volume data on the resource.
+				FMemory::Free(Resource->VolumeData);
 
-			// Update RHI resources.
-			Resource->UpdateRHI();
+				// Update settings on this resource.
+				Resource->SizeX = UpdateParams.SizeX;
+				Resource->SizeY = UpdateParams.SizeY;
+				Resource->SizeZ = UpdateParams.SizeZ;
+				Resource->Intensity = UpdateParams.Intensity;
+				Resource->LocalBounds = UpdateParams.Bounds;
+				Resource->VolumeData = UpdateParams.VolumeData;
+
+				// Update RHI resources.
+				Resource->UpdateRHI();
 		});
 	}
 
@@ -307,9 +307,9 @@ ENGINE_API void UVectorFieldStatic::SetCPUAccessEnabled()
 	bAllowCPUAccess = true;
 	UpdateCPUData();
 }
-#endif // WITH_ENGINE
+#endif // WITH_EDITOR
 
-void UVectorFieldStatic::UpdateCPUData() 
+void UVectorFieldStatic::UpdateCPUData()
 {
 	if (bAllowCPUAccess)
 	{
@@ -318,20 +318,34 @@ void UVectorFieldStatic::UpdateCPUData()
 		// otherwise it simply loads the data directly from file into the pointer after allocating.
 		FFloat16Color *Ptr = nullptr;
 		SourceData.GetCopy((void**)&Ptr, /* bDiscardInternalCopy */ true);
-		
+
 		// Make sure the data is actually valid. 
-		ensure(Ptr != nullptr); 
+		if (!ensure(Ptr))
+		{
+			UE_LOG(LogVectorField, Error, TEXT("Vector field data is not loaded."));
+			return;
+		}
 
 		// Make sure the size actually match what we expect
-		ensure(SourceData.GetBulkDataSize() == (SizeX*SizeY*SizeZ) * sizeof(FFloat16Color));
+		if (!ensure(SourceData.GetBulkDataSize() == (SizeX*SizeY*SizeZ) * sizeof(FFloat16Color)))
+		{
+			UE_LOG(LogVectorField, Error, TEXT("Vector field bulk data size is different than expected. Expected %d bytes, got %d."), SizeX*SizeY*SizeZ, SourceData.GetBulkDataSize());
+			FMemory::Free(Ptr);
+			return;
+		}
 
 		// GetCopy should free/unload the data.
-		ensure(!SourceData.IsBulkDataLoaded());
+		if (!ensure(!SourceData.IsBulkDataLoaded()))
+		{
+			UE_LOG(LogVectorField, Error, TEXT("SourceData.GetCopy to unload the data, but it is still loaded."));
+			FMemory::Free(Ptr);
+			return;
+		}
 
 		// Convert from 16-bit to 32-bit floats.
-		// Use vec4s instead of vec3s because of alignment, which in principle would be better for 
-		// cache and automatic or manual vectorization, even if the memory usage is 33% larger. 
-		// Need to profile to to make sure.
+			// Use vec4s instead of vec3s because of alignment, which in principle would be better for 
+			// cache and automatic or manual vectorization, even if the memory usage is 33% larger. 
+			// Need to profile to to make sure.
 		CPUData.SetNumUninitialized(SizeX*SizeY*SizeZ);
 		for (size_t i = 0; i < (size_t)(SizeX*SizeY*SizeZ); i++)
 		{
@@ -347,7 +361,7 @@ void UVectorFieldStatic::UpdateCPUData()
 	}
 }
 
-FRHITexture* UVectorFieldStatic::GetVolumeTextureRef()
+FTextureRHIParamRef UVectorFieldStatic::GetVolumeTextureRef()
 {
 	if (Resource)
 	{

@@ -358,7 +358,7 @@ struct FNiagaraDataInterfaceParametersCS_VectorField : public FNiagaraDataInterf
 
 		// Get and set 3D texture handle from the currently bound vector field.
 		UVectorFieldStatic* StaticVectorField = Cast<UVectorFieldStatic>(VFDI->Field); 
-		FRHITexture* VolumeTextureRHI = StaticVectorField->GetVolumeTextureRef(); // Returns nullptr if StaticVectorField == nullptr
+		FTextureRHIParamRef VolumeTextureRHI = StaticVectorField ? StaticVectorField->GetVolumeTextureRef() : GBlackVolumeTexture->TextureRHI;
 		SetTextureParameter(RHICmdList, ComputeShaderRHI, VectorFieldTexture, VolumeTextureRHI); 
 		
 		// Get and set sampler state
