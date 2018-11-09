@@ -361,7 +361,7 @@ void UVectorFieldStatic::UpdateCPUData()
 	}
 }
 
-FTextureRHIParamRef UVectorFieldStatic::GetVolumeTextureRef()
+FRHITexture* UVectorFieldStatic::GetVolumeTextureRef()
 {
 	if (Resource)
 	{
