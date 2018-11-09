@@ -333,7 +333,7 @@ void UVectorFieldStatic::UpdateCPUData()
 		// cache and automatic or manual vectorization, even if the memory usage is 33% larger. 
 		// Need to profile to to make sure.
 		CPUData.SetNumUninitialized(SizeX*SizeY*SizeZ);
-		for (size_t i = 0; i < SizeX*SizeY*SizeZ; i++)
+		for (size_t i = 0; i < (size_t)(SizeX*SizeY*SizeZ); i++)
 		{
 			CPUData[i] = FVector4(float(Ptr[i].R), float(Ptr[i].G), float(Ptr[i].B), 0.0f);
 		}
@@ -349,7 +349,7 @@ void UVectorFieldStatic::UpdateCPUData()
 
 FRHITexture* UVectorFieldStatic::GetVolumeTextureRef()
 {
-	if (this && Resource)
+	if (Resource)
 	{
 		return Resource->VolumeTextureRHI;
 	}
