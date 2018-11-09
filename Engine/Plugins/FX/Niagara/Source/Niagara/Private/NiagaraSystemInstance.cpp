@@ -941,8 +941,8 @@ void FNiagaraSystemInstance::TickInstanceParameters(float DeltaSeconds)
 	//TODO: Create helper binding objects to avoid the search in set parameter value.
 	//Set System params.
 	FTransform ComponentTrans = Component->GetComponentTransform();
-	FVector OldPos = OwnerPositionParam.GetValue();// ComponentTrans.GetLocation();
 	FVector CurrPos = ComponentTrans.GetLocation();
+	FVector OldPos = FMath::IsNearlyZero(Age) ? CurrPos : OwnerPositionParam.GetValue(); // The first frame the value in OwnerPositionParam is uninitialized memory, we need to make sure that we don't use it.
 	OwnerPositionParam.SetValue(CurrPos);
 	OwnerScaleParam.SetValue(ComponentTrans.GetScale3D());
 	OwnerVelocityParam.SetValue((CurrPos - OldPos) / DeltaSeconds);
