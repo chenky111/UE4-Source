@@ -63,7 +63,7 @@ bool UNiagaraNodeCustomHlsl::GetTokens(TArray<FString>& OutTokens) const
 		return false;
 	}
 	
-	FString InputVars = TEXT(";/*+-)(?:, \t\n");
+	FString InputVars = TEXT(";/*+-)(?:, []\t\n");
 	int32 LastValidIdx = INDEX_NONE;
 	bool bComment = false;
 	int32 TargetLength = HlslData.Len();
