@@ -17,6 +17,8 @@
 #include "NiagaraRibbonRendererProperties.h"
 #include "NiagaraRenderer.h"
 #include "Misc/CoreDelegates.h"
+#include "NiagaraShaderModule.h"
+#include "UObject/CoreRedirects.h"
 
 IMPLEMENT_MODULE(INiagaraModule, Niagara);
 
@@ -231,6 +233,13 @@ void INiagaraModule::StartupModule()
 	UNiagaraRibbonRendererProperties::InitCDOPropertiesAfterModuleStartup();
 	UNiagaraMeshRendererProperties::InitCDOPropertiesAfterModuleStartup();
 
+	// Register the data interface CDO finder with teh shader module..
+	INiagaraShaderModule& NiagaraShaderModule = FModuleManager::LoadModuleChecked<INiagaraShaderModule>("NiagaraShader");
+	NiagaraShaderModule.SetOnRequestDefaultDataInterfaceHandler(INiagaraShaderModule::FOnRequestDefaultDataInterface::CreateLambda([](const FString& DIClassName) -> UNiagaraDataInterfaceBase*
+	{
+		return FNiagaraTypeRegistry::GetDefaultDataInterfaceByName(DIClassName);
+	}));
+
 }
 
 void INiagaraModule::ShutdownRenderingResources()
@@ -247,6 +256,10 @@ void INiagaraModule::ShutdownModule()
 		delete Pair.Value;
 		Pair.Value = nullptr;
 	}
+
+	// Clear out the handler when shutting down..
+	INiagaraShaderModule& NiagaraShaderModule = FModuleManager::LoadModuleChecked<INiagaraShaderModule>("NiagaraShader");
+	NiagaraShaderModule.ResetOnRequestDefaultDataInterfaceHandler();
 
 	CVarDetailLevel.AsVariable()->SetOnChangedCallback(FConsoleVariableDelegate());
 	ShutdownRenderingResources();
@@ -766,6 +779,41 @@ bool FNiagaraVariable::GetValue() const
 }
 
 //////////////////////////////////////////////////////////////////////////
+
+UNiagaraDataInterfaceBase* FNiagaraTypeRegistry::GetDefaultDataInterfaceByName(const FString& DIClassName)
+{
+	UClass* DIClass = nullptr;
+	for (const FNiagaraTypeDefinition& Def : RegisteredTypes)
+	{
+		if (Def.IsDataInterface())
+		{
+			UClass* FoundDIClass = Def.GetClass();
+			if (FoundDIClass && (FoundDIClass->GetName() == DIClassName || FoundDIClass->GetFullName() == DIClassName))
+			{
+				DIClass = FoundDIClass;
+				break;
+			}
+		}
+	}
+	// Consider the possibility of a redirector pointing to a new location..
+	if (DIClass == nullptr)
+	{
+		FCoreRedirectObjectName OldObjName;
+		OldObjName.ObjectName = *DIClassName;
+		FCoreRedirectObjectName NewObjName = FCoreRedirects::GetRedirectedName(ECoreRedirectFlags::Type_Class, OldObjName);
+		if (NewObjName.IsValid() && OldObjName != NewObjName)
+		{
+			return GetDefaultDataInterfaceByName(NewObjName.ObjectName.ToString());
+		}
+	}
+
+	if (DIClass)
+	{
+		return CastChecked<UNiagaraDataInterfaceBase>(DIClass->GetDefaultObject(false)); // We wouldn't be registered if the CDO had not already been created...
+	}
+
+	return nullptr;
+}
 
 
 FDelegateHandle INiagaraModule::SetOnProcessShaderCompilationQueue(FOnProcessQueue InOnProcessQueue)
