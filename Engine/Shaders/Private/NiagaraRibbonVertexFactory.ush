@@ -149,13 +149,12 @@ Buffer<int> SortedIndices;
 uint SortedIndicesOffset;
 
 Buffer<float> SegmentDistances;
+Buffer<uint> MultiRibbonIndices;
 Buffer<float> PackedPerRibbonDataByIndex;
 
 struct FVertexFactoryInput
 {
 	uint VertexId					: SV_VertexID;
-
-	uint RibbonIndex				: ATTRIBUTE0;
 
 	// Optional instance ID for vertex layered rendering
 #if FEATURE_LEVEL >= FEATURE_LEVEL_SM4 && ONEPASS_POINTLIGHT_SHADOW && USING_VERTEX_SHADER_LAYER
@@ -550,7 +549,9 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 	float2 UV1Offset;
 	uint NumSegments;
 	uint StartVertexId;
-	UnpackPerRibbonDataByIndex(Input.RibbonIndex, UV0Scale, UV0Offset, UV1Scale, UV1Offset, NumSegments,  StartVertexId);
+
+	uint RibbonIndex = MultiRibbonIndices[Input.VertexId / 2];
+	UnpackPerRibbonDataByIndex(RibbonIndex, UV0Scale, UV0Offset, UV1Scale, UV1Offset, NumSegments,  StartVertexId);
 	
 	uint StartParticleId = GetParticleIdByVertexId(StartVertexId);
 
