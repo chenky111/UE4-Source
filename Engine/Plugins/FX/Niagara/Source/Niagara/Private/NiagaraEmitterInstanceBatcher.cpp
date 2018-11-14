@@ -495,7 +495,7 @@ void NiagaraEmitterInstanceBatcher::Run(const FNiagaraComputeExecutionContext *C
 	{
 		//UE_LOG(LogNiagara, Warning, TEXT("Queued up!"));
 
-		if (!Context->GPUDebugDataReadbackFloat && !Context->GPUDebugDataReadbackInt && !Context->GPUDebugDataReadbackCounts)
+		if (!Context->GPUDebugDataReadbackFloat && !Context->GPUDebugDataReadbackInt && !Context->GPUDebugDataReadbackCounts && Context->MainDataSet != nullptr)
 		{
 			FRWBuffer &DatasetIndexBufferWrite = Context->MainDataSet->GetCurDataSetIndices();
 
@@ -503,14 +503,14 @@ void NiagaraEmitterInstanceBatcher::Run(const FNiagaraComputeExecutionContext *C
 			Context->GPUDebugDataFloatSize = 0;
 			Context->GPUDebugDataIntSize = 0;
 
-			if (Context->MainDataSet != nullptr && Context->MainDataSet->GetNumFloatComponents() > 0)
+			if (Context->MainDataSet->GetNumFloatComponents() > 0)
 			{
 				Context->GPUDebugDataReadbackFloat = new FRHIGPUMemoryReadback(Context->MainDataSet->GetDataByIndex(WriteBufferIdx).GetGPUBufferFloat()->Buffer, TEXT("Niagara GPU Debug Info Float Emitter Readback"));
 				Context->GPUDebugDataReadbackFloat->Insert(RHICmdList);
 				Context->GPUDebugDataFloatSize = Context->MainDataSet->GetDataByIndex(WriteBufferIdx).GetGPUBufferFloat()->NumBytes;
 			}
 
-			if (Context->MainDataSet != nullptr && Context->MainDataSet->GetNumInt32Components() > 0)
+			if (Context->MainDataSet->GetNumInt32Components() > 0)
 			{
 				Context->GPUDebugDataReadbackInt = new FRHIGPUMemoryReadback(Context->MainDataSet->GetDataByIndex(WriteBufferIdx).GetGPUBufferInt()->Buffer, TEXT("Niagara GPU Debug Info Int Emitter Readback"));
 				Context->GPUDebugDataReadbackInt->Insert(RHICmdList);
