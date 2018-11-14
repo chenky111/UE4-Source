@@ -332,6 +332,9 @@ public:
 
 	void NIAGARA_API RemoveEventHandlerByUsageId(FGuid EventHandlerUsageId);
 
+	/* Gets whether or not the supplied event generator id matches an event generator which is shared between the particle spawn and update scrips. */
+	bool IsEventGeneratorShared(FName EventGeneratorId) const;
+
 protected:
 	virtual void BeginDestroy() override;
 
@@ -367,6 +370,9 @@ private:
 
 	UPROPERTY()
 	UNiagaraScript* GPUComputeScript;
+
+	UPROPERTY()
+	TArray<FName> SharedEventGeneratorIds;
 
 #if WITH_EDITOR
 	FOnPropertiesChanged OnPropertiesChangedDelegate;

@@ -531,6 +531,20 @@ void UNiagaraEmitter::OnPostCompile()
 	SpawnScriptProps.InitDataSetAccess();
 	UpdateScriptProps.InitDataSetAccess();
 
+	TSet<FName> SpawnIds;
+	TSet<FName> UpdateIds;
+	for (const FNiagaraEventGeneratorProperties& SpawnGeneratorProps : SpawnScriptProps.EventGenerators)
+	{
+		SpawnIds.Add(SpawnGeneratorProps.ID);
+	}
+	for (const FNiagaraEventGeneratorProperties& UpdateGeneratorProps : UpdateScriptProps.EventGenerators)
+	{
+		UpdateIds.Add(UpdateGeneratorProps.ID);
+	}
+
+	SharedEventGeneratorIds.Empty();
+	SharedEventGeneratorIds.Append(SpawnIds.Intersect(UpdateIds).Array());
+
 	for (int32 i = 0; i < EventHandlerScriptProps.Num(); i++)
 	{
 		if (EventHandlerScriptProps[i].Script)
@@ -760,6 +774,11 @@ void UNiagaraEmitter::RemoveEventHandlerByUsageId(FGuid EventHandlerUsageId)
 #if WITH_EDITOR
 	UpdateChangeId();
 #endif
+}
+
+bool UNiagaraEmitter::IsEventGeneratorShared(FName EventGeneratorId) const
+{
+	return SharedEventGeneratorIds.Contains(EventGeneratorId);
 }
 
 void UNiagaraEmitter::BeginDestroy()

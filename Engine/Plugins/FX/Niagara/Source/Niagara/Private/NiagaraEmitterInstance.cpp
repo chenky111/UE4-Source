@@ -228,6 +228,8 @@ void FNiagaraEmitterInstance::Init(int32 InEmitterIdx, FName InSystemInstanceNam
 
 	ensure(CachedEmitter->UpdateScriptProps.DataSetAccessSynchronized());
 	UpdateScriptEventDataSets.Empty();
+	UpdateEventGeneratorIsSharedByIndex.SetNumZeroed(CachedEmitter->UpdateScriptProps.EventGenerators.Num());
+	int32 UpdateEventGeneratorIndex = 0;
 	for (const FNiagaraEventGeneratorProperties &GeneratorProps : CachedEmitter->UpdateScriptProps.EventGenerators)
 	{
 		FNiagaraDataSet *Set = FNiagaraEventDataSetMgr::CreateEventDataSet(ParentSystemInstance->GetIDName(), EmitterHandle.GetIdName(), GeneratorProps.SetProps.ID.Name);
@@ -235,10 +237,14 @@ void FNiagaraEmitterInstance::Init(int32 InEmitterIdx, FName InSystemInstanceNam
 		Set->AddVariables(GeneratorProps.SetProps.Variables);
 		Set->Finalize();
 		UpdateScriptEventDataSets.Add(Set);
+		UpdateEventGeneratorIsSharedByIndex[UpdateEventGeneratorIndex] = CachedEmitter->IsEventGeneratorShared(GeneratorProps.ID);
+		UpdateEventGeneratorIndex++;
 	}
 
 	ensure(CachedEmitter->SpawnScriptProps.DataSetAccessSynchronized());
 	SpawnScriptEventDataSets.Empty();
+	SpawnEventGeneratorIsSharedByIndex.SetNumZeroed(CachedEmitter->SpawnScriptProps.EventGenerators.Num());
+	int32 SpawnEventGeneratorIndex = 0;
 	for (const FNiagaraEventGeneratorProperties &GeneratorProps : CachedEmitter->SpawnScriptProps.EventGenerators)
 	{
 		FNiagaraDataSet *Set = FNiagaraEventDataSetMgr::CreateEventDataSet(ParentSystemInstance->GetIDName(), EmitterHandle.GetIdName(), GeneratorProps.SetProps.ID.Name);
@@ -246,6 +252,8 @@ void FNiagaraEmitterInstance::Init(int32 InEmitterIdx, FName InSystemInstanceNam
 		Set->AddVariables(GeneratorProps.SetProps.Variables);
 		Set->Finalize();
 		SpawnScriptEventDataSets.Add(Set);
+		SpawnEventGeneratorIsSharedByIndex[SpawnEventGeneratorIndex] = CachedEmitter->IsEventGeneratorShared(GeneratorProps.ID);
+		SpawnEventGeneratorIndex++;
 	}
 
 	SpawnExecContext.Init(CachedEmitter->SpawnScriptProps.Script, CachedEmitter->SimTarget);
@@ -1115,14 +1123,33 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 
 	//Allocate space for prev frames particles and any new one's we're going to spawn.
 	Data.Allocate(AllocationSize);
+
+	int32 SpawnEventGeneratorIndex = 0;
 	for (FNiagaraDataSet* SpawnEventDataSet : SpawnScriptEventDataSets)
 	{
-		SpawnEventDataSet->Allocate(SpawnTotal + EventSpawnTotal);
+		int32 NumToAllocate = SpawnTotal + EventSpawnTotal;
+		if (SpawnEventGeneratorIsSharedByIndex[SpawnEventGeneratorIndex])
+		{
+			// For shared event data sets we need to allocate storage for the current particles since
+			// the same data set will be used in the update execution.
+			NumToAllocate += OrigNumParticles;
+		}
+		SpawnEventDataSet->Allocate(NumToAllocate);
+		SpawnEventGeneratorIndex++;
 	}
+
+	int32 UpdateEventGeneratorIndex = 0;
 	for (FNiagaraDataSet* UpdateEventDataSet : UpdateScriptEventDataSets)
 	{
-		UpdateEventDataSet->Allocate(OrigNumParticles);
+		if (UpdateEventGeneratorIsSharedByIndex[UpdateEventGeneratorIndex] == false)
+		{
+			// We only allocate update event data sets if they're not shared, because shared event datasets will have already
+			// been allocated as part of the spawn event data set handling.
+			UpdateEventDataSet->Allocate(OrigNumParticles);
+		}
+		UpdateEventGeneratorIndex++;
 	}
+
 	TArray<FNiagaraDataSetExecutionInfo, TInlineAllocator<8>> DataSetExecInfos;
 	DataSetExecInfos.Emplace(&Data, 0, false, true);
 
@@ -1145,8 +1172,8 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 		DataSetExecInfos[0].StartInstance = 0;
 		for (FNiagaraDataSet* EventDataSet : UpdateScriptEventDataSets)
 		{
-			DataSetExecInfos.Emplace(EventDataSet, 0, false, true);
 			EventDataSet->SetNumInstances(OrigNumParticles);
+			DataSetExecInfos.Emplace(EventDataSet, 0, false, true);
 		}
 		UpdateExecContext.Execute(OrigNumParticles, DataSetExecInfos);
 		int32 DeltaParticles = Data.GetNumInstances() - OrigNumParticles;

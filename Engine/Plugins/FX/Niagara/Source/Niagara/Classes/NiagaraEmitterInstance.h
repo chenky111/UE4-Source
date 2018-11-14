@@ -169,7 +169,9 @@ private:
 	TArray<FNiagaraDataSet*> UpdateScriptEventDataSets;
 	TArray<FNiagaraDataSet*> SpawnScriptEventDataSets;
 	TMap<FNiagaraDataSetID, FNiagaraDataSet*> DataSetMap;
-	
+
+	TArray<bool> UpdateEventGeneratorIsSharedByIndex;
+	TArray<bool> SpawnEventGeneratorIsSharedByIndex;
 
 	FName OwnerSystemInstanceName;
 
