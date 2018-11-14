@@ -1125,6 +1125,7 @@ void UNiagaraComponent::SynchronizeWithSourceSystem()
 void UNiagaraComponent::AssetExposedParametersChanged()
 {
 	SynchronizeWithSourceSystem();
+	ReinitializeSystem();
 }
 #endif
 
@@ -1212,7 +1213,7 @@ void UNiagaraComponent::SetParameterValueOverriddenLocally(const FNiagaraVariabl
 	
 	if (bRequiresSystemInstanceReset)
 	{
-		SystemInstance->Reset(FNiagaraSystemInstance::EResetMode::ResetSystem, true);
+		SystemInstance->Reset(FNiagaraSystemInstance::EResetMode::ResetAll, true);
 	}
 	
 }
