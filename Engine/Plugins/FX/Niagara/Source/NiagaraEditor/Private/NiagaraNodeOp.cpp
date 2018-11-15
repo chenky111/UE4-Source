@@ -254,11 +254,11 @@ FName UNiagaraNodeOp::GetUniqueAdditionalPinName() const
 	}
 	
 	// create a new name based on the existing pins (A, B, ... AA, AB, ...)
-	static TCHAR* Alphabet = TEXT("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+	static FString Alphabet = TEXT("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
 	for (int32 Remaining = ExistingNames.Num(); Remaining > 0; Remaining = Remaining / 26)
 	{
 		int32 CharIndex = Remaining < 26 ? Remaining - 1 : Remaining % 26;
-		Name = FString() + Alphabet[CharIndex] + Name;
+		Name = FString() + (*Alphabet)[CharIndex] + Name;
 	}
 
 	return FNiagaraUtilities::GetUniqueName(*Name, ExistingNames);
