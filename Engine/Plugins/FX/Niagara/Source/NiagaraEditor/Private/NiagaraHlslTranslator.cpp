@@ -3982,9 +3982,7 @@ void FHlslNiagaraTranslator::Operation(class UNiagaraNodeOp* Operation, TArray<i
 
 	// Use the pins to determine the output type here since they may have been changed due to numeric pin fix up.
 	const FNiagaraOpInfo* OpInfo = FNiagaraOpInfo::GetOpInfo(Operation->OpName);
-
-	//EnterStatsScope(FNiagaraStatScope(*Operation->GetFullName(), OpInfo->FriendlyName));
-
+	
 	TArray<UEdGraphPin*> OutputPins;
 	Operation->GetOutputPins(OutputPins);
 	for (int32 OutputIndex = 0; OutputIndex < OutputPins.Num(); OutputIndex++)
@@ -3999,11 +3997,22 @@ void FHlslNiagaraTranslator::Operation(class UNiagaraNodeOp* Operation, TArray<i
 		}
 
 		const FNiagaraOpInOutInfo& IOInfo = OpInfo->Outputs[OutputIndex];
-		check(!IOInfo.HlslSnippet.IsEmpty());
-		Outputs.Add(AddBodyChunk(GetUniqueSymbolName(IOInfo.Name), IOInfo.HlslSnippet, OutputType, Inputs));
+		FString OutputHlsl;
+		if (OpInfo->bSupportsAddedInputs)
+		{
+			if (!OpInfo->CreateHlslForAddedInputs(Inputs.Num(), OutputHlsl))
+			{
+				FText PinNameText = OutputPin->PinFriendlyName.IsEmpty() ? FText::FromName(OutputPin->PinName) : OutputPin->PinFriendlyName;
+				Error(FText::Format(LOCTEXT("AggregateInputFailTypePin", "Cannot create hlsl output for type {0}! Output Pin: {1}"), OutputType.GetNameText(), PinNameText), Operation, OutputPin);
+				OutputHlsl = IOInfo.HlslSnippet;
+			}
+		}
+		else {
+			OutputHlsl = IOInfo.HlslSnippet;
+		}
+		check(!OutputHlsl.IsEmpty());
+		Outputs.Add(AddBodyChunk(GetUniqueSymbolName(IOInfo.Name), OutputHlsl, OutputType, Inputs));
 	}
-
-	//ExitStatsScope();
 }
 
 void FHlslNiagaraTranslator::FunctionCall(UNiagaraNodeFunctionCall* FunctionNode, TArray<int32>& Inputs, TArray<int32>& Outputs)

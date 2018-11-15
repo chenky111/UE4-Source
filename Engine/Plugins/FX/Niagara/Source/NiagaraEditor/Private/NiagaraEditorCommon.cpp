@@ -8,6 +8,7 @@
 #include "ActorFactoryNiagara.h"
 #include "NiagaraActor.h"
 #include "NiagaraComponent.h"
+#include "Misc/StringFormatter.h"
 
 #define LOCTEXT_NAMESPACE "NiagaraEditor"
 
@@ -33,6 +34,30 @@ const TArray<FNiagaraOpInfo>& FNiagaraOpInfo::GetOpInfoArray()
 void FNiagaraOpInfo::BuildName(FString InName, FString InCategory)
 {	
 	Name = FName(*(InCategory + TEXT("::") + InName));
+}
+
+bool FNiagaraOpInfo::CreateHlslForAddedInputs(int32 InputCount, FString & HlslResult) const
+{
+	if (!bSupportsAddedInputs || AddedInputFormatting.IsEmpty() || InputCount < 2)
+	{
+		return false;
+	}
+
+	FString Result = TEXT("{0}");
+	FString KeyA = TEXT("A");
+	FString KeyB = TEXT("B");
+	TMap<FString, FStringFormatArg> FormatArgs;
+	FormatArgs.Add(KeyA, FStringFormatArg(Result));
+	FormatArgs.Add(KeyB, FStringFormatArg(Result));
+	for (int32 i = 1; i < InputCount; i++)
+	{
+		FormatArgs[KeyB] = FStringFormatArg(TEXT("{") + FString::FromInt(i) + TEXT("}"));
+		Result = FString::Format(*AddedInputFormatting, FormatArgs);
+		FormatArgs[KeyA] = FStringFormatArg(Result);
+	}
+
+	HlslResult = Result;
+	return true;
 }
 
 BEGIN_FUNCTION_BUILD_OPTIMIZATION
@@ -87,6 +112,9 @@ void FNiagaraOpInfo::Init()
 		Op->Inputs.Add(FNiagaraOpInOutInfo(B, Type, BText, BText, DefaultStr_Zero));
 		Op->Outputs.Add(FNiagaraOpInOutInfo(Result, Type, ResultText, ResultText, DefaultStr_Zero, TEXT("{0} + {1}")));
 		Op->BuildName(TEXT("Add"), CategoryName);
+		Op->bSupportsAddedInputs = true;
+		Op->AddedInputTypeRestrictions.Add(Type);
+		Op->AddedInputFormatting = TEXT("{A} + {B}");
 		OpInfoMap.Add(Op->Name) = Idx;
 
 		Idx = OpInfos.AddDefaulted();
@@ -99,6 +127,9 @@ void FNiagaraOpInfo::Init()
 		Op->Inputs.Add(FNiagaraOpInOutInfo(B, Type, BText, BText, DefaultStr_Zero));
 		Op->Outputs.Add(FNiagaraOpInOutInfo(Result, Type, ResultText, ResultText, DefaultStr_Zero, TEXT("{0} - {1}")));		
 		Op->BuildName(TEXT("Subtract"), CategoryName);
+		Op->bSupportsAddedInputs = true;
+		Op->AddedInputTypeRestrictions.Add(Type);
+		Op->AddedInputFormatting = TEXT("{A} - {B}");
 		OpInfoMap.Add(Op->Name) = Idx;
 
 		Idx = OpInfos.AddDefaulted();
@@ -111,6 +142,9 @@ void FNiagaraOpInfo::Init()
 		Op->Inputs.Add(FNiagaraOpInOutInfo(B, Type, BText, BText, DefaultStr_One));
 		Op->Outputs.Add(FNiagaraOpInOutInfo(Result, Type, ResultText, ResultText, DefaultStr_One, TEXT("{0} * {1}")));
 		Op->BuildName(TEXT("Mul"), CategoryName);
+		Op->bSupportsAddedInputs = true;
+		Op->AddedInputTypeRestrictions.Add(Type);
+		Op->AddedInputFormatting = TEXT("{A} * {B}");
 		OpInfoMap.Add(Op->Name) = Idx;
 
 		Idx = OpInfos.AddDefaulted();
@@ -647,6 +681,9 @@ void FNiagaraOpInfo::Init()
 		Op->Inputs.Add(FNiagaraOpInOutInfo(B, Type, BText, BText, DefaultStr_One));
 		Op->Outputs.Add(FNiagaraOpInOutInfo(Result, Type, ResultText, ResultText, DefaultStr_One, TEXT("min({0},{1})")));
 		Op->BuildName(TEXT("Min"), CategoryName);
+		Op->bSupportsAddedInputs = true;
+		Op->AddedInputTypeRestrictions.Add(Type);
+		Op->AddedInputFormatting = TEXT("min({A}, {B})");
 		OpInfoMap.Add(Op->Name) = Idx;
 
 		Idx = OpInfos.AddDefaulted();
@@ -658,6 +695,9 @@ void FNiagaraOpInfo::Init()
 		Op->Inputs.Add(FNiagaraOpInOutInfo(B, Type, BText, BText, DefaultStr_One));
 		Op->Outputs.Add(FNiagaraOpInOutInfo(Result, Type, ResultText, ResultText, DefaultStr_One, TEXT("max({0},{1})")));
 		Op->BuildName(TEXT("Max"), CategoryName);
+		Op->bSupportsAddedInputs = true;
+		Op->AddedInputTypeRestrictions.Add(Type);
+		Op->AddedInputFormatting = TEXT("max({A}, {B})");
 		OpInfoMap.Add(Op->Name) = Idx;
 
 		Idx = OpInfos.AddDefaulted();
@@ -839,6 +879,9 @@ void FNiagaraOpInfo::Init()
 	Op->Inputs.Add(FNiagaraOpInOutInfo(B, IntType, BText, BText, Default_IntOne));
 	Op->Outputs.Add(FNiagaraOpInOutInfo(Result, IntType, ResultText, ResultText, Default_IntOne, TEXT("{0} & {1}")));
 	Op->BuildName(TEXT("BitAnd"), IntCategoryName);
+	Op->bSupportsAddedInputs = true;
+	Op->AddedInputTypeRestrictions.Add(IntType);
+	Op->AddedInputFormatting = TEXT("{A} & {B}");
 	OpInfoMap.Add(Op->Name) = Idx;
 
 	Idx = OpInfos.AddDefaulted();
@@ -851,6 +894,9 @@ void FNiagaraOpInfo::Init()
 	Op->Inputs.Add(FNiagaraOpInOutInfo(B, IntType, BText, BText, Default_IntOne));
 	Op->Outputs.Add(FNiagaraOpInOutInfo(Result, IntType, ResultText, ResultText, Default_IntOne, TEXT("{0} | {1}")));
 	Op->BuildName(TEXT("BitOr"), IntCategoryName);
+	Op->bSupportsAddedInputs = true;
+	Op->AddedInputTypeRestrictions.Add(IntType);
+	Op->AddedInputFormatting = TEXT("{A} | {B}");
 	OpInfoMap.Add(Op->Name) = Idx;
 
 	Idx = OpInfos.AddDefaulted();
@@ -863,6 +909,9 @@ void FNiagaraOpInfo::Init()
 	Op->Inputs.Add(FNiagaraOpInOutInfo(B, IntType, BText, BText, Default_IntOne));
 	Op->Outputs.Add(FNiagaraOpInOutInfo(Result, IntType, ResultText, ResultText, Default_IntOne, TEXT("{0} ^ {1}")));
 	Op->BuildName(TEXT("BitXOr"), IntCategoryName);
+	Op->bSupportsAddedInputs = true;
+	Op->AddedInputTypeRestrictions.Add(IntType);
+	Op->AddedInputFormatting = TEXT("{A} ^ {B}");
 	OpInfoMap.Add(Op->Name) = Idx;
 
 	Idx = OpInfos.AddDefaulted();
@@ -895,6 +944,9 @@ void FNiagaraOpInfo::Init()
 	Op->Inputs.Add(FNiagaraOpInOutInfo(B, BoolType, BText, BText, Default_BoolOne));
 	Op->Outputs.Add(FNiagaraOpInOutInfo(Result, BoolType, ResultText, ResultText, Default_BoolOne, TEXT("{0} && {1}")));
 	Op->BuildName(TEXT("LogicAnd"), BoolCategoryName);
+	Op->bSupportsAddedInputs = true;
+	Op->AddedInputTypeRestrictions.Add(BoolType);
+	Op->AddedInputFormatting = TEXT("{A} && {B}");
 	OpInfoMap.Add(Op->Name) = Idx;
 
 	Idx = OpInfos.AddDefaulted();
@@ -907,6 +959,9 @@ void FNiagaraOpInfo::Init()
 	Op->Inputs.Add(FNiagaraOpInOutInfo(B, BoolType, BText, BText, Default_BoolOne));
 	Op->Outputs.Add(FNiagaraOpInOutInfo(Result, BoolType, ResultText, ResultText, Default_BoolOne, TEXT("{0} || {1}")));
 	Op->BuildName(TEXT("LogicOr"), BoolCategoryName);
+	Op->bSupportsAddedInputs = true;
+	Op->AddedInputTypeRestrictions.Add(BoolType);
+	Op->AddedInputFormatting = TEXT("{A} || {B}");
 	OpInfoMap.Add(Op->Name) = Idx;
 
 	Idx = OpInfos.AddDefaulted();
@@ -1009,6 +1064,9 @@ void FNiagaraOpInfo::Init()
 	Op->Inputs.Add(FNiagaraOpInOutInfo(B, MatrixType, BText, BText, Default_MatrixOne));
 	Op->Outputs.Add(FNiagaraOpInOutInfo(Result, MatrixType, ResultText, ResultText, Default_MatrixOne, TEXT("{0} * {1}")));
 	Op->BuildName(TEXT("MatrixMultiply"), MatrixCategoryName);
+	Op->bSupportsAddedInputs = true;
+	Op->AddedInputTypeRestrictions.Add(MatrixType);
+	Op->AddedInputFormatting = TEXT("{A} * {B}");
 	OpInfoMap.Add(Op->Name) = Idx;
 	
 	Idx = OpInfos.AddDefaulted();
