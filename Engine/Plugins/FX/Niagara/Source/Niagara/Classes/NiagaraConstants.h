@@ -83,6 +83,9 @@
 #define SYS_PARAM_PARTICLES_CAMERA_OFFSET			INiagaraModule::GetVar_Particles_CameraOffset()
 #define SYS_PARAM_PARTICLES_MATERIAL_RANDOM			INiagaraModule::GetVar_Particles_MaterialRandom()
 #define SYS_PARAM_PARTICLES_LIGHT_RADIUS			INiagaraModule::GetVar_Particles_LightRadius()
+#define SYS_PARAM_PARTICLES_LIGHT_EXPONENT			INiagaraModule::GetVar_Particles_LightExponent()
+#define SYS_PARAM_PARTICLES_LIGHT_ENABLED			INiagaraModule::GetVar_Particles_LightEnabled()
+#define SYS_PARAM_PARTICLES_LIGHT_VOLUMETRIC_SCATTERING	INiagaraModule::GetVar_Particles_LightVolumetricScattering()
 
 #define SYS_PARAM_PARTICLES_RIBBONID				INiagaraModule::GetVar_Particles_RibbonID()
 #define SYS_PARAM_PARTICLES_RIBBONWIDTH				INiagaraModule::GetVar_Particles_RibbonWidth()

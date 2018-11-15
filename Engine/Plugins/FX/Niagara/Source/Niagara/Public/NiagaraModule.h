@@ -177,6 +177,9 @@ public:
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Particles_CameraOffset() { return Particles_CameraOffset; }
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Particles_MaterialRandom() { return Particles_MaterialRandom; }
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Particles_LightRadius() { return Particles_LightRadius; }
+	FORCEINLINE static const FNiagaraVariable&  GetVar_Particles_LightExponent() { return Particles_LightExponent; }
+	FORCEINLINE static const FNiagaraVariable&  GetVar_Particles_LightEnabled() { return Particles_LightEnabled; }
+	FORCEINLINE static const FNiagaraVariable&  GetVar_Particles_LightVolumetricScattering() { return Particles_LightVolumetricScattering; }
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Particles_RibbonID() { return Particles_RibbonID; }
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Particles_RibbonWidth() { return Particles_RibbonWidth; }
 	FORCEINLINE static const FNiagaraVariable&  GetVar_Particles_RibbonTwist() { return Particles_RibbonTwist; }
@@ -265,6 +268,9 @@ private:
 	static FNiagaraVariable Particles_CameraOffset;
 	static FNiagaraVariable Particles_MaterialRandom;
 	static FNiagaraVariable Particles_LightRadius;
+	static FNiagaraVariable Particles_LightExponent;
+	static FNiagaraVariable Particles_LightEnabled;
+	static FNiagaraVariable Particles_LightVolumetricScattering;
 	static FNiagaraVariable Particles_RibbonID;
 	static FNiagaraVariable Particles_RibbonWidth;
 	static FNiagaraVariable Particles_RibbonTwist;
