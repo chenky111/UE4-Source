@@ -66,9 +66,8 @@ struct FNiagaraEventGeneratorProperties
 
 	}
 
-	FNiagaraEventGeneratorProperties(FNiagaraDataSetProperties &Props, FName InEventGenerator, FName InSourceEmitter)
+	FNiagaraEventGeneratorProperties(FNiagaraDataSetProperties &Props, FName InEventGenerator)
 		: ID(Props.ID.Name)
-		, SourceEmitter(InSourceEmitter)
 		, SetProps(Props)		
 	{
 
@@ -78,8 +77,8 @@ struct FNiagaraEventGeneratorProperties
 	UPROPERTY(EditAnywhere, Category = "Event Receiver")
 	int32 MaxEventsPerFrame; //TODO - More complex allocation so that we can grow dynamically if more space is needed ?
 
+	UPROPERTY()
 	FName ID;
-	FName SourceEmitter;
 
 	UPROPERTY()
 	FNiagaraDataSetProperties SetProps;

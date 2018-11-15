@@ -48,7 +48,7 @@ void FNiagaraEmitterScriptProperties::InitDataSetAccess()
 
 		for (FNiagaraDataSetProperties &WriteID : Script->GetVMExecutableData().WriteDataSets)
 		{
-			FNiagaraEventGeneratorProperties Props(WriteID, "", "");
+			FNiagaraEventGeneratorProperties Props(WriteID, "");
 			EventGenerators.Add(Props);
 		}
 	}
