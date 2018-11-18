@@ -23,6 +23,8 @@
 #include "IStructureDetailsView.h"
 #include "SDropTarget.h"
 #include "Modules/ModuleManager.h"
+#include "AssetRegistryModule.h"
+#include "NiagaraParameterCollection.h"
 
 #define LOCTEXT_NAMESPACE "NiagaraStackFunctionInputValue"
 
@@ -95,6 +97,7 @@ void SNiagaraStackFunctionInputValue::Construct(const FArguments& InArgs, UNiaga
 						SNew(STextBlock)
 						.TextStyle(FNiagaraEditorStyle::Get(), "NiagaraEditor.ParameterText")
 						.Text(this, &SNiagaraStackFunctionInputValue::GetLinkedValueHandleText)
+						.OnDoubleClicked(this, &SNiagaraStackFunctionInputValue::OnLinkedInputDoubleClicked)
 					]
 				]
 
@@ -422,6 +425,29 @@ FReply SNiagaraStackFunctionInputValue::DynamicInputTextDoubleClicked()
 	return FReply::Unhandled();
 }
 
+FReply SNiagaraStackFunctionInputValue::OnLinkedInputDoubleClicked()
+{
+	FString ParamCollection;
+	FString ParamName;
+	FunctionInput->GetLinkedValueHandle().GetName().ToString().Split(TEXT("."), &ParamCollection, &ParamName);
+
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	TArray<FAssetData> CollectionAssets;
+	AssetRegistryModule.Get().GetAssetsByClass(UNiagaraParameterCollection::StaticClass()->GetFName(), CollectionAssets);
+
+	for (FAssetData& CollectionAsset : CollectionAssets)
+	{
+		UNiagaraParameterCollection* Collection = CastChecked<UNiagaraParameterCollection>(CollectionAsset.GetAsset());
+		if (Collection && Collection->GetNamespace() == *ParamCollection)
+		{
+			FAssetEditorManager::Get().OpenEditorForAsset(Collection);
+			return FReply::Handled();
+		}
+	}
+
+	return FReply::Unhandled();
+}
+
 TSharedRef<SExpanderArrow> SNiagaraStackFunctionInputValue::CreateCustomNiagaraFunctionInputActionExpander(const FCustomExpanderData& ActionMenuData)
 {
 	return SNew(SNiagaraFunctionInputActionMenuExpander, ActionMenuData);
@@ -506,6 +532,7 @@ void SNiagaraStackFunctionInputValue::CollectAllActions(FGraphActionListBuilderB
 	TArray<FNiagaraParameterHandle> AvailableHandles;
 	FunctionInput->GetAvailableParameterHandles(AvailableHandles);
 
+	TArray<FNiagaraParameterHandle> ParameterCollectionHandles;
 	TArray<FNiagaraParameterHandle> UserHandles;
 	TArray<FNiagaraParameterHandle> EngineHandles;
 	TArray<FNiagaraParameterHandle> SystemHandles;
@@ -514,7 +541,11 @@ void SNiagaraStackFunctionInputValue::CollectAllActions(FGraphActionListBuilderB
 	TArray<FNiagaraParameterHandle> OtherHandles;
 	for (const FNiagaraParameterHandle AvailableHandle : AvailableHandles)
 	{
-		if (AvailableHandle.IsUserHandle())
+		 if (AvailableHandle.IsParameterCollectionHandle())
+		{
+			ParameterCollectionHandles.Add(AvailableHandle);
+		}
+		else if (AvailableHandle.IsUserHandle())
 		{
 			UserHandles.Add(AvailableHandle);
 		}
@@ -555,6 +586,7 @@ void SNiagaraStackFunctionInputValue::CollectAllActions(FGraphActionListBuilderB
 			}
 		};
 
+		AddMenuItemsForHandleList(ParameterCollectionHandles, LOCTEXT("NPC", "Parameter Collections"));
 		AddMenuItemsForHandleList(UserHandles, LOCTEXT("UserSection", "User Exposed"));
 		AddMenuItemsForHandleList(EngineHandles, LOCTEXT("EngineSection", "Engine"));
 		AddMenuItemsForHandleList(SystemHandles, LOCTEXT("SystemSection", "System"));

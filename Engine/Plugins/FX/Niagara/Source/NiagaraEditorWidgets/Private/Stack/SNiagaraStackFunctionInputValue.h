@@ -60,6 +60,7 @@ private:
 	FText GetInvalidValueToolTipText() const;
 
 	FReply DynamicInputTextDoubleClicked();
+	FReply OnLinkedInputDoubleClicked();
 
 	class SNiagaraFunctionInputActionMenuExpander: public SExpanderArrow
 	{

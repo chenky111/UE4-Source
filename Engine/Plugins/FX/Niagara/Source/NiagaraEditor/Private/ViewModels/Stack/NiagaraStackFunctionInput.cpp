@@ -772,6 +772,26 @@ void UNiagaraStackFunctionInput::GetAvailableParameterHandles(TArray<FNiagaraPar
 			}
 		}
 	}
+
+	//Parameter Collections
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	TArray<FAssetData> CollectionAssets;
+	AssetRegistryModule.Get().GetAssetsByClass(UNiagaraParameterCollection::StaticClass()->GetFName(), CollectionAssets);
+
+	for (FAssetData& CollectionAsset : CollectionAssets)
+	{
+		UNiagaraParameterCollection* Collection = CastChecked<UNiagaraParameterCollection>(CollectionAsset.GetAsset());
+		if (Collection)
+		{
+			for (const FNiagaraVariable& CollectionParam : Collection->GetParameters())
+			{
+				if (CollectionParam.GetType() == InputType)
+				{
+					AvailableParameterHandles.AddUnique(FNiagaraParameterHandle(CollectionParam.GetName()));
+				}
+			}
+		}
+	}
 }
 
 UNiagaraNodeFunctionCall* UNiagaraStackFunctionInput::GetDynamicInputNode() const
