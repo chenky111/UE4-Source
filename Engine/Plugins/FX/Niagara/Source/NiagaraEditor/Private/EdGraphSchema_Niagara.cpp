@@ -931,63 +931,66 @@ const FPinConnectionResponse UEdGraphSchema_Niagara::CanCreateConnection(const U
 		return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Directions are not compatible"));
 	}
 
-	// Check for compatible type pins.
-	if (PinA->PinType.PinCategory == PinCategoryType && 
-		PinB->PinType.PinCategory == PinCategoryType && 
-		PinA->PinType != PinB->PinType)
+	if (PinA->PinType.PinCategory != TEXT("wildcard") && PinB->PinType.PinCategory != TEXT("wildcard"))
 	{
-		FNiagaraTypeDefinition PinTypeA = PinToTypeDefinition(PinA);
-		FNiagaraTypeDefinition PinTypeB = PinToTypeDefinition(PinB);
-		if (FNiagaraTypeDefinition::TypesAreAssignable(PinTypeA, PinTypeB) == false)
+		// Check for compatible type pins.
+		if (PinA->PinType.PinCategory == PinCategoryType &&
+			PinB->PinType.PinCategory == PinCategoryType &&
+			PinA->PinType != PinB->PinType)
 		{
-			//Do some limiting on auto conversions here?
-			if (PinTypeA.GetClass())
+			FNiagaraTypeDefinition PinTypeA = PinToTypeDefinition(PinA);
+			FNiagaraTypeDefinition PinTypeB = PinToTypeDefinition(PinB);
+			if (FNiagaraTypeDefinition::TypesAreAssignable(PinTypeA, PinTypeB) == false)
+			{
+				//Do some limiting on auto conversions here?
+				if (PinTypeA.GetClass())
+				{
+					return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Types are not compatible"));
+				}
+				else
+				{
+					return FPinConnectionResponse(CONNECT_RESPONSE_MAKE_WITH_CONVERSION_NODE, FString::Printf(TEXT("Convert %s to %s"), *(PinToTypeDefinition(PinA).GetNameText().ToString()), *(PinToTypeDefinition(PinB).GetNameText().ToString())));
+				}
+			}
+		}
+
+		// Check for compatible misc pins
+		if (PinA->PinType.PinCategory == PinCategoryMisc ||
+			PinB->PinType.PinCategory == PinCategoryMisc)
+		{
+			// TODO: This shouldn't be handled explicitly here.
+			bool PinAIsConvertAddAndPinBIsNonGenericType =
+				PinA->PinType.PinCategory == PinCategoryMisc && PinA->PinType.PinSubCategory == UNiagaraNodeWithDynamicPins::AddPinSubCategory &&
+				PinB->PinType.PinCategory == PinCategoryType && PinToTypeDefinition(PinB) != FNiagaraTypeDefinition::GetGenericNumericDef();
+
+			bool PinBIsConvertAddAndPinAIsNonGenericType =
+				PinB->PinType.PinCategory == PinCategoryMisc && PinB->PinType.PinSubCategory == UNiagaraNodeWithDynamicPins::AddPinSubCategory &&
+				PinA->PinType.PinCategory == PinCategoryType && PinToTypeDefinition(PinA) != FNiagaraTypeDefinition::GetGenericNumericDef();
+
+			if (PinAIsConvertAddAndPinBIsNonGenericType == false && PinBIsConvertAddAndPinAIsNonGenericType == false)
 			{
 				return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Types are not compatible"));
 			}
-			else
+		}
+
+		if (PinA->PinType.PinCategory == PinCategoryClass || PinB->PinType.PinCategory == PinCategoryClass)
+		{
+			FNiagaraTypeDefinition AType = PinToTypeDefinition(PinA);
+			FNiagaraTypeDefinition BType = PinToTypeDefinition(PinB);
+			if (AType != BType)
 			{
-				return FPinConnectionResponse(CONNECT_RESPONSE_MAKE_WITH_CONVERSION_NODE, FString::Printf(TEXT("Convert %s to %s"), *(PinToTypeDefinition(PinA).GetNameText().ToString()), *(PinToTypeDefinition(PinB).GetNameText().ToString())));
+				return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Types are not compatible"));
 			}
 		}
-	}
 
-	// Check for compatible misc pins
-	if (PinA->PinType.PinCategory == PinCategoryMisc ||
-		PinB->PinType.PinCategory == PinCategoryMisc) 
-	{
-		// TODO: This shouldn't be handled explicitly here.
-		bool PinAIsConvertAddAndPinBIsNonGenericType =
-			PinA->PinType.PinCategory == PinCategoryMisc && PinA->PinType.PinSubCategory == UNiagaraNodeWithDynamicPins::AddPinSubCategory &&
-			PinB->PinType.PinCategory == PinCategoryType && PinToTypeDefinition(PinB) != FNiagaraTypeDefinition::GetGenericNumericDef();
-
-		bool PinBIsConvertAddAndPinAIsNonGenericType =
-			PinB->PinType.PinCategory == PinCategoryMisc && PinB->PinType.PinSubCategory == UNiagaraNodeWithDynamicPins::AddPinSubCategory &&
-			PinA->PinType.PinCategory == PinCategoryType && PinToTypeDefinition(PinA) != FNiagaraTypeDefinition::GetGenericNumericDef();
-
-		if(PinAIsConvertAddAndPinBIsNonGenericType == false && PinBIsConvertAddAndPinAIsNonGenericType == false)
+		if (PinA->PinType.PinCategory == PinCategoryEnum || PinB->PinType.PinCategory == PinCategoryEnum)
 		{
-			return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Types are not compatible"));
-		}
-	}
-
-	if (PinA->PinType.PinCategory == PinCategoryClass || PinB->PinType.PinCategory == PinCategoryClass)
-	{
-		FNiagaraTypeDefinition AType = PinToTypeDefinition(PinA);
-		FNiagaraTypeDefinition BType = PinToTypeDefinition(PinB);
-		if (AType != BType)
-		{
-			return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Types are not compatible"));
-		}
-	}
-
-	if (PinA->PinType.PinCategory == PinCategoryEnum || PinB->PinType.PinCategory == PinCategoryEnum)
-	{
-		FNiagaraTypeDefinition PinTypeA = PinToTypeDefinition(PinA);
-		FNiagaraTypeDefinition PinTypeB = PinToTypeDefinition(PinB);
-		if (FNiagaraTypeDefinition::TypesAreAssignable(PinTypeA, PinTypeB) == false)
-		{
-			return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Types are not compatible"));
+			FNiagaraTypeDefinition PinTypeA = PinToTypeDefinition(PinA);
+			FNiagaraTypeDefinition PinTypeB = PinToTypeDefinition(PinB);
+			if (FNiagaraTypeDefinition::TypesAreAssignable(PinTypeA, PinTypeB) == false)
+			{
+				return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Types are not compatible"));
+			}
 		}
 	}
 
