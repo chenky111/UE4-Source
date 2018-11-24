@@ -52,6 +52,7 @@ void UNiagaraDataInterfaceVectorField::PostEditChangeProperty(struct FPropertyCh
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 }
+#endif //WITH_EDITOR
 
 
 void UNiagaraDataInterfaceVectorField::PostLoad()
@@ -73,7 +74,6 @@ void UNiagaraDataInterfaceVectorField::PostInitProperties()
 		FNiagaraTypeRegistry::Register(FNiagaraTypeDefinition(GetClass()), /*bCanBeParameter*/ true, /*bCanBePayload*/ false, /*bIsUserDefined*/ false);
 	}
 }
-#endif //WITH_EDITOR
 
 /*--------------------------------------------------------------------------------------------------------------------------*/
 
