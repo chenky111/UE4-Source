@@ -4,7 +4,7 @@
 #include "NiagaraRenderer.h"
 #include "NiagaraConstants.h"
 UNiagaraLightRendererProperties::UNiagaraLightRendererProperties()
-	: RadiusScale(1.0f), ColorAdd(FVector(0.0f, 0.0f, 0.0f)), bUseInverseSquaredFalloff(1)
+	: bUseInverseSquaredFalloff(1), RadiusScale(1.0f), ColorAdd(FVector(0.0f, 0.0f, 0.0f))
 {
 }
 
