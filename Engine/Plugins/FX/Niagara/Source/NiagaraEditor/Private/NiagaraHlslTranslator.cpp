@@ -4402,9 +4402,10 @@ void FHlslNiagaraTranslator::RegisterFunctionCall(ENiagaraScriptUsage ScriptUsag
 			UNiagaraNodeOutput* FuncOutput = SourceGraph->FindOutputNode(ScriptUsage);
 			check(FuncOutput);
 
-			// Go ahead and insert any defaulted values into the parameter map here at the top level.
-			if (ActiveHistoryForFunctionCalls.InTopLevelFunctionCall(CompileOptions.TargetUsage) && ActiveHistoryForFunctionCalls.GetModuleAlias() != nullptr)
+			if (ActiveHistoryForFunctionCalls.GetModuleAlias() != nullptr)
 			{
+				bool bIsInTopLevelFunction = ActiveHistoryForFunctionCalls.InTopLevelFunctionCall(CompileOptions.TargetUsage);
+
 				UEdGraphPin* ParamMapPin = nullptr;
 				for (UEdGraphPin* Pin : CallInputs)
 				{
@@ -4431,20 +4432,35 @@ void FHlslNiagaraTranslator::RegisterFunctionCall(ENiagaraScriptUsage ScriptUsag
 
 							for (uint32 VarIdx = History.MapNodeVariableMetaData[FoundIdx].Key; VarIdx < History.MapNodeVariableMetaData[FoundIdx].Value; VarIdx++)
 							{
+								if (History.PerVariableReadHistory[VarIdx].Num() == 0)
+								{
+									// We don't need to worry about defaults if the variable is only written to.
+									continue;
+								}
+
 								const FNiagaraVariable& Var = History.Variables[VarIdx];
 								const FNiagaraVariable& AliasedVar = History.VariablesWithOriginalAliasesIntact[VarIdx];
-								int32 LastSetChunkIdx = ParamMapSetVariablesToChunks[ActiveStageIdx][VarIdx];
-								if (LastSetChunkIdx == INDEX_NONE)
+								bool bIsAliased = Var.GetName() != AliasedVar.GetName();
+
+								// For non aliased values we resolve the defaults once at the top level since it's impossible to know which context they were actually used in, but
+								// for aliased values we check to see if they're used in the current context by resolving the alias and checking against the current resolved variable
+								// name since aliased values can only be resolved for reading in the correct context.
+								bool bIsValidForCurrentCallingContext = (bIsInTopLevelFunction && bIsAliased == false) || (bIsAliased && ActiveHistoryForFunctionCalls.ResolveAliases(AliasedVar).GetName() == Var.GetName());
+								if (bIsValidForCurrentCallingContext)
 								{
-									const UEdGraphPin* DefaultPin = History.GetDefaultValuePin(VarIdx);
-									HandleParameterRead(ActiveStageIdx, AliasedVar, DefaultPin, ParamNode, LastSetChunkIdx);
-									
-									// If this variable was in the pending defaults list, go ahead and remove it
-									// as we added it before first use...
-									if (DeferredVariablesMissingDefault.Contains(Var))
+									int32 LastSetChunkIdx = ParamMapSetVariablesToChunks[ActiveStageIdx][VarIdx];
+									if (LastSetChunkIdx == INDEX_NONE)
 									{
-										DeferredVariablesMissingDefault.Remove(Var);
-										UniqueVarToChunk.Add(Var, LastSetChunkIdx);
+										const UEdGraphPin* DefaultPin = History.GetDefaultValuePin(VarIdx);
+										HandleParameterRead(ActiveStageIdx, AliasedVar, DefaultPin, ParamNode, LastSetChunkIdx);
+
+										// If this variable was in the pending defaults list, go ahead and remove it
+										// as we added it before first use...
+										if (DeferredVariablesMissingDefault.Contains(Var))
+										{
+											DeferredVariablesMissingDefault.Remove(Var);
+											UniqueVarToChunk.Add(Var, LastSetChunkIdx);
+										}
 									}
 								}
 							}
