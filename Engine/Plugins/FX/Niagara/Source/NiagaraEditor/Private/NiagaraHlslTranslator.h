@@ -461,7 +461,7 @@ public:
 	static bool IsBuiltInHlslType(FNiagaraTypeDefinition Type);
 	static FString GetStructHlslTypeName(FNiagaraTypeDefinition Type);
 	static FString GetPropertyHlslTypeName(const UProperty* Property);
-	static FString BuildHLSLStructDecl(FNiagaraTypeDefinition Type);
+	static FString BuildHLSLStructDecl(FNiagaraTypeDefinition Type, FText& OutErrorMessage);
 	static FString GetHlslDefaultForType(FNiagaraTypeDefinition Type);
 	static bool IsHlslBuiltinVector(FNiagaraTypeDefinition Type);
 	static TArray<FName> ConditionPropertyPath(const FNiagaraTypeDefinition& Type, const TArray<FName>& InPath);

@@ -132,11 +132,27 @@ public:
 		{
 			if (InPin->PinType.PinCategory == UEdGraphSchema_Niagara::PinCategoryType)
 			{
-				const UScriptStruct* Struct = CastChecked<const UScriptStruct>(InPin->PinType.PinSubCategoryObject.Get());
-				const FCreateGraphPin* CreateGraphPin = TypeToCreatePinDelegateMap.Find(Struct);
-				if (CreateGraphPin != nullptr)
+				if (InPin->PinType.PinSubCategoryObject != nullptr && InPin->PinType.PinSubCategoryObject->IsA<UScriptStruct>())
 				{
-					return (*CreateGraphPin).Execute(InPin);
+					const UScriptStruct* Struct = CastChecked<const UScriptStruct>(InPin->PinType.PinSubCategoryObject.Get());
+					const FCreateGraphPin* CreateGraphPin = TypeToCreatePinDelegateMap.Find(Struct);
+					if (CreateGraphPin != nullptr)
+					{
+						return (*CreateGraphPin).Execute(InPin);
+					}
+					else
+					{
+						UE_LOG(LogNiagaraEditor, Error, TEXT("Can not create pin for specified struct type! Pin Name '%s' Owning Node '%s'."), *InPin->PinName.ToString(),
+							*InPin->GetOwningNode()->GetName());
+					}
+				}
+				else
+				{
+					UE_LOG(LogNiagaraEditor, Error, TEXT("Pin type is invalid! Pin Name '%s' Owning Node '%s'. Turning into standard int definition!"), *InPin->PinName.ToString(),
+						*InPin->GetOwningNode()->GetName());
+					InPin->PinType.PinSubCategoryObject = MakeWeakObjectPtr(const_cast<UScriptStruct*>(FNiagaraTypeDefinition::GetIntStruct()));
+					InPin->DefaultValue.Empty();
+					return CreatePin(InPin);
 				}
 			}
 			else if (InPin->PinType.PinCategory == UEdGraphSchema_Niagara::PinCategoryEnum)

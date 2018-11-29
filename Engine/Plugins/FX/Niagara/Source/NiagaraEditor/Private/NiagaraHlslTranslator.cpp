@@ -961,7 +961,12 @@ const FNiagaraTranslateResults &FHlslNiagaraTranslator::Translate(const FNiagara
 
 		for (FNiagaraTypeDefinition Type : StructsToDefine)
 		{
-			HlslOutput += BuildHLSLStructDecl(Type);
+			FText ErrorMessage;
+			HlslOutput += BuildHLSLStructDecl(Type, ErrorMessage);
+			if (ErrorMessage.IsEmpty() == false)
+			{
+				Error(ErrorMessage, nullptr, nullptr);
+			}
 		}
 				
 		//Declare parameters.
@@ -5189,9 +5194,9 @@ void FHlslNiagaraTranslator::Error(FText ErrorText, const UNiagaraNode* Node, co
 			}
 		}
 	}
-	if (Pin && Pin->PinFriendlyName.ToString().Len() > 0)
+	if (Pin)
 	{
-		NodePinStr += TEXT(" Pin: ") + Pin->PinFriendlyName.ToString();
+		NodePinStr += TEXT(" Pin: ") + (Pin->PinFriendlyName.ToString().Len() > 0 ? Pin->PinFriendlyName.ToString() : Pin->GetName());
 		NodePinSuffix = TEXT(" - ");
 	}
 	
@@ -5418,14 +5423,17 @@ FString FHlslNiagaraTranslator::GetPropertyHlslTypeName(const UProperty* Propert
 		const UEnumProperty* EnumProp = Cast<const UEnumProperty>(Property);
 		return "int";
 	}
+	else if (Property->IsA(UBoolProperty::StaticClass()))
+	{
+		return "bool";
+	}
 	else
 	{
-		check(false);	// unknown type
-		return TEXT("UnknownType");
+		return TEXT("");
 	}
 }
 
-FString FHlslNiagaraTranslator::BuildHLSLStructDecl(FNiagaraTypeDefinition Type)
+FString FHlslNiagaraTranslator::BuildHLSLStructDecl(FNiagaraTypeDefinition Type, FText& OutErrorMessage)
 {
 	if (!IsBuiltInHlslType(Type))
 	{
@@ -5435,7 +5443,14 @@ FString FHlslNiagaraTranslator::BuildHLSLStructDecl(FNiagaraTypeDefinition Type)
 		for (TFieldIterator<UProperty> PropertyIt(Type.GetStruct(), EFieldIteratorFlags::IncludeSuper); PropertyIt; ++PropertyIt)
 		{
 			UProperty* Property = *PropertyIt;
-			Decl += TEXT("\t") + GetPropertyHlslTypeName(Property) + TEXT(" ") + Property->GetName() + TEXT(";\n");
+			FString PropertyTypeName = GetPropertyHlslTypeName(Property);
+			if (PropertyTypeName.IsEmpty())
+			{
+				OutErrorMessage = FText::Format(LOCTEXT("UnknownPropertyTypeErrorFormat", "Failed to build hlsl struct declaration for type {0}.  Property {1} has an unsuported type {2}."), 
+					FText::FromString(Type.GetName()), Property->GetDisplayNameText(), FText::FromString(Property->GetClass()->GetName()));
+				return TEXT("");
+			}
+			Decl += TEXT("\t") + PropertyTypeName + TEXT(" ") + Property->GetName() + TEXT(";\n");
 		}
 		Decl += "};\n\n";
 		return Decl;

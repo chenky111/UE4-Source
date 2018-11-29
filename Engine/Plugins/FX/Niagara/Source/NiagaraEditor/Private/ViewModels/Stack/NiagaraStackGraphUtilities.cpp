@@ -1168,6 +1168,7 @@ void GetFunctionNamesForOutputNode(UNiagaraNodeOutput& OutputNode, TArray<FStrin
 
 bool FNiagaraStackGraphUtilities::IsRapidIterationType(const FNiagaraTypeDefinition& InputType)
 {
+	checkf(InputType.IsValid(), TEXT("Type is invalid."));
 	return InputType != FNiagaraTypeDefinition::GetBoolDef() && !InputType.IsEnum() &&
 		InputType != FNiagaraTypeDefinition::GetParameterMapDef() && !InputType.IsDataInterface();
 }
