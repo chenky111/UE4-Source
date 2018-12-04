@@ -55,7 +55,7 @@ FNiagaraSystemInstance::FNiagaraSystemInstance(UNiagaraComponent* InComponent)
 	SystemBounds.Init();
 }
 
-void FNiagaraSystemInstance::Init(UNiagaraSystem* InSystem, bool bInForceSolo)
+void FNiagaraSystemInstance::Init(bool bInForceSolo)
 {
 	bForceSolo = bInForceSolo;
 	ActualExecutionState = ENiagaraExecutionState::Inactive;
@@ -388,7 +388,6 @@ void FNiagaraSystemInstance::Reset(FNiagaraSystemInstance::EResetMode Mode, bool
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraSystemReset);
 
-	FNiagaraSystemSimulation* SystemSim = GetSystemSimulation().Get();
 	if (Mode == EResetMode::None)
 	{
 		// Right now we don't support binding with reset mode none.
@@ -403,9 +402,9 @@ void FNiagaraSystemInstance::Reset(FNiagaraSystemInstance::EResetMode Mode, bool
 
 	SetPaused(false);
 
-	if (SystemSim)
+	if (SystemSimulation.IsValid())
 	{
-		SystemSim->RemoveInstance(this);
+		SystemSimulation->RemoveInstance(this);
 	}
 	else
 	{
@@ -432,6 +431,7 @@ void FNiagaraSystemInstance::Reset(FNiagaraSystemInstance::EResetMode Mode, bool
 	{
 		//UE_LOG(LogNiagara, Log, TEXT("FNiagaraSystemInstance::ReInit"));
 		ReInitInternal();
+		bBindParams = true;
 	}
 	
 	if (bBindParams)
@@ -439,7 +439,6 @@ void FNiagaraSystemInstance::Reset(FNiagaraSystemInstance::EResetMode Mode, bool
 		BindParameters();
 	}
 
-	SystemSim = GetSystemSimulation().Get();
 	SetRequestedExecutionState(ENiagaraExecutionState::Active);
 	SetActualExecutionState(ENiagaraExecutionState::Active);
 
@@ -449,7 +448,7 @@ void FNiagaraSystemInstance::Reset(FNiagaraSystemInstance::EResetMode Mode, bool
 	if (!IsComplete())
 	{
 		bPendingSpawn = true;
-		SystemSim->AddInstance(this);
+		SystemSimulation->AddInstance(this);
 
 		UNiagaraSystem* System = GetSystem();
 		if (System->NeedsWarmup())
@@ -555,6 +554,30 @@ bool FNiagaraSystemInstance::IsReadyToRun() const
 	return bAllReadyToRun;
 }
 
+bool DoSystemDataInterfacesRequireSolo(const UNiagaraSystem& System, const UNiagaraComponent& Component)
+{
+	if (System.HasSystemScriptDIsWithPerInstanceData())
+	{
+		return true;
+	}
+
+	const TArray<FName>& UserDINamesReadInSystemScripts = System.GetUserDINamesReadInSystemScripts();
+	if (UserDINamesReadInSystemScripts.Num() > 0)
+	{
+		TArray<FNiagaraVariable> OverrideParameterVariables;
+		Component.GetOverrideParameters().GetParameters(OverrideParameterVariables);
+		for (const FNiagaraVariable& OverrideParameterVariable : OverrideParameterVariables)
+		{
+			if (OverrideParameterVariable.IsDataInterface() && UserDINamesReadInSystemScripts.Contains(OverrideParameterVariable.GetName()))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 void FNiagaraSystemInstance::ReInitInternal()
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraSystemReinit);
@@ -584,7 +607,7 @@ void FNiagaraSystemInstance::ReInitInternal()
 	}
 
 	/** Do we need to run in solo mode? */
-	bSolo = bForceSolo || System->IsSolo();
+	bSolo = bForceSolo || DoSystemDataInterfacesRequireSolo(*System, *Component);
 	if (bSolo)
 	{
 		if (!SystemSimulation.IsValid())
@@ -775,6 +798,21 @@ void FNiagaraSystemInstance::BindParameters()
 {
 	Component->GetOverrideParameters().Bind(&InstanceParameters);
 
+	if (SystemSimulation->GetIsSolo())
+	{
+		// If this simulation is solo than we can bind the instance parameters to the system simulation contexts so that
+		// the system and emitter scripts use the per-instance data interfaces.
+		Component->GetOverrideParameters().Bind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+		Component->GetOverrideParameters().Bind(&SystemSimulation->GetUpdateExecutionContext().Parameters);
+	}
+	else 
+	{
+		// If this simulation is not solo than we have bind the source system parameters to the system simulation contexts so that
+		// the system and emitter scripts use the default shared data interfaces.
+		GetSystem()->GetExposedParameters().Bind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+		GetSystem()->GetExposedParameters().Bind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+	}
+
 	for (TSharedRef<FNiagaraEmitterInstance> Simulation : Emitters)
 	{
 		Simulation->BindParameters();
@@ -784,6 +822,17 @@ void FNiagaraSystemInstance::BindParameters()
 void FNiagaraSystemInstance::UnbindParameters()
 {
 	Component->GetOverrideParameters().Unbind(&InstanceParameters);
+
+	if (SystemSimulation->GetIsSolo())
+	{
+		Component->GetOverrideParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+		Component->GetOverrideParameters().Unbind(&SystemSimulation->GetUpdateExecutionContext().Parameters);
+	}
+	else
+	{
+		GetSystem()->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+		GetSystem()->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+	}
 
 	for (TSharedRef<FNiagaraEmitterInstance> Simulation : Emitters)
 	{
@@ -842,6 +891,15 @@ void FNiagaraSystemInstance::InitDataInterfaces()
 	};
 
 	CalcInstDataSize(InstanceParameters.GetDataInterfaces());//This probably should be a proper exec context. 
+
+	if (SystemSimulation->GetIsSolo())
+	{
+		CalcInstDataSize(SystemSimulation->GetSpawnExecutionContext().GetDataInterfaces());
+		SystemSimulation->GetSpawnExecutionContext().DirtyDataInterfaces();
+
+		CalcInstDataSize(SystemSimulation->GetUpdateExecutionContext().GetDataInterfaces());
+		SystemSimulation->GetUpdateExecutionContext().DirtyDataInterfaces();
+	}
 
 	//Iterate over interfaces to get size for table and clear their interface bindings.
 	for (TSharedRef<FNiagaraEmitterInstance> Simulation : Emitters)

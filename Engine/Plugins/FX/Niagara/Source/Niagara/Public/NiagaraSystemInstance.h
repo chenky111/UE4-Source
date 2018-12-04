@@ -54,7 +54,7 @@ public:
 	void Cleanup();
 
 	/** Initializes this System instance to simulate the supplied System. */
-	void Init(UNiagaraSystem* InSystem, bool bInForceSolo=false);
+	void Init(bool bInForceSolo=false);
 
 	void Activate(EResetMode InResetMode = EResetMode::ResetAll);
 	void Deactivate(bool bImmediate = false);

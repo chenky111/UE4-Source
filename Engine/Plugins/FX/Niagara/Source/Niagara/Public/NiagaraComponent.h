@@ -289,6 +289,8 @@ public:
 
 	FNiagaraParameterStore& GetOverrideParameters() { return OverrideParameters; }
 
+	const FNiagaraParameterStore& GetOverrideParameters() const { return OverrideParameters; }
+
 	//~ End UObject Interface.
 
 	// Called when the particle system is done

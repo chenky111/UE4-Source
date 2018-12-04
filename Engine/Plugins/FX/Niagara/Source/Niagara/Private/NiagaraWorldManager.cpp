@@ -152,7 +152,7 @@ TSharedRef<FNiagaraSystemSimulation, ESPMode::ThreadSafe> FNiagaraWorldManager::
 	
 	TSharedRef<FNiagaraSystemSimulation, ESPMode::ThreadSafe> Sim = MakeShared<FNiagaraSystemSimulation, ESPMode::ThreadSafe>();
 	SystemSimulations.Add(System, Sim);
-	Sim->Init(System, World);
+	Sim->Init(System, World, false);
 	return Sim;
 }
 

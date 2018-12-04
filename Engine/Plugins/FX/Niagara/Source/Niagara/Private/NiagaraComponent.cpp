@@ -493,7 +493,7 @@ bool UNiagaraComponent::InitializeSystem()
 #if WITH_EDITORONLY_DATA
 		OnSystemInstanceChangedDelegate.Broadcast();
 #endif
-		SystemInstance->Init(GetAsset(), bForceSolo);
+		SystemInstance->Init(bForceSolo);
 		return true;
 	}
 	return false;

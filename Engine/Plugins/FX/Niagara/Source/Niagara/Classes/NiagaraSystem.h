@@ -137,9 +137,6 @@ public:
 	/** Are there any pending compile requests?*/
 	bool HasOutstandingCompilationRequests() const;
 
-	/** Returns whether this system has to be run in solo or not. */
-	bool IsSolo()const;
-
 	FORCEINLINE bool NeedsWarmup()const { return WarmupTickCount > 0 && WarmupTickDelta > SMALL_NUMBER; }
 	FORCEINLINE float GetWarmupTime()const { return WarmupTime; }
 	FORCEINLINE int32 GetWarmupTickCount()const { return WarmupTickCount; }
@@ -231,13 +228,17 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Debug")
 	bool bDumpDebugEmitterInfo;
 
+	bool HasSystemScriptDIsWithPerInstanceData() const;
+
+	const TArray<FName>& GetUserDINamesReadInSystemScripts() const;
+
 private:
 #if WITH_EDITORONLY_DATA
 	INiagaraModule::FMergeEmitterResults MergeChangesForEmitterHandle(FNiagaraEmitterHandle& EmitterHandle);
 	bool QueryCompileComplete(bool bWait, bool bDoPost, bool bDoNotApply = false);
 #endif
 
-	void DetermineIfSolo();
+	void UpdatePostCompileDIInfo();
 protected:
 
 	/** Handles to the emitter this System will simulate. */
@@ -299,9 +300,11 @@ protected:
 	UPROPERTY(EditAnywhere, Category = Warmup)
 	float WarmupTickDelta;
 
+	void InitEmitterSpawnAttributes();
 
 	UPROPERTY()
-	uint32 bSolo : 1;
+	bool bHasSystemScriptDIsWithPerInstanceData;
 
-	void InitEmitterSpawnAttributes();
+	UPROPERTY()
+	TArray<FName> UserDINamesReadInSystemScripts;
 };

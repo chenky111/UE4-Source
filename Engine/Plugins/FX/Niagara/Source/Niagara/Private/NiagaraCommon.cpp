@@ -283,22 +283,6 @@ bool FNiagaraScriptDataInterfaceCompileInfo::CanExecuteOnTarget(ENiagaraSimTarge
 	return false;
 }
 
-bool FNiagaraScriptDataInterfaceCompileInfo::IsSystemSolo() const
-{
-	check(IsInGameThread());
-	if (Name.ToString().StartsWith("User."))
-	{
-		return true;
-	}
-
-	UNiagaraDataInterface* Obj = GetDefaultDataInterface();
-	if (Obj && Obj->PerInstanceDataSize() > 0)
-	{
-		return true;
-	}
-	return false;
-}
-
 UNiagaraDataInterface* FNiagaraScriptDataInterfaceCompileInfo::GetDefaultDataInterface() const
 {
 	check(IsInGameThread());

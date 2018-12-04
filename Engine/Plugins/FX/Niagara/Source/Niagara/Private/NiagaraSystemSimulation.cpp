@@ -73,13 +73,14 @@ FNiagaraSystemSimulation::~FNiagaraSystemSimulation()
 	Destroy();
 }
 
-bool FNiagaraSystemSimulation::Init(UNiagaraSystem* InSystem, UWorld* InWorld, FNiagaraSystemInstance* InSoloSystemInstance)
+bool FNiagaraSystemSimulation::Init(UNiagaraSystem* InSystem, UWorld* InWorld, bool bInIsSolo)
 {
 	UNiagaraSystem* System = InSystem;
 	WeakSystem = System;
-	SoloSystemInstance = InSoloSystemInstance;
 
 	World = InWorld;
+
+	bIsSolo = bInIsSolo;
 
 	FNiagaraWorldManager* WorldMan = FNiagaraWorldManager::Get(InWorld);
 	check(WorldMan);
@@ -240,6 +241,10 @@ void FNiagaraSystemSimulation::TransferInstance(FNiagaraSystemSimulation* Source
 	
 		//Move the system direct to the new sim's 
 		SystemInst->SystemInstanceIndex = SystemInstances.Add(SystemInst);
+		if (SystemInst->SystemInstanceIndex == 0)
+		{
+			InitParameterDataSetBindings(SystemInst);
+		}
 
 		check(NewDataIndex == SystemInst->SystemInstanceIndex);
 	}
@@ -341,6 +346,11 @@ bool FNiagaraSystemSimulation::Tick(float DeltaSeconds)
 				if (!Inst->IsComplete())
 				{
 					Inst->SystemInstanceIndex = SystemInstances.Add(Inst);
+					if (Inst->SystemInstanceIndex == 0)
+					{
+						// When the first instance is added we need to initialize the parameter store to data set bindings.
+						InitParameterDataSetBindings(Inst);
+					}
 					++SpawnNum;
 				}
 				else
@@ -392,8 +402,6 @@ bool FNiagaraSystemSimulation::Tick(float DeltaSeconds)
 				}
 			};
 
-			InitBindings(SystemInstances[0]);
-
 			SpawnInstanceParameterDataSet.Allocate(NewNum);
 			UpdateInstanceParameterDataSet.Allocate(NewNum);
 
@@ -428,6 +436,8 @@ bool FNiagaraSystemSimulation::Tick(float DeltaSeconds)
 			SpawnGlobalSystemCountScaleParam.SetValue(GlobalSystemCountScale);
 			UpdateGlobalSystemCountScaleParam.SetValue(GlobalSystemCountScale);
 		}
+
+		FNiagaraSystemInstance* SoloSystemInstance = bIsSolo && SystemInstances.Num() == 1 ? SystemInstances[0] : nullptr;
 
 		//TODO: JIRA - UE-60096 - Remove.
 		//We're having to allocate and spawn before update here so we have to do needless copies.			
@@ -661,9 +671,9 @@ bool FNiagaraSystemSimulation::Tick(float DeltaSeconds)
 	}
 
 #if WITH_EDITORONLY_DATA
-	if (SoloSystemInstance != nullptr)
+	if (bIsSolo && SystemInstances.Num() == 1)
 	{
-		SoloSystemInstance->FinishCapture();
+		SystemInstances[0]->FinishCapture();
 	}
 #endif
 
@@ -839,20 +849,18 @@ void FNiagaraSystemSimulation::UnpauseInstance(FNiagaraSystemInstance* Instance)
 	}
 }
 
-void FNiagaraSystemSimulation::InitBindings(FNiagaraSystemInstance* SystemInst)
+void FNiagaraSystemSimulation::InitParameterDataSetBindings(FNiagaraSystemInstance* SystemInst)
 {
 	//Have to init here as we need an actual parameter store to pull the layout info from.
 	//TODO: Pull the layout stuff out of each data set and store. So much duplicated data.
 	//This assumes that all layouts for all emitters is the same. Which it should be.
 	//Ideally we can store all this layout info in the systm/emitter assets so we can just generate this in Init()
-	if (DataSetToEmitterSpawnParameters.Num() == 0 && SystemInst != nullptr)
+	if (SystemInst != nullptr)
 	{
 		SpawnInstanceParameterToDataSetBinding.Init(SpawnInstanceParameterDataSet, SystemInst->GetInstanceParameters());
 		UpdateInstanceParameterToDataSetBinding.Init(UpdateInstanceParameterDataSet, SystemInst->GetInstanceParameters());
 
 		TArray<TSharedRef<FNiagaraEmitterInstance>>& Emitters = SystemInst->GetEmitters();
-		check(DataSetToEmitterUpdateParameters.Num() == 0);
-		check(DataSetToEmitterEventParameters.Num() == 0);
 		DataSetToEmitterSpawnParameters.SetNum(Emitters.Num());
 		DataSetToEmitterUpdateParameters.SetNum(Emitters.Num());
 		DataSetToEmitterEventParameters.SetNum(Emitters.Num());
@@ -873,14 +881,5 @@ void FNiagaraSystemSimulation::InitBindings(FNiagaraSystemInstance* SystemInst)
 				DataSetToEmitterEventParameters[EmitterIdx][EventIdx].Init(DataSet, EventContext.Parameters);
 			}
 		}
-	}
-
-	// If we have data interfaces (say user ones) that need to be pushed to the 
-	// system spawn and update scripts, it needs to happen here.
-	if (SystemInst)
-	{
-		SystemInst->GetInstanceParameters().Bind(&SpawnExecContext.Parameters);
-		SystemInst->GetInstanceParameters().Bind(&UpdateExecContext.Parameters);
-
 	}
 }
