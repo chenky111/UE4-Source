@@ -431,7 +431,8 @@ void FNiagaraSystemInstance::Reset(FNiagaraSystemInstance::EResetMode Mode, bool
 	{
 		//UE_LOG(LogNiagara, Log, TEXT("FNiagaraSystemInstance::ReInit"));
 		ReInitInternal();
-		bBindParams = true;
+		// If the system was reinitialized successfully than we need to force a rebind of the parameters.
+		bBindParams = IsComplete() == false;
 	}
 	
 	if (bBindParams)
@@ -823,15 +824,18 @@ void FNiagaraSystemInstance::UnbindParameters()
 {
 	Component->GetOverrideParameters().Unbind(&InstanceParameters);
 
-	if (SystemSimulation->GetIsSolo())
+	if (SystemSimulation.IsValid())
 	{
-		Component->GetOverrideParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
-		Component->GetOverrideParameters().Unbind(&SystemSimulation->GetUpdateExecutionContext().Parameters);
-	}
-	else
-	{
-		GetSystem()->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
-		GetSystem()->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+		if (SystemSimulation->GetIsSolo())
+		{
+			Component->GetOverrideParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+			Component->GetOverrideParameters().Unbind(&SystemSimulation->GetUpdateExecutionContext().Parameters);
+		}
+		else
+		{
+			GetSystem()->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+			GetSystem()->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+		}
 	}
 
 	for (TSharedRef<FNiagaraEmitterInstance> Simulation : Emitters)
