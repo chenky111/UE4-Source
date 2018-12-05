@@ -268,7 +268,7 @@ void FNiagaraSystemInstance::SetSolo(bool bInSolo)
 	if (bInSolo)
 	{
 		TSharedPtr<FNiagaraSystemSimulation, ESPMode::ThreadSafe> NewSoloSim = MakeShared<FNiagaraSystemSimulation, ESPMode::ThreadSafe>();
-		NewSoloSim->Init(System, Component->GetWorld(), this);
+		NewSoloSim->Init(System, Component->GetWorld(), true);
 
 		NewSoloSim->TransferInstance(SystemSimulation.Get(), this);	
 
@@ -614,7 +614,7 @@ void FNiagaraSystemInstance::ReInitInternal()
 		if (!SystemSimulation.IsValid())
 		{
 			SystemSimulation = MakeShared<FNiagaraSystemSimulation, ESPMode::ThreadSafe>();
-			SystemSimulation->Init(System, Component->GetWorld(), this);
+			SystemSimulation->Init(System, Component->GetWorld(), true);
 		}
 	}
 	else
