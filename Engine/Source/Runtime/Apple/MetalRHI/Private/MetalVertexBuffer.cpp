@@ -743,31 +743,14 @@ FStagingBufferRHIRef FMetalDynamicRHI::RHICreateStagingBuffer(FVertexBufferRHIPa
 // A write-only lock must not have had the EnqueueStagedRead function called and must supply the buffer.
 void *FMetalStagingBuffer::Lock(uint32 Offset, uint32 NumBytes)
 {
-	check(BackingBuffer);
-	FMetalVertexBuffer* VertexBuffer = ResourceCast(BackingBuffer.GetReference());
-	uint8* BytePtr = nullptr;
-	if (VertexBuffer->CPUBuffer)
-	{
-		BytePtr = (uint8*)VertexBuffer->CPUBuffer.GetContents();
-	}
-	else
-	{
-		check(VertexBuffer->Buffer.GetStorageMode() != mtlpp::StorageMode::Private);
-		BytePtr = (uint8*)VertexBuffer->Buffer.GetContents();
-	}
-	BytePtr += Offset;
-	return BytePtr;
+	check(ReadbackStagingBuffer);
+	
+	uint8* BackingPtr = (uint8*) ReadbackStagingBuffer.GetContents();
+	return BackingPtr+Offset;
 }
 
 // Releases the mapped memory for a lock.
 void FMetalStagingBuffer::Unlock()
 {
-	check(BackingBuffer);
-	FMetalVertexBuffer* VertexBuffer = ResourceCast(BackingBuffer.GetReference());
-	if (VertexBuffer->CPUBuffer && (VertexBuffer->GetUsage() & (BUF_Dynamic|BUF_Static)))
-	{
-		LLM_SCOPE(ELLMTag::VertexBuffer);
-		SafeReleaseMetalBuffer(VertexBuffer->CPUBuffer);
-		VertexBuffer->CPUBuffer = nil;
-	}
+	// does nothing in metal.
 }
