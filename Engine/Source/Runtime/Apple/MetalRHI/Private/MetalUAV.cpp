@@ -824,7 +824,7 @@ void FMetalRHICommandContext::RHIEnqueueStagedRead(FStagingBufferRHIParamRef Sta
 		// it's not big enough to hold our readback we need to allocate.
 		if(!ReadbackBuffer || ReadbackBuffer.GetLength() < NumBytes)
 		{
-			if(ReadbackBuffer.GetLength() < NumBytes)
+			if(ReadbackBuffer)
 			{
 				SafeReleaseMetalBuffer(ReadbackBuffer);
 			}

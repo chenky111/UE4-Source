@@ -1008,6 +1008,8 @@ public:
 	: FRHIStagingBuffer(InBuffer)
 	{
 	}
+	
+	~FMetalStagingBuffer();
 
 	void *Lock(uint32 Offset, uint32 NumBytes);
 

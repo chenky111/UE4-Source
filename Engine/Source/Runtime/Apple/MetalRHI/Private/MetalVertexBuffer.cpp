@@ -738,9 +738,16 @@ FStagingBufferRHIRef FMetalDynamicRHI::RHICreateStagingBuffer(FVertexBufferRHIPa
 	return new FMetalStagingBuffer(VertexBuffer);
 }
 
-// Call this to lock the vertex-buffer for the given mode.
-// A read-only lock must have the same buffer used to call EnqueueStagedRead, and that fence must have passed or the behaviour is undefined.
-// A write-only lock must not have had the EnqueueStagedRead function called and must supply the buffer.
+FMetalStagingBuffer::~FMetalStagingBuffer()
+{
+	if(ReadbackStagingBuffer)
+	{
+		SafeReleaseMetalBuffer(ReadbackStagingBuffer);
+	}
+}
+
+// Returns the pointer to read the buffer. There is no locking; the buffer is always shared.
+// If this was not fenced correctly it will not have the expected data.
 void *FMetalStagingBuffer::Lock(uint32 Offset, uint32 NumBytes)
 {
 	check(ReadbackStagingBuffer);
@@ -749,7 +756,6 @@ void *FMetalStagingBuffer::Lock(uint32 Offset, uint32 NumBytes)
 	return BackingPtr+Offset;
 }
 
-// Releases the mapped memory for a lock.
 void FMetalStagingBuffer::Unlock()
 {
 	// does nothing in metal.
