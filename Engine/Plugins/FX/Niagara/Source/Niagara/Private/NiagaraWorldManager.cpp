@@ -30,8 +30,11 @@ FNiagaraViewDataMgr::FNiagaraViewDataMgr()
 void FNiagaraViewDataMgr::Init()
 {
 	IRendererModule& RendererModule = GetRendererModule();
+
 	GNiagaraViewDataManager.PostOpaqueDelegate.BindRaw(&GNiagaraViewDataManager, &FNiagaraViewDataMgr::PostOpaqueRender);
 	RendererModule.RegisterPostOpaqueRenderDelegate(GNiagaraViewDataManager.PostOpaqueDelegate);
+
+	RendererModule.OnPreSceneRender().AddRaw(&GNiagaraViewDataManager, &FNiagaraViewDataMgr::OnPreSceneRenderCalled);
 }
 
 void FNiagaraViewDataMgr::Shutdown()

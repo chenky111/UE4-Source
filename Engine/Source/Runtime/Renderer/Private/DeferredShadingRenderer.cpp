@@ -639,6 +639,10 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 		RHICmdList.ImmediateFlush(EImmediateFlushType::FlushRHIThreadFlushResources);
 	}
 
+	IRendererModule& RendererModule = GetRendererModule();
+	FPreSceneRenderValues PreSceneRenderValues = RendererModule.PreSceneRenderExtension();
+	Views[0].bUsesGlobalDistanceField |= PreSceneRenderValues.bUsesGlobalDistanceField;
+
 	if (!bDoInitViewAftersPrepass)
 	{
 		bool bSplitDispatch = !GDoPrepareDistanceFieldSceneAfterRHIFlush;
@@ -1330,7 +1334,6 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 		ServiceLocalQueue();
 	}
 
-	IRendererModule& RendererModule = GetRendererModule();
 	if (RendererModule.HasPostOpaqueExtentions())
 	{
 		FSceneTexturesUniformParameters SceneTextureParameters;
