@@ -42,6 +42,7 @@
 
 #include "Modules/ModuleManager.h"
 #include "AssetRegistryModule.h"
+#include "NiagaraNodeSimTargetSelector.h"
 
 #define LOCTEXT_NAMESPACE "NiagaraSchema"
 
@@ -902,6 +903,15 @@ TArray<TSharedPtr<FNiagaraSchemaAction_NewNode> > UEdGraphSchema_Niagara::GetGra
 		const FText UsageSelectorMenuDesc = LOCTEXT("NiagaraUsageSelectorMenuDesc", "Select By Use");
 		TSharedPtr<FNiagaraSchemaAction_NewNode> Action = AddNewNodeAction(NewActions, UtilMenuCat, UsageSelectorMenuDesc, TEXT("Select By Use"), FText::GetEmpty());
 		UNiagaraNodeUsageSelector* Node = NewObject<UNiagaraNodeUsageSelector>(OwnerOfTemporaries);
+		Action->NodeTemplate = Node;
+	}
+
+	// Add simulation target selector node
+	{
+		const FText UtilMenuCat = LOCTEXT("NiagaraSimTargetSelectorMenuCat", "Util");
+		const FText SimTargetSelectorMenuDesc = LOCTEXT("NiagaraSimTargetSelectorMenuDesc", "Select By Simulation Target");
+		TSharedPtr<FNiagaraSchemaAction_NewNode> Action = AddNewNodeAction(NewActions, UtilMenuCat, SimTargetSelectorMenuDesc, TEXT("Select By Simulation Target"), FText::GetEmpty());
+		UNiagaraNodeSimTargetSelector* Node = NewObject<UNiagaraNodeSimTargetSelector>(OwnerOfTemporaries);
 		Action->NodeTemplate = Node;
 	}
 

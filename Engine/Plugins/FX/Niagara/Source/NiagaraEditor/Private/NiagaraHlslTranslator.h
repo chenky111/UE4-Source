@@ -457,6 +457,10 @@ public:
 	virtual ENiagaraScriptUsage GetTargetUsage() const;
 	FGuid GetTargetUsageId() const;
 	virtual ENiagaraScriptUsage GetCurrentUsage() const;
+	virtual ENiagaraSimTarget GetSimulationTarget() const
+	{
+		return CompilationTarget;
+	}
 
 	static bool IsBuiltInHlslType(FNiagaraTypeDefinition Type);
 	static FString GetStructHlslTypeName(FNiagaraTypeDefinition Type);

@@ -53,4 +53,6 @@ protected:
 	virtual bool CanMovePin(const UEdGraphPin* Pin) const override { return false; }
 	virtual bool AllowNiagaraTypeForAddPin(const FNiagaraTypeDefinition& InType) override;
 	//~ End UNiagaraNodeWithDynamicPins Interface
+
+	virtual void InsertInputPinsFor(const FNiagaraVariable& Var);
 };
