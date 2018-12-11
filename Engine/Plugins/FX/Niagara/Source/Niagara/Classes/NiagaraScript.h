@@ -51,6 +51,15 @@ enum class ENiagaraModuleDependencyType : uint8
 	PostDependency
 };
 
+UENUM()
+enum class ENiagaraModuleDependencyScriptConstraint : uint8
+{
+	/** The module providing the dependency must be in the same script e.g. if the module requiring the dependency is in "Particle Spawn" the module providing the dependency must also be in "Particle Spawn". */
+	SameScript,
+	/** The module providing the dependency can be in any script as long as it satisfies the dependency type, e.g. if the module requiring the dependency is in "Particle Spawn" the module providing the dependency could be in "Emitter Spawn". */
+	AllScripts
+};
+
 USTRUCT()
 struct FNiagaraModuleDependency
 {
@@ -58,13 +67,24 @@ struct FNiagaraModuleDependency
 public:
 	/** Specifies the provided id of the required dependent module (e.g. 'ProvidesNormalizedAge') */
 	UPROPERTY(AssetRegistrySearchable, EditAnywhere, Category = Script)
-		FName Id;
+	FName Id;
+
 	/** Whether the dependency belongs before or after this module */
 	UPROPERTY(AssetRegistrySearchable, EditAnywhere, Category = Script)
-		ENiagaraModuleDependencyType Type; // e.g. PreDependency,
-										   /** Detailed description of the dependency */
+	ENiagaraModuleDependencyType Type; // e.g. PreDependency
+
+	/** Specifies constraints related to the source script a modules provising a depency. */
+	UPROPERTY(AssetRegistrySearchable, EditAnywhere, Category = Script)
+	ENiagaraModuleDependencyScriptConstraint ScriptConstraint;
+	
+	/** Detailed description of the dependency */
 	UPROPERTY(AssetRegistrySearchable, EditAnywhere, Category = Script, meta = (MultiLine = true))
-		FText Description;
+	FText Description;
+
+	FNiagaraModuleDependency()
+	{
+		ScriptConstraint = ENiagaraModuleDependencyScriptConstraint::AllScripts;
+	}
 };
 
 struct FNiagaraScriptDebuggerInfo

@@ -46,66 +46,51 @@ TArray<ENiagaraScriptUsage> UsagePriority = { // Ordered such as the highest pri
 	ENiagaraScriptUsage::SystemUpdateScript,
 	ENiagaraScriptUsage::SystemSpawnScript };
 
-UNiagaraNodeOutput* GetOutputNodeForModuleDependency(ENiagaraScriptUsage DependantUsage, UNiagaraScript* DependencyScript, UNiagaraSystem& System, UNiagaraEmitter* Emitter, FNiagaraModuleDependency Dependency)
+UNiagaraNodeOutput* GetOutputNodeForModuleDependency(ENiagaraScriptUsage DependantUsage, UNiagaraScript* DependencyScript, UNiagaraSystem& System, const FNiagaraEmitterHandle* EmitterHandle, FNiagaraModuleDependency Dependency)
 {
 	UNiagaraNodeOutput* TargetOutputNode = nullptr;
 	if (DependencyScript)
 	{
 		UNiagaraScript* OutputScript = nullptr;
 		TArray<ENiagaraScriptUsage> SupportedUsages = UNiagaraScript::GetSupportedUsageContextsForBitmask(DependencyScript->ModuleUsageBitmask);
-		ENiagaraScriptUsage ScriptUsage = SupportedUsages[0];
-		int32 ClosestDistance = MAX_int32;
 
-		int32 DependantIndex = UsagePriority.IndexOfByPredicate(
-			[&](const ENiagaraScriptUsage CurrentUsage)
+		if (Dependency.ScriptConstraint == ENiagaraModuleDependencyScriptConstraint::AllScripts)
 		{
-			return UNiagaraScript::IsEquivalentUsage(DependantUsage, CurrentUsage);
-		});
-
-		for (ENiagaraScriptUsage PossibleUsage : SupportedUsages)
-		{
-			int32 PossibleIndex = UsagePriority.IndexOfByPredicate(
+			int32 ClosestDistance = MAX_int32;
+			int32 DependantIndex = UsagePriority.IndexOfByPredicate(
 				[&](const ENiagaraScriptUsage CurrentUsage)
+			{
+				return UNiagaraScript::IsEquivalentUsage(DependantUsage, CurrentUsage);
+			});
+
+			for (ENiagaraScriptUsage PossibleUsage : SupportedUsages)
+			{
+				int32 PossibleIndex = UsagePriority.IndexOfByPredicate(
+					[&](const ENiagaraScriptUsage CurrentUsage)
 				{
 					return UNiagaraScript::IsEquivalentUsage(PossibleUsage, CurrentUsage);
 				});
 
-			if (PossibleIndex == INDEX_NONE)
-			{
-				// This usage isn't in the execution flow so check the next one.
-				continue;
-			}
+				if (PossibleIndex == INDEX_NONE)
+				{
+					// This usage isn't in the execution flow so check the next one.
+					continue;
+				}
 
-			int32 Distance = PossibleIndex - DependantIndex;
-			bool bCorrectOrder = (Dependency.Type == ENiagaraModuleDependencyType::PreDependency && Distance >= 0) || (Dependency.Type == ENiagaraModuleDependencyType::PostDependency && Distance <= 0);
-			if ((FMath::Abs(Distance) < ClosestDistance) && bCorrectOrder)
+				int32 Distance = PossibleIndex - DependantIndex;
+				bool bCorrectOrder = (Dependency.Type == ENiagaraModuleDependencyType::PreDependency && Distance >= 0) || (Dependency.Type == ENiagaraModuleDependencyType::PostDependency && Distance <= 0);
+				if ((FMath::Abs(Distance) < ClosestDistance) && bCorrectOrder)
+				{
+					ClosestDistance = Distance;
+					OutputScript = FNiagaraEditorUtilities::GetScriptFromSystem(System, EmitterHandle->GetId(), PossibleUsage, FGuid());
+				}
+			}
+		}
+		else if (Dependency.ScriptConstraint == ENiagaraModuleDependencyScriptConstraint::SameScript)
+		{
+			if (SupportedUsages.Contains(DependantUsage))
 			{
-				ClosestDistance = Distance;
-				ScriptUsage = PossibleUsage;
-				if (UNiagaraScript::IsEquivalentUsage(ScriptUsage, ENiagaraScriptUsage::SystemSpawnScript))
-				{
-					OutputScript = System.GetSystemSpawnScript();
-				}
-				else if (UNiagaraScript::IsEquivalentUsage(ScriptUsage, ENiagaraScriptUsage::SystemUpdateScript))
-				{
-					OutputScript = System.GetSystemUpdateScript();
-				}
-				else if (UNiagaraScript::IsEquivalentUsage(ScriptUsage, ENiagaraScriptUsage::EmitterSpawnScript))
-				{
-					OutputScript = Emitter->EmitterSpawnScriptProps.Script;
-				}
-				else if (UNiagaraScript::IsEquivalentUsage(ScriptUsage, ENiagaraScriptUsage::EmitterUpdateScript))
-				{
-					OutputScript = Emitter->EmitterUpdateScriptProps.Script;
-				}
-				else if (UNiagaraScript::IsEquivalentUsage(ScriptUsage, ENiagaraScriptUsage::ParticleSpawnScript))
-				{
-					OutputScript = Emitter->SpawnScriptProps.Script;
-				}
-				else if (UNiagaraScript::IsEquivalentUsage(ScriptUsage, ENiagaraScriptUsage::ParticleUpdateScript))
-				{
-					OutputScript = Emitter->UpdateScriptProps.Script;
-				}
+				OutputScript = FNiagaraEditorUtilities::GetScriptFromSystem(System, EmitterHandle->GetId(), DependantUsage, FGuid());
 			}
 		}
 
@@ -395,7 +380,8 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 					{
 						DisabledDependencies.Add(FunctionNode);
 					}
-					else
+					else if (Dependency.ScriptConstraint == ENiagaraModuleDependencyScriptConstraint::AllScripts || 
+						(Dependency.ScriptConstraint == ENiagaraModuleDependencyScriptConstraint::SameScript && OutputNode->GetUsage() == ModuleData.Usage && OutputNode->GetUsageId() == ModuleData.UsageId))
 					{
 						bDependencyMet = true;
 						break;
@@ -455,6 +441,17 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 					FNiagaraStackGraphUtilities::GetScriptAssetsByDependencyProvided(ENiagaraScriptUsage::Module, Dependency.Id, ModuleAssets);
 					for (FAssetData ModuleAsset : ModuleAssets)
 					{
+						UNiagaraScript* DependencyScript = Cast<UNiagaraScript>(ModuleAsset.GetAsset());
+						if (Dependency.ScriptConstraint == ENiagaraModuleDependencyScriptConstraint::SameScript)
+						{
+							TArray<ENiagaraScriptUsage> SupportedUsages = UNiagaraScript::GetSupportedUsageContextsForBitmask(DependencyScript->ModuleUsageBitmask);
+							if (SupportedUsages.Contains(OutputNode->GetUsage()) == false)
+							{
+								// If the dependency requires the provider be in the same script and the usage of this module doesn't support that usage, skip it.
+								continue;
+							}
+						}
+						
 						FText FixDescription = FText::Format(LOCTEXT("AddDependency", "Add new dependency module {0}"), FText::FromName(ModuleAsset.AssetName));
 						UNiagaraStackEntry::FStackIssueFix Fix(
 							FixDescription,
@@ -463,14 +460,13 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 							FScopedTransaction ScopedTransaction(FixDescription);
 							UNiagaraNodeFunctionCall* NewModuleNode = nullptr;
 							int32 TargetIndex = 0;
-							UNiagaraScript* DependencyScript = Cast<UNiagaraScript>(ModuleAsset.GetAsset());
 							checkf(DependencyScript != nullptr, TEXT("Add module action failed"));
 							// Determine the output node for the group where the added dependency module belongs
 							UNiagaraNodeOutput* TargetOutputNode = nullptr;
 							for (int i = ModuleIndex; i < SystemModuleData.Num() && i >= 0; i = Dependency.Type == ENiagaraModuleDependencyType::PostDependency ? i + 1 : i - 1) // moving up or down depending on type
 							// starting at current module, which is a dependant
 							{
-								auto FoundRequirement = SystemModuleData[i].ModuleNode->FunctionScript->RequiredDependencies.FindByPredicate(
+								bool FoundRequirement = SystemModuleData[i].ModuleNode->FunctionScript->RequiredDependencies.FindByPredicate(
 									[&](FNiagaraModuleDependency CurrentDependency)
 								{
 									return CurrentDependency.Id == Dependency.Id;
@@ -478,10 +474,12 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 								if (FoundRequirement) // check for multiple dependendants along the way, and stop adjacent to the last one
 								{
 									ENiagaraScriptUsage DependencyUsage = SystemModuleData[i].Usage;
-									TargetOutputNode = GetOutputNodeForModuleDependency(DependencyUsage, DependencyScript, GetSystemViewModel()->GetSystem(), GetEmitterViewModel()->GetEmitter(), Dependency);
-									if (TargetOutputNode != nullptr)
+									const FNiagaraEmitterHandle* EmitterHandle = FNiagaraEditorUtilities::GetEmitterHandleForEmitter(GetSystemViewModel()->GetSystem(), *GetEmitterViewModel()->GetEmitter());
+									UNiagaraNodeOutput* FoundTargetOutputNode = GetOutputNodeForModuleDependency(DependencyUsage, DependencyScript, GetSystemViewModel()->GetSystem(), EmitterHandle, Dependency);
+									if (FoundTargetOutputNode != nullptr)
 									{
-										auto CurrentOutputNode = FNiagaraStackGraphUtilities::GetEmitterOutputNodeForStackNode(*SystemModuleData[i].ModuleNode);
+										TargetOutputNode = FoundTargetOutputNode;
+										UNiagaraNodeOutput* CurrentOutputNode = FNiagaraStackGraphUtilities::GetEmitterOutputNodeForStackNode(*SystemModuleData[i].ModuleNode);
 										if (TargetOutputNode == CurrentOutputNode)
 										{
 											TargetIndex = Dependency.Type == ENiagaraModuleDependencyType::PostDependency ? SystemModuleData[i].Index + 1 : SystemModuleData[i].Index;
