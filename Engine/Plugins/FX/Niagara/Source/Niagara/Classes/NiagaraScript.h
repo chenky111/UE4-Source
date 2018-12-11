@@ -83,7 +83,7 @@ public:
 
 	FNiagaraModuleDependency()
 	{
-		ScriptConstraint = ENiagaraModuleDependencyScriptConstraint::AllScripts;
+		ScriptConstraint = ENiagaraModuleDependencyScriptConstraint::SameScript;
 	}
 };
 
