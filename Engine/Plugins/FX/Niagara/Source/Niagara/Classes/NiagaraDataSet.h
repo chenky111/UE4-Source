@@ -347,6 +347,7 @@ public:
 				}
 				//UE_LOG(LogNiagara, Warning, TEXT("DataSetAllocate: Adding New Free IDs: %d - "), RequiredIDs - 1, ExistingNumIDs);
 			}
+#if 0
 			else if (RequiredIDs < ExistingNumIDs >> 1)//Configurable?
 			{
 				//If the max id we use has reduced significantly then we can shrink the tables.
@@ -371,6 +372,7 @@ public:
 				check(NumFreeIDs <= RequiredIDs);
 				FreeIDsTable.SetNumUninitialized(NumFreeIDs);
 			}
+#endif
 			else
 			{
 				//Drop in required size not great enough so just allocate same size.
