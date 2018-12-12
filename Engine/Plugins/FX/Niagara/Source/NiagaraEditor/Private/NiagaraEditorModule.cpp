@@ -140,11 +140,10 @@ public:
 					{
 						return (*CreateGraphPin).Execute(InPin);
 					}
-					else
-					{
-						UE_LOG(LogNiagaraEditor, Error, TEXT("Can not create pin for specified struct type! Pin Name '%s' Owning Node '%s'."), *InPin->PinName.ToString(),
-							*InPin->GetOwningNode()->GetName());
-					}
+					// Otherwise, fall back to the generic pin for Niagara types. Previous iterations put out an error here, but this 
+					// was not correct as the above list is just overrides from the default renamable pin, usually numeric types with their own custom 
+					// editors for default values. Things like the parameter map can safely just fall through to the end condition and create a
+					// generic renamable pin.
 				}
 				else
 				{
