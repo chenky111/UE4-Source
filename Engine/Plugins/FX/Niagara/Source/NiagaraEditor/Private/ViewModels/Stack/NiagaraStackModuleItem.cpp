@@ -372,6 +372,15 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 						: ((Dependency.Type == ENiagaraModuleDependencyType::PreDependency && Distance < 0)
 							|| (Dependency.Type == ENiagaraModuleDependencyType::PostDependency && Distance > 0));
 
+					bool bSameScriptDependencyConstraint = Dependency.ScriptConstraint == ENiagaraModuleDependencyScriptConstraint::SameScript;
+					bool bEquivalentScriptUsage = UNiagaraScript::IsEquivalentUsage(OutputNode->GetUsage(), ModuleData.Usage);
+
+					// If the dependency is for modules in the same script, the two modules are only incorrectly ordered if they share equivalent script usages
+					if (bSameScriptDependencyConstraint)
+					{
+						bIncorrectOrder = bEquivalentScriptUsage && bIncorrectOrder;
+					}
+
 					if (bIncorrectOrder)
 					{
 						DisorderedDependencies.Add(ModuleData);
@@ -381,7 +390,7 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 						DisabledDependencies.Add(FunctionNode);
 					}
 					else if (Dependency.ScriptConstraint == ENiagaraModuleDependencyScriptConstraint::AllScripts || 
-						(Dependency.ScriptConstraint == ENiagaraModuleDependencyScriptConstraint::SameScript && OutputNode->GetUsage() == ModuleData.Usage && OutputNode->GetUsageId() == ModuleData.UsageId))
+						(bSameScriptDependencyConstraint && bEquivalentScriptUsage && OutputNode->GetUsageId() == ModuleData.UsageId))
 					{
 						bDependencyMet = true;
 						break;
@@ -464,14 +473,14 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 							// Determine the output node for the group where the added dependency module belongs
 							UNiagaraNodeOutput* TargetOutputNode = nullptr;
 							for (int i = ModuleIndex; i < SystemModuleData.Num() && i >= 0; i = Dependency.Type == ENiagaraModuleDependencyType::PostDependency ? i + 1 : i - 1) // moving up or down depending on type
-							// starting at current module, which is a dependant
+							// starting at current module, which is a dependent
 							{
 								bool FoundRequirement = SystemModuleData[i].ModuleNode->FunctionScript->RequiredDependencies.FindByPredicate(
 									[&](FNiagaraModuleDependency CurrentDependency)
 								{
 									return CurrentDependency.Id == Dependency.Id;
 								});
-								if (FoundRequirement) // check for multiple dependendants along the way, and stop adjacent to the last one
+								if (FoundRequirement) // check for multiple dependents along the way, and stop adjacent to the last one
 								{
 									ENiagaraScriptUsage DependencyUsage = SystemModuleData[i].Usage;
 									const FNiagaraEmitterHandle* EmitterHandle = FNiagaraEditorUtilities::GetEmitterHandleForEmitter(GetSystemViewModel()->GetSystem(), *GetEmitterViewModel()->GetEmitter());
