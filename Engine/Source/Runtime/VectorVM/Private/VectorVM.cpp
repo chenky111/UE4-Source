@@ -1381,15 +1381,15 @@ struct FVectorIntKernelDivide : TBinaryVectorIntKernel<FVectorIntKernelDivide>
 {
 	static void VM_FORCEINLINE DoKernel(FVectorVMContext& Context, VectorRegisterInt* Dst, VectorRegisterInt Src0, VectorRegisterInt Src1)
 	{
-		int TmpA[4];
+		int32 TmpA[4];
 		VectorIntStore(Src0, TmpA);
 
-		int TmpB[4];
+		int32 TmpB[4];
 		VectorIntStore(Src1, TmpB);
 
 		// No intrinsics exist for integer divide. Since div by zero causes crashes, we must be safe against that.
 
-		int TmpDst[4];
+		int32 TmpDst[4];
 		TmpDst[0] = TmpB[0] != 0 ? (TmpA[0] / TmpB[0]) : 0;
 		TmpDst[1] = TmpB[1] != 0 ? (TmpA[1] / TmpB[1]) : 0;
 		TmpDst[2] = TmpB[2] != 0 ? (TmpA[2] / TmpB[2]) : 0;
@@ -1561,13 +1561,13 @@ struct FVectorIntKernelBitLShift : TBinaryVectorIntKernel<FVectorIntKernelBitLSh
 {
 	static void VM_FORCEINLINE DoKernel(FVectorVMContext& Context, VectorRegisterInt* Dst, VectorRegisterInt Src0,  VectorRegisterInt Src1)
 	{
-		int TmpA[4];
+		int32 TmpA[4];
 		VectorIntStore(Src0, TmpA);
 
-		int TmpB[4];
+		int32 TmpB[4];
 		VectorIntStore(Src1, TmpB);
 
-		int TmpDst[4];
+		int32 TmpDst[4];
 		TmpDst[0] = (TmpA[0] << TmpB[0]);
 		TmpDst[1] = (TmpA[1] << TmpB[1]);
 		TmpDst[2] = (TmpA[2] << TmpB[2]);
@@ -1581,13 +1581,13 @@ struct FVectorIntKernelBitRShift : TBinaryVectorIntKernel<FVectorIntKernelBitRSh
 {
 	static void VM_FORCEINLINE DoKernel(FVectorVMContext& Context, VectorRegisterInt* Dst, VectorRegisterInt Src0, VectorRegisterInt Src1)
 	{
-		int TmpA[4];
+		int32 TmpA[4];
 		VectorIntStore(Src0, TmpA);
 
-		int TmpB[4];
+		int32 TmpB[4];
 		VectorIntStore(Src1, TmpB);
 
-		int TmpDst[4];
+		int32 TmpDst[4];
 		TmpDst[0] = (TmpA[0] >> TmpB[0]);
 		TmpDst[1] = (TmpA[1] >> TmpB[1]);
 		TmpDst[2] = (TmpA[2] >> TmpB[2]);
