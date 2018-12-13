@@ -21,6 +21,9 @@ float4 ModuloPrecise(float4 x, float4 y){ return x - y * trunc(x/y); }
 float3 ModuloPrecise(float3 x, float3 y){ return x - y * trunc(x/y); }
 float2 ModuloPrecise(float2 x, float2 y){ return x - y * trunc(x/y);}
 float ModuloPrecise(float x, float y){ return x - y * trunc(x/y); }
+int ModuloPrecise(int x, int y){ return x - y * (x/y); }
+int Modulo(int x, int y){  return x - y * (x/y);  }
+
 	
 // using rcp is only 12 bits of precision, we should usually pay for perf
 float4 Reciprocal(float4 x){ return 1.0f/x;}

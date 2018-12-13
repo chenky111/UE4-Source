@@ -619,7 +619,7 @@ void FNiagaraOpInfo::Init()
 		Idx = OpInfos.AddDefaulted();
 		Op = &OpInfos[Idx];
 		Op->Category = CategoryText;
-		Op->FriendlyName = NSLOCTEXT("NiagaraOpInfo", "Fmod Name", "FMod");
+		Op->FriendlyName = NSLOCTEXT("NiagaraOpInfo", "Fmod Name", "Modulo");
 		Op->Description = NSLOCTEXT("NiagaraOpInfo", "Fmod Desc", "Result = A % B");
 		Op->Keywords = FText::FromString(TEXT("%"));
 		Op->Inputs.Add(FNiagaraOpInOutInfo(A, Type, AText, AText, DefaultStr_One));
@@ -631,7 +631,7 @@ void FNiagaraOpInfo::Init()
 		Idx = OpInfos.AddDefaulted();
 		Op = &OpInfos[Idx];
 		Op->Category = CategoryText;
-		Op->FriendlyName = NSLOCTEXT("NiagaraOpInfo", "Fmod Name Fast", "FMod Fast");
+		Op->FriendlyName = NSLOCTEXT("NiagaraOpInfo", "Fmod Name Fast", "Modulo Fast");
 		Op->Description = NSLOCTEXT("NiagaraOpInfo", "Fmod Desc Fast", "Result = A % B. May be less precise than regular FMod.");
 		Op->Keywords = FText::FromString(TEXT("%"));
 		Op->Inputs.Add(FNiagaraOpInOutInfo(A, Type, AText, AText, DefaultStr_One));
@@ -925,6 +925,35 @@ void FNiagaraOpInfo::Init()
 	Op->BuildName(TEXT("BitNot"), IntCategoryName);
 	OpInfoMap.Add(Op->Name) = Idx;
 
+	Idx = OpInfos.AddDefaulted();
+	Op = &OpInfos[Idx];
+	Op->Category = IntCategory;
+	Op->FriendlyName = NSLOCTEXT("NiagaraOpInfo", "BitLShift Name", "Bitwise Left Shift");
+	Op->Description = NSLOCTEXT("NiagaraOpInfo", "BitLShift Desc", "Shifts A left by B bits, padding with zeroes on the right. B should be between 0 and 31 or there will be undefined behavior.");
+	Op->Keywords = FText::FromString(TEXT("<<"));
+	Op->Inputs.Add(FNiagaraOpInOutInfo(A, IntType, AText, AText, Default_IntOne));
+	Op->Inputs.Add(FNiagaraOpInOutInfo(B, IntType, BText, BText, Default_IntOne));
+	Op->Outputs.Add(FNiagaraOpInOutInfo(Result, IntType, ResultText, ResultText, Default_IntOne, TEXT("{0} << {1}")));
+	Op->BuildName(TEXT("BitLShift"), IntCategoryName);
+	Op->bSupportsAddedInputs = true;
+	Op->AddedInputTypeRestrictions.Add(IntType);
+	Op->AddedInputFormatting = TEXT("{A} << {B}");
+	OpInfoMap.Add(Op->Name) = Idx;
+
+	Idx = OpInfos.AddDefaulted();
+	Op = &OpInfos[Idx];
+	Op->Category = IntCategory;
+	Op->FriendlyName = NSLOCTEXT("NiagaraOpInfo", "BitRShift Name", "Bitwise Right Shift");
+	Op->Description = NSLOCTEXT("NiagaraOpInfo", "BitRShift Desc", "Shifts A right by B bits, taking the sign bit and propagating it to fill in on left (i.e. negative numbers fill with 1's, positive fill with 0's. B should be between 0 and 31 or there will be undefined behavior.");
+	Op->Keywords = FText::FromString(TEXT(">>"));
+	Op->Inputs.Add(FNiagaraOpInOutInfo(A, IntType, AText, AText, Default_IntOne));
+	Op->Inputs.Add(FNiagaraOpInOutInfo(B, IntType, BText, BText, Default_IntOne));
+	Op->Outputs.Add(FNiagaraOpInOutInfo(Result, IntType, ResultText, ResultText, Default_IntOne, TEXT("{0} >> {1}")));
+	Op->BuildName(TEXT("BitRShift"), IntCategoryName);
+	Op->bSupportsAddedInputs = true;
+	Op->AddedInputTypeRestrictions.Add(IntType);
+	Op->AddedInputFormatting = TEXT("{A} >> {B}");
+	OpInfoMap.Add(Op->Name) = Idx;
 	//////////////////////////////////////////////////////////////////////////
 	// Boolean Only Ops
 

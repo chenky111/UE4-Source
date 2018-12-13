@@ -1376,6 +1376,30 @@ struct FVectorIntKernelMultiply : TBinaryVectorIntKernel<FVectorIntKernelMultipl
 	}
 };
 
+//divi,
+struct FVectorIntKernelDivide : TBinaryVectorIntKernel<FVectorIntKernelDivide>
+{
+	static void VM_FORCEINLINE DoKernel(FVectorVMContext& Context, VectorRegisterInt* Dst, VectorRegisterInt Src0, VectorRegisterInt Src1)
+	{
+		int TmpA[4];
+		VectorIntStore(Src0, TmpA);
+
+		int TmpB[4];
+		VectorIntStore(Src1, TmpB);
+
+		// No intrinsics exist for integer divide. Since div by zero causes crashes, we must be safe against that.
+
+		int TmpDst[4];
+		TmpDst[0] = TmpB[0] != 0 ? (TmpA[0] / TmpB[0]) : 0;
+		TmpDst[1] = TmpB[1] != 0 ? (TmpA[1] / TmpB[1]) : 0;
+		TmpDst[2] = TmpB[2] != 0 ? (TmpA[2] / TmpB[2]) : 0;
+		TmpDst[3] = TmpB[3] != 0 ? (TmpA[3] / TmpB[3]) : 0;
+
+		*Dst = MakeVectorRegisterInt(TmpDst[0], TmpDst[1], TmpDst[2], TmpDst[3]);
+	}
+};
+
+
 //clampi,
 struct FVectorIntKernelClamp : TTrinaryVectorIntKernel<FVectorIntKernelClamp>
 {
@@ -1529,6 +1553,46 @@ struct FVectorIntKernelBitNot : TUnaryVectorIntKernel<FVectorIntKernelBitNot>
 	static void VM_FORCEINLINE DoKernel(FVectorVMContext& Context, VectorRegisterInt* Dst, VectorRegisterInt Src0)
 	{
 		*Dst = VectorIntNot(Src0);
+	}
+};
+
+// bit_lshift
+struct FVectorIntKernelBitLShift : TBinaryVectorIntKernel<FVectorIntKernelBitLShift>
+{
+	static void VM_FORCEINLINE DoKernel(FVectorVMContext& Context, VectorRegisterInt* Dst, VectorRegisterInt Src0,  VectorRegisterInt Src1)
+	{
+		int TmpA[4];
+		VectorIntStore(Src0, TmpA);
+
+		int TmpB[4];
+		VectorIntStore(Src1, TmpB);
+
+		int TmpDst[4];
+		TmpDst[0] = (TmpA[0] << TmpB[0]);
+		TmpDst[1] = (TmpA[1] << TmpB[1]);
+		TmpDst[2] = (TmpA[2] << TmpB[2]);
+		TmpDst[3] = (TmpA[3] << TmpB[3]);
+		*Dst = MakeVectorRegisterInt(TmpDst[0], TmpDst[1], TmpDst[2], TmpDst[3] );
+	}
+};
+
+// bit_rshift
+struct FVectorIntKernelBitRShift : TBinaryVectorIntKernel<FVectorIntKernelBitRShift>
+{
+	static void VM_FORCEINLINE DoKernel(FVectorVMContext& Context, VectorRegisterInt* Dst, VectorRegisterInt Src0, VectorRegisterInt Src1)
+	{
+		int TmpA[4];
+		VectorIntStore(Src0, TmpA);
+
+		int TmpB[4];
+		VectorIntStore(Src1, TmpB);
+
+		int TmpDst[4];
+		TmpDst[0] = (TmpA[0] >> TmpB[0]);
+		TmpDst[1] = (TmpA[1] >> TmpB[1]);
+		TmpDst[2] = (TmpA[2] >> TmpB[2]);
+		TmpDst[3] = (TmpA[3] >> TmpB[3]);
+		*Dst = MakeVectorRegisterInt(TmpDst[0], TmpDst[1], TmpDst[2], TmpDst[3]);
 	}
 };
 
@@ -1837,6 +1901,7 @@ void VectorVM::Exec(
 				case EVectorVMOp::addi: FVectorIntKernelAdd::Exec(Context); break;
 				case EVectorVMOp::subi: FVectorIntKernelSubtract::Exec(Context); break;
 				case EVectorVMOp::muli: FVectorIntKernelMultiply::Exec(Context); break;
+				case EVectorVMOp::divi: FVectorIntKernelDivide::Exec(Context); break;
 				case EVectorVMOp::clampi: FVectorIntKernelClamp::Exec(Context); break;
 				case EVectorVMOp::mini: FVectorIntKernelMin::Exec(Context); break;
 				case EVectorVMOp::maxi: FVectorIntKernelMax::Exec(Context); break;
@@ -1854,6 +1919,8 @@ void VectorVM::Exec(
 				case EVectorVMOp::bit_or: FVectorIntKernelBitOr::Exec(Context); break;
 				case EVectorVMOp::bit_xor: FVectorIntKernelBitXor::Exec(Context); break;
 				case EVectorVMOp::bit_not: FVectorIntKernelBitNot::Exec(Context); break;
+				case EVectorVMOp::bit_lshift: FVectorIntKernelBitLShift::Exec(Context); break;
+				case EVectorVMOp::bit_rshift: FVectorIntKernelBitRShift::Exec(Context); break;
 				case EVectorVMOp::logic_and: FVectorIntKernelLogicAnd::Exec(Context); break;
 				case EVectorVMOp::logic_or: FVectorIntKernelLogicOr::Exec(Context); break;
 				case EVectorVMOp::logic_xor: FVectorIntKernelLogicXor::Exec(Context); break;
