@@ -50,6 +50,13 @@ float Reciprocal(float x){ return 1.0f/x; }
 	float2 Modulo(float2 x, float2 y){ return fmod(x,y); }
 	float Modulo(float x, float y){ return fmod(x,y); }
 
+	// utility function used for scene depth calculations
+	float3 WorldPositionFromSceneDepth(float2 ScreenPosition, float SceneDepth)
+	{
+		float4 HomogeneousWorldPosition = mul(float4(ScreenPosition * SceneDepth, SceneDepth, 1), View.ScreenToWorld);
+		return HomogeneousWorldPosition.xyz / HomogeneousWorldPosition.w;
+	}
+
 	// 4D random number generator inspired by PCGs (permuted congruential generator)
 	// COPY FROM RANDOM.USH, which we can't easily include here due to a sizable dependency chain
 	uint4 NiagaraRand4DPCG32(int4 p)
