@@ -120,6 +120,7 @@ void UNiagaraDataInterfaceCollisionQuery::GetFunctions(TArray<FNiagaraFunctionSi
 	SigDepth.Outputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetBoolDef(), TEXT("IsInsideView")));
 	SigDepth.Outputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetVec3Def(), TEXT("SamplePosWorld")));
 	SigDepth.Outputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetVec3Def(), TEXT("SampleWorldNormal")));
+	SigDepth.Outputs.Add(FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("SamplePosDistanceToCamera")));
 	OutFunctions.Add(SigDepth);
 
 	FNiagaraFunctionSignature SigMeshField;
@@ -296,12 +297,13 @@ bool UNiagaraDataInterfaceCollisionQuery::GetFunctionHLSL(const FName& Definitio
 	}
 	else if (DefinitionFunctionName == TEXT("QuerySceneDepthGPU"))
 	{
-		OutHLSL += TEXT("void ") + InstanceFunctionName + TEXT("(in float3 In_SamplePos, out float Out_SceneDepth, out bool Out_IsInsideView, out float3 Out_WorldPos, out float3 Out_WorldNormal) \n{\n");
+		OutHLSL += TEXT("void ") + InstanceFunctionName + TEXT("(in float3 In_SamplePos, out float Out_SceneDepth, out bool Out_IsInsideView, out float3 Out_WorldPos, out float3 Out_WorldNormal, out float Out_SamplePosDistanceToCamera) \n{\n");
 		OutHLSL += TEXT("\
 			Out_SceneDepth = -1;\n\
 			Out_WorldPos = float3(0.0, 0.0, 0.0);\n\
 			Out_WorldNormal = float3(0.0, 0.0, 1.0);\n\
 			Out_IsInsideView = true;\n\
+			Out_SamplePosDistanceToCamera = length(In_SamplePos - View.WorldCameraOrigin);\n\
 			float4 SamplePosition = float4(In_SamplePos + View.PreViewTranslation, 1);\n\
 			float4 ClipPosition = mul(SamplePosition, View.TranslatedWorldToClip);\n\
 			float2 ScreenPosition = ClipPosition.xy / ClipPosition.w;\n\
@@ -678,6 +680,7 @@ void UNiagaraDataInterfaceCollisionQuery::QuerySceneDepth(FVectorVMContext & Con
 	VectorVM::FExternalFuncRegisterHandler<float> OutWorldNormX(Context);
 	VectorVM::FExternalFuncRegisterHandler<float> OutWorldNormY(Context);
 	VectorVM::FExternalFuncRegisterHandler<float> OutWorldNormZ(Context);
+	VectorVM::FExternalFuncRegisterHandler<float> OutSampleDistance(Context);
 
 	FScopeLock ScopeLock(&CriticalSection);
 	for (int32 i = 0; i < Context.NumInstances; ++i)
@@ -690,6 +693,7 @@ void UNiagaraDataInterfaceCollisionQuery::QuerySceneDepth(FVectorVMContext & Con
 		*OutWorldNormX.GetDestAndAdvance() = 0.0f;
 		*OutWorldNormY.GetDestAndAdvance() = 0.0f;
 		*OutWorldNormZ.GetDestAndAdvance() = 1.0f;
+		*OutSampleDistance.GetDestAndAdvance() = -1;
 	}
 }
 
