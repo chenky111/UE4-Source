@@ -203,21 +203,31 @@ void NiagaraEmitterInstanceBatcher::ResolveDatasetWrites(FRHICommandList &RHICmd
 	}
 	else if (Context->GPUDataReadback->IsReady())
 	{
+		bool bSuccessfullyRead = false;
 		{
 		    SCOPE_CYCLE_COUNTER(STAT_NiagaraGPUReadback_RT);
 		    int32 *NumInstancesAfterSim = static_cast<int32*>(Context->GPUDataReadback->RetrieveData(64 * sizeof(int32)));
-		    int32 ExistingDataCount = Context->MainDataSet->CurrData().GetNumInstances();// index 1 is always the count
-		    int32 NewExistingDataCount = NumInstancesAfterSim[1] + Context->AccumulatedSpawnRate;
-		    Context->MainDataSet->CurrData().SetNumInstances(NewExistingDataCount);	
-		    FString PathName = Context->GPUScript->GetOutermost()->GetPathName();
-		    // UE_LOG(LogNiagara, Log, TEXT("GPU Syncup %s : Was(%d) Now(%d)"), *PathName, ExistingDataCount, NewExistingDataCount );
-		    SET_DWORD_STAT(STAT_NiagaraGPUParticles, NewExistingDataCount);
-		    SET_DWORD_STAT(STAT_NiagaraReadbackLatency, 0);
-    
-		    Context->GPUDataReadback->Finish();
-    
-		    Context->AccumulatedSpawnRate = 0;
+			if (NumInstancesAfterSim)
+			{
+				int32 ExistingDataCount = Context->MainDataSet->CurrData().GetNumInstances();// index 1 is always the count
+				int32 NewExistingDataCount = NumInstancesAfterSim[1] + Context->AccumulatedSpawnRate;
+				Context->MainDataSet->CurrData().SetNumInstances(NewExistingDataCount);
+				FString PathName = Context->GPUScript->GetOutermost()->GetPathName();
+				// UE_LOG(LogNiagara, Log, TEXT("GPU Syncup %s : Was(%d) Now(%d)"), *PathName, ExistingDataCount, NewExistingDataCount );
+				SET_DWORD_STAT(STAT_NiagaraGPUParticles, NewExistingDataCount);
+				SET_DWORD_STAT(STAT_NiagaraReadbackLatency, 0);
+
+				Context->GPUDataReadback->Finish();
+
+				Context->AccumulatedSpawnRate = 0;
+				bSuccessfullyRead = true;
+			}
+			else
+			{
+				UE_LOG(LogNiagara, Warning, TEXT("GPUDataReadback said it was ready, but returned an invalid buffer. Skipping this time.."));
+			}
 		}
+		if (bSuccessfullyRead)
 		{
 			SCOPE_CYCLE_COUNTER(STAT_NiagaraAllocateGPUReadback_RT);
 			// The following code seems to take significant time on d3d12
