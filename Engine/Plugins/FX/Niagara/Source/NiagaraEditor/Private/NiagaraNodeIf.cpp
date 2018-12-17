@@ -160,7 +160,7 @@ void UNiagaraNodeIf::ResolveNumerics(const UEdGraphSchema_Niagara* Schema, bool 
 		InputPins.Add(Pins[i + VarStartIdx]);
 		InputPins.Add(Pins[i + VarStartIdx + OutputVars.Num()]);
 		OutputPins.Add(Pins[i + VarStartIdx + 2 * OutputVars.Num()]);
-		NumericResolutionByPins(Schema, InputPins, OutputPins,  true, PinCache);
+		NumericResolutionByPins(Schema, InputPins, OutputPins,  bSetInline, PinCache);
 	}
 }
 
