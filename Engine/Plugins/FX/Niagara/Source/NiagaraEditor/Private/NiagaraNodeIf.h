@@ -13,16 +13,16 @@ class UNiagaraNodeIf : public UNiagaraNodeWithDynamicPins
 public:
 
 	/** Outputs of this branch. */
-	UPROPERTY(EditAnywhere, Category=If)
+	UPROPERTY()
 	TArray<FNiagaraVariable> OutputVars;
 
-	UPROPERTY(EditAnywhere, Category = If)
+	UPROPERTY()
 	TArray<FGuid> OutputVarGuids;
 
-	UPROPERTY(EditAnywhere, Category = If)
+	UPROPERTY()
 	TArray<FGuid> InputAVarGuids;
 
-	UPROPERTY(EditAnywhere, Category = If)
+	UPROPERTY()
 	TArray<FGuid> InputBVarGuids;
 
 	//~ Begin UObject Interface

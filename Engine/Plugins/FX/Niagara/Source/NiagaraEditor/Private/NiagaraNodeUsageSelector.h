@@ -11,10 +11,10 @@ class UNiagaraNodeUsageSelector: public UNiagaraNodeWithDynamicPins
 	GENERATED_UCLASS_BODY()
 
 public:
-	UPROPERTY(EditAnywhere, Category=If)
+	UPROPERTY()
 	TArray<FNiagaraVariable> OutputVars;
 	
-	UPROPERTY(EditAnywhere, Category=If)
+	UPROPERTY()
 	TArray<FGuid> OutputVarGuids;
 	
 	//~ Begin UObject Interface
