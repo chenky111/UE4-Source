@@ -8,6 +8,7 @@
 #include "UObject/UObjectHash.h"
 #include "NiagaraNode.h"
 #include "NiagaraNodeFunctionCall.h"
+#include "NiagaraNodeIf.h"
 #include "NiagaraNodeInput.h"
 #include "NiagaraNodeOutput.h"
 #include "NiagaraNodeReadDataSet.h"
@@ -940,7 +941,6 @@ const FNiagaraTranslateResults &FHlslNiagaraTranslator::Translate(const FNiagara
 		//Generate function definitions
 		FString FunctionDefinitionString = GetFunctionDefinitions();
 		FunctionDefinitionString += TEXT("\n");
-
 		if (TranslationStages.Num() > 1 && RequiresInterpolation())
 		{
 			//ensure the interpolated spawn constants are part of the parameter set.
@@ -1649,6 +1649,8 @@ void FHlslNiagaraTranslator::DefineMain(FString &OutHlslOutput,
 		OutHlslOutput += FString::Printf(TEXT("\t%s.Particles.ID.Index = TempIDIndex;\n\t%s.Particles.ID.AcquireTag = TempIDTag;\n"), *MapName, *MapName);
 	}
 
+	
+
 	// Fill in the defaults for parameters.
 	for (int32 i = 0; i < MainPreSimulateChunks.Num(); ++i)
 	{
@@ -1711,7 +1713,7 @@ void FHlslNiagaraTranslator::DefineMain(FString &OutHlslOutput,
 				}
 
 				OutHlslOutput += FString::Printf(TEXT("\t\tSimulate%s(Context);\n"), TranslationStages.Num() > 1 ? *TranslationStages[StageIdx].PassNamespace : TEXT(""));
-				
+
 				if (StageIdx + 1 < TranslationStages.Num() && TranslationStages[StageIdx + 1].bCopyPreviousParams)
 				{
 					OutHlslOutput += TEXT("\t\t//Begin Transfer of Attributes!\n");
@@ -1729,6 +1731,7 @@ void FHlslNiagaraTranslator::DefineMain(FString &OutHlslOutput,
 					}
 					OutHlslOutput += TEXT("\t\t//End Transfer of Attributes!\n\n");
 				}
+
 
 				// Either go on to the next phase, or write to the final output context.
 				if (StageIdx + 1 < TranslationStages.Num() && TranslationStages[StageIdx + 1].bInterpolatePreviousParams)
@@ -2471,8 +2474,7 @@ bool FHlslNiagaraTranslator::ShouldInterpolateParameter(const FNiagaraVariable& 
 		Parameter == SYS_PARAM_ENGINE_EXEC_COUNT || 
 		Parameter == SYS_PARAM_EMITTER_SPAWNRATE ||
 		Parameter == SYS_PARAM_EMITTER_SPAWN_INTERVAL ||
-		Parameter == SYS_PARAM_EMITTER_INTERP_SPAWN_START_DT ||
-		Parameter == SYS_PARAM_EMITTER_SPAWN_GROUP )
+		Parameter == SYS_PARAM_EMITTER_INTERP_SPAWN_START_DT)
 	{
 		return false;
 	}
@@ -2564,7 +2566,9 @@ int32 FHlslNiagaraTranslator::GetParameter(const FNiagaraVariable& Parameter)
 	}
 
 	int32 FuncParam = INDEX_NONE;
-	if (GetFunctionParameter(Parameter, FuncParam))
+	const FNiagaraVariable* FoundKnownVariable = FNiagaraConstants::GetKnownConstant(Parameter.GetName(), false);
+
+	if (FoundKnownVariable == nullptr && GetFunctionParameter(Parameter, FuncParam))
 	{
 		if (FuncParam != INDEX_NONE)
 		{
@@ -2938,8 +2942,8 @@ int32 FHlslNiagaraTranslator::GetAttribute(const FNiagaraVariable& Attribute)
 			//This is a special case where we allow the grabbing of attributes in the update section of an interpolated spawn script.
 			//But we return the results of the previously ran spawn script.
 			FString ParameterMapInstanceName = GetParameterMapInstanceName(0);
-			FNiagaraVariable NamespacedVar = FNiagaraParameterMapHistory::BasicAttributeToNamespacedAttribute(Attribute);
 
+			FNiagaraVariable NamespacedVar = Attribute;
 			FString SymbolName = *(ParameterMapInstanceName + TEXT(".") + GetSanitizedSymbolName(NamespacedVar.GetName().ToString()));
 			return AddSourceChunk(SymbolName, Attribute.GetType());
 		}
@@ -2953,7 +2957,7 @@ int32 FHlslNiagaraTranslator::GetAttribute(const FNiagaraVariable& Attribute)
 	{
 		CompilationOutput.ScriptData.DataUsage.bReadsAttributeData = true;
 		int32 Chunk = INDEX_NONE;
-		if (!ParameterMapRegisterUniformAttributeVariable(Attribute, nullptr, 0, Chunk))
+		if (!ParameterMapRegisterNamespaceAttributeVariable(Attribute, nullptr, 0, Chunk))
 		{
 			Error(FText::Format(LOCTEXT("AttrReadError", "Cannot read attribute {0} {1}."), Attribute.GetType().GetNameText(), FText::FromString(*Attribute.GetName().ToString())), nullptr, nullptr);
 			return INDEX_NONE;
@@ -5041,7 +5045,7 @@ void FHlslNiagaraTranslator::Convert(class UNiagaraNodeConvert* Convert, TArray 
 	}
 }
 
-void FHlslNiagaraTranslator::If(TArray<FNiagaraVariable>& Vars, int32 Condition, TArray<int32>& PathA, TArray<int32>& PathB, TArray<int32>& Outputs)
+void FHlslNiagaraTranslator::If(UNiagaraNodeIf* IfNode, TArray<FNiagaraVariable>& Vars, int32 Condition, TArray<int32>& PathA, TArray<int32>& PathB, TArray<int32>& Outputs)
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraEditor_HlslTranslator_If);
 
@@ -5051,10 +5055,19 @@ void FHlslNiagaraTranslator::If(TArray<FNiagaraVariable>& Vars, int32 Condition,
 
 	TArray<FString> OutSymbols;
 	OutSymbols.Reserve(Vars.Num());
+	int32 PinIdx = 1;
 	for (FNiagaraVariable& Var : Vars)
 	{
+		FNiagaraTypeDefinition Type = Schema->PinToTypeDefinition(IfNode->GetInputPin(PinIdx++));
+		if (!AddStructToDefinitionSet(Type))
+		{
+			FText OutErrorMessage = FText::Format(LOCTEXT("UnknownNumeric", "Variable in If node uses invalid type. Var: {0} Type: {1}"),
+				FText::FromName(Var.GetName()), Type.GetNameText());
+
+			Error(OutErrorMessage, IfNode, nullptr);
+		}
 		OutSymbols.Add(GetUniqueSymbolName(*(Var.GetName().ToString() + TEXT("_IfResult"))));
-		Outputs.Add(AddBodyChunk(OutSymbols.Last(), TEXT(""), Var.GetType(), true));
+		Outputs.Add(AddBodyChunk(OutSymbols.Last(), TEXT(""), Type, true));
 	}
 	AddBodyChunk(TEXT(""), TEXT("if({0})\n\t{"), FNiagaraTypeDefinition::GetFloatDef(), Condition, false, false);
 	for (int32 i = 0; i < NumVars; ++i)

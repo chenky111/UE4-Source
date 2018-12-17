@@ -136,6 +136,6 @@ public:
 	virtual void DetermineWiringStyle(UEdGraphPin* OutputPin, UEdGraphPin* InputPin, /*inout*/ FConnectionParams& Params) override;
 
 private:
-	UEdGraph* Graph;
+	class UNiagaraGraph* Graph;
 };
 

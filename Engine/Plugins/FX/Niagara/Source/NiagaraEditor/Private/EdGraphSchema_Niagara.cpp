@@ -1669,7 +1669,7 @@ void UEdGraphSchema_Niagara::GetContextMenuActions(const UEdGraph* CurrentGraph,
 
 FNiagaraConnectionDrawingPolicy::FNiagaraConnectionDrawingPolicy(int32 InBackLayerID, int32 InFrontLayerID, float InZoomFactor, const FSlateRect& InClippingRect, FSlateWindowElementList& InDrawElements, UEdGraph* InGraph)
 	: FConnectionDrawingPolicy(InBackLayerID, InFrontLayerID, InZoomFactor, InClippingRect, InDrawElements)
-	, Graph(InGraph)
+	, Graph(CastChecked<UNiagaraGraph>(InGraph))
 {
 	ArrowImage = nullptr;
 	ArrowRadius = FVector2D::ZeroVector;
@@ -1685,8 +1685,20 @@ void FNiagaraConnectionDrawingPolicy::DetermineWiringStyle(UEdGraphPin* OutputPi
 
 	if (Graph)
 	{
-		const UEdGraphSchema* Schema = Graph->GetSchema();
-		Params.WireColor = Schema->GetPinTypeColor(OutputPin->PinType);
+		const UEdGraphSchema_Niagara* NSchema = Cast<UEdGraphSchema_Niagara>(Graph->GetSchema());
+		if (NSchema && OutputPin)
+		{
+			Params.WireColor = NSchema->GetPinTypeColor(OutputPin->PinType);
+			if (NSchema->PinToTypeDefinition(OutputPin) == FNiagaraTypeDefinition::GetGenericNumericDef())
+			{
+				FNiagaraTypeDefinition NewDef = Graph->GetCachedNumericConversion(OutputPin);
+				if (NewDef.IsValid())
+				{
+					FEdGraphPinType NewPinType = NSchema->TypeDefinitionToPinType(NewDef);
+					Params.WireColor = NSchema->GetPinTypeColor(NewPinType);
+				}
+			}
+		}
 	}
 }
 

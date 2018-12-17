@@ -231,8 +231,18 @@ class UNiagaraGraph : public UEdGraph
 	/** Remove a listener for OnGraphNeedsRecompile events */
 	void RemoveOnGraphNeedsRecompileHandler(FDelegateHandle Handle);
 
+	FNiagaraTypeDefinition GetCachedNumericConversion(class UEdGraphPin* InPin);
+
+	const class UEdGraphSchema_Niagara* GetNiagaraSchema() const;
+
+	void InvalidateNumericCache();
+
 protected:
 	void RebuildCachedData(bool bForce = false);
+	void RebuildNumericCache();
+	bool bNeedNumericCacheRebuilt;
+	TMap<TPair<FGuid, UEdGraphNode*>, FNiagaraTypeDefinition> CachedNumericConversions;
+	void ResolveNumerics(TMap<UNiagaraNode*, bool>& VisitedNodes, UEdGraphNode* Node);
 
 private:
 	virtual void NotifyGraphChanged(const FEdGraphEditAction& InAction) override;
