@@ -2118,7 +2118,7 @@ class ir_gen_vvm_visitor : public ir_hierarchical_visitor
 			case EVectorVMBaseTypes::Float:
 			{
 				float Val = *(float*)(CompilationOutput.InternalConstantData.GetData() + Offset);
-				OpsConstantTable += FString::Printf(TEXT("%d | %f\n"), TableOffset, Val);
+				OpsConstantTable += FString::Printf(TEXT("%d | %.9g\n"), TableOffset, Val);
 				NumConstants++;
 			}
 			break;
