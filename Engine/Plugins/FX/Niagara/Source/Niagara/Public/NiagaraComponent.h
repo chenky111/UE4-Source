@@ -294,6 +294,7 @@ public:
 	//~ End UObject Interface.
 
 	// Called when the particle system is done
+	UPROPERTY(BlueprintAssignable)
 	FOnNiagaraSystemFinished OnSystemFinished;
 
 private:
