@@ -21,7 +21,8 @@ class UNiagaraParameterCollectionInstance;
 class FNiagaraSystemSimulation;
 
 // Called when the particle system is done
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnNiagaraSystemFinished, class UNiagaraComponent*);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNiagaraSystemFinished, class UNiagaraComponent*, PSystem);
+
 
 /**
 * UNiagaraComponent is the primitive component for a Niagara System.
