@@ -83,6 +83,7 @@ public:
 
 	FNiagaraModuleDependency()
 	{
+		Type = ENiagaraModuleDependencyType::PreDependency;
 		ScriptConstraint = ENiagaraModuleDependencyScriptConstraint::SameScript;
 	}
 };
