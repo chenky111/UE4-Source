@@ -475,12 +475,12 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 							for (int i = ModuleIndex; i < SystemModuleData.Num() && i >= 0; i = Dependency.Type == ENiagaraModuleDependencyType::PostDependency ? i + 1 : i - 1) // moving up or down depending on type
 							// starting at current module, which is a dependent
 							{
-								bool FoundRequirement = SystemModuleData[i].ModuleNode->FunctionScript->RequiredDependencies.FindByPredicate(
-									[&](FNiagaraModuleDependency CurrentDependency)
+								bool bRequiredDependencyFound = SystemModuleData[i].ModuleNode->FunctionScript->RequiredDependencies.ContainsByPredicate(
+									[&Dependency](const FNiagaraModuleDependency& RequiredDependency)
 								{
-									return CurrentDependency.Id == Dependency.Id;
+									return RequiredDependency.Id == Dependency.Id;
 								});
-								if (FoundRequirement) // check for multiple dependents along the way, and stop adjacent to the last one
+								if (bRequiredDependencyFound) // check for multiple dependents along the way, and stop adjacent to the last one
 								{
 									ENiagaraScriptUsage DependencyUsage = SystemModuleData[i].Usage;
 									const FNiagaraEmitterHandle* EmitterHandle = FNiagaraEditorUtilities::GetEmitterHandleForEmitter(GetSystemViewModel()->GetSystem(), *GetEmitterViewModel()->GetEmitter());
