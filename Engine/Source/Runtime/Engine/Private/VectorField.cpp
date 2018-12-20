@@ -335,11 +335,13 @@ void UVectorFieldStatic::UpdateCPUData()
 		}
 
 		// GetCopy should free/unload the data.
-		if (!ensure(!SourceData.IsBulkDataLoaded()))
+		if (SourceData.IsBulkDataLoaded())
 		{
-			UE_LOG(LogVectorField, Error, TEXT("SourceData.GetCopy to unload the data, but it is still loaded."));
-			FMemory::Free(Ptr);
-			return;
+			// NOTE(mv): This assertion will fail in the case where the bulk data is still available even though the bDiscardInternalCopy
+			//           flag is toggled when FUntypedBulkData::CanLoadFromDisk() also fail. This happens when the user tries to allow 
+			//           CPU access to a newly imported file that isn't reloaded. We still have our valid data, so we just issue a 
+			//           warning and move on. See FUntypedBulkData::GetCopy() for more details. 
+			UE_LOG(LogVectorField, Warning, TEXT("SourceData.GetCopy() is supposed to unload the data after copying, but it is still loaded."));
 		}
 
 		// Convert from 16-bit to 32-bit floats.
