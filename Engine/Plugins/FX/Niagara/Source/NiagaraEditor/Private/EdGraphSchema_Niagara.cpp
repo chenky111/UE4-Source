@@ -1283,7 +1283,11 @@ bool UEdGraphSchema_Niagara::TryGetPinDefaultValueFromNiagaraVariable(const FNia
 
 FNiagaraTypeDefinition UEdGraphSchema_Niagara::PinToTypeDefinition(const UEdGraphPin* Pin) const
 {
-	if (Pin->PinType.PinCategory == PinCategoryType && Pin->PinType.PinSubCategoryObject != nullptr)
+	if (Pin == nullptr)
+	{
+		return FNiagaraTypeDefinition();
+	}
+	if (Pin->PinType.PinCategory == PinCategoryType && Pin->PinType.PinSubCategoryObject.IsValid())
 	{
 		UScriptStruct* Struct = Cast<UScriptStruct>(Pin->PinType.PinSubCategoryObject.Get());
 		if (Struct == nullptr)
