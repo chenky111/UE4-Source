@@ -921,6 +921,19 @@ void UNiagaraGraph::InvalidateNumericCache()
 	CachedNumericConversions.Empty();
 }
 
+FString UNiagaraGraph::GetFunctionAliasByContext(const FNiagaraGraphFunctionAliasContext& FunctionAliasContext)
+{
+	FString FunctionAlias;
+	for (UEdGraphNode* Node : Nodes)
+	{
+		UNiagaraNode* NiagaraNode = Cast<UNiagaraNode>(Node);
+		if (NiagaraNode != nullptr)
+		{
+			NiagaraNode->AppendFunctionAliasForContext(FunctionAliasContext, FunctionAlias);
+		}
+	}
+	return FunctionAlias;
+}
 
 void UNiagaraGraph::ResolveNumerics(TMap<UNiagaraNode*, bool>& VisitedNodes, UEdGraphNode* Node)
 {

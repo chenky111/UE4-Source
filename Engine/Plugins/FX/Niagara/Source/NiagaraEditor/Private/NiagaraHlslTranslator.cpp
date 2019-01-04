@@ -354,7 +354,10 @@ void FHlslNiagaraTranslator::GenerateFunctionSignature(ENiagaraScriptUsage Scrip
 	}
 	else
 	{
-		OutSig = FNiagaraFunctionSignature(*InName, InputVars, OutputVars, *InFullName, true, false);
+		FNiagaraGraphFunctionAliasContext FunctionAliasContext;
+		FunctionAliasContext.CompileUsage = GetCurrentUsage();
+		FString SignatureName = InName + FuncGraph->GetFunctionAliasByContext(FunctionAliasContext);
+		OutSig = FNiagaraFunctionSignature(*SignatureName, InputVars, OutputVars, *InFullName, true, false);
 	}
 }
 

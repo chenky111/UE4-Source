@@ -13,6 +13,7 @@
 
 class UEdGraphPin;
 class INiagaraCompiler;
+struct FNiagaraGraphFunctionAliasContext;
 
 UCLASS()
 class NIAGARAEDITOR_API UNiagaraNode : public UEdGraphNode
@@ -115,6 +116,9 @@ public:
 	void ForceChangeId(const FGuid& InId, bool bRaiseGraphNeedsRecompile);
 
 	FOnNodeVisualsChanged& OnVisualsChanged();
+
+	virtual void AppendFunctionAliasForContext(const FNiagaraGraphFunctionAliasContext& InFunctionAliasContext, FString& InOutFunctionAlias) { };
+
 protected:
 	virtual int32 CompileInputPin(class FHlslNiagaraTranslator *Translator, UEdGraphPin* Pin);
 	virtual bool IsValidPinToCompile(UEdGraphPin* Pin) const { return true; }; 

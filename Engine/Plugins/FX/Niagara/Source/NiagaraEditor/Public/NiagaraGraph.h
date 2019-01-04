@@ -75,6 +75,10 @@ public:
 	TArray<UNiagaraNode*> Traversal;
 };
 
+struct FNiagaraGraphFunctionAliasContext
+{
+	ENiagaraScriptUsage CompileUsage;
+};
 
 UCLASS(MinimalAPI)
 class UNiagaraGraph : public UEdGraph
@@ -236,6 +240,8 @@ class UNiagaraGraph : public UEdGraph
 	const class UEdGraphSchema_Niagara* GetNiagaraSchema() const;
 
 	void InvalidateNumericCache();
+
+	FString GetFunctionAliasByContext(const FNiagaraGraphFunctionAliasContext& FunctionAliasContext);
 
 protected:
 	void RebuildCachedData(bool bForce = false);
