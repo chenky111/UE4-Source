@@ -483,7 +483,7 @@ TArray<TSharedPtr<FNiagaraSchemaAction_NewNode> > UEdGraphSchema_Niagara::GetGra
 			{
 				{
 					const FText MenuDescFmt = LOCTEXT("AddEventReadFmt", "Add {0} Event Read");
-					const FText MenuDesc = FText::Format(MenuDescFmt, Type.GetStruct()->GetDisplayNameText());
+					const FText MenuDesc = FText::Format(MenuDescFmt, Type.GetNameText());
 
 					TSharedPtr<FNiagaraSchemaAction_NewNode> Action = AddNewNodeAction(NewActions, MenuCat, MenuDesc, *MenuDesc.ToString(), FText::GetEmpty());
 
@@ -493,7 +493,7 @@ TArray<TSharedPtr<FNiagaraSchemaAction_NewNode> > UEdGraphSchema_Niagara::GetGra
 				}
 				{
 					const FText MenuDescFmt = LOCTEXT("AddEventWriteFmt", "Add {0} Event Write");
-					const FText MenuDesc = FText::Format(MenuDescFmt, Type.GetStruct()->GetDisplayNameText());
+					const FText MenuDesc = FText::Format(MenuDescFmt, Type.GetNameText());
 
 					TSharedPtr<FNiagaraSchemaAction_NewNode> Action = AddNewNodeAction(NewActions, MenuCat, MenuDesc, *MenuDesc.ToString(), FText::GetEmpty());
 
@@ -571,11 +571,8 @@ TArray<TSharedPtr<FNiagaraSchemaAction_NewNode> > UEdGraphSchema_Niagara::GetGra
 			FText DescFmt = LOCTEXT("NiagaraMakeBreakFmt", "{0}");
 			auto MakeBreakType = [&](FNiagaraTypeDefinition Type, bool bMake)
 			{
-				FText DisplayName = Type.GetStruct()->GetDisplayNameText();
-				if (Type.GetEnum())
-				{
-					DisplayName = FText::FromString(Type.GetEnum()->GetName());
-				}
+				FText DisplayName = Type.GetNameText();
+
 				FText Desc = FText::Format(DescFmt, DisplayName);
 				TSharedPtr<FNiagaraSchemaAction_NewNode> Action = AddNewNodeAction(NewActions, bMake ? MakeCat : BreakCat, Desc, *Type.GetStruct()->GetName(), FText::GetEmpty());
 				UNiagaraNodeConvert* ConvertNode = NewObject<UNiagaraNodeConvert>(OwnerOfTemporaries);
@@ -833,7 +830,7 @@ TArray<TSharedPtr<FNiagaraSchemaAction_NewNode> > UEdGraphSchema_Niagara::GetGra
 						}
 					}
 						
-					const FText MenuDesc = FText::Format(MenuDescFmt, Type.GetStruct()->GetDisplayNameText());
+					const FText MenuDesc = FText::Format(MenuDescFmt, Type.GetNameText());
 					TSharedPtr<FNiagaraSchemaAction_NewNode> InputAction = AddNewNodeAction(NewActions, MenuCat, MenuDesc, *MenuDesc.ToString(), FText::GetEmpty());
 					UNiagaraNodeInput* InputNode = NewObject<UNiagaraNodeInput>(OwnerOfTemporaries);
 					FNiagaraEditorUtilities::InitializeParameterInputNode(*InputNode, Type, NiagaraGraph);
@@ -855,7 +852,7 @@ TArray<TSharedPtr<FNiagaraSchemaAction_NewNode> > UEdGraphSchema_Niagara::GetGra
 							MenuCat = LOCTEXT("AddRIParameterCat", "Add Rapid Iteration Param");
 						}
 
-						const FText MenuDesc = FText::Format(MenuDescFmt, Type.GetStruct()->GetDisplayNameText());
+						const FText MenuDesc = FText::Format(MenuDescFmt, Type.GetNameText());
 						TSharedPtr<FNiagaraSchemaAction_NewNode> InputAction = AddNewNodeAction(NewActions, MenuCat, MenuDesc, *MenuDesc.ToString(), FText::GetEmpty());
 						UNiagaraNodeInput* InputNode = NewObject<UNiagaraNodeInput>(OwnerOfTemporaries);
 						FNiagaraEditorUtilities::InitializeParameterInputNode(*InputNode, Type, NiagaraGraph);
@@ -867,7 +864,7 @@ TArray<TSharedPtr<FNiagaraSchemaAction_NewNode> > UEdGraphSchema_Niagara::GetGra
 				if (PinType != FNiagaraTypeDefinition::GetGenericNumericDef())
 				{
 					//For correctly typed pins, offer the correct type at the top level.				
-					const FText MenuDesc = FText::Format(MenuDescFmt, PinType.GetStruct()->GetDisplayNameText());
+					const FText MenuDesc = FText::Format(MenuDescFmt, PinType.GetNameText());
 					TSharedPtr<FNiagaraSchemaAction_NewNode> InputAction = AddNewNodeAction(NewActions, FText::GetEmpty(), MenuDesc, *MenuDesc.ToString(), FText::GetEmpty());
 					UNiagaraNodeInput* InputNode = NewObject<UNiagaraNodeInput>(OwnerOfTemporaries);
 					FNiagaraEditorUtilities::InitializeParameterInputNode(*InputNode, PinType, NiagaraGraph);
