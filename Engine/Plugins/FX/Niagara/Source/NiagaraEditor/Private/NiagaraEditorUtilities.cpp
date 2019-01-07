@@ -89,7 +89,10 @@ void FNiagaraEditorUtilities::InitializeParameterInputNode(UNiagaraNodeInput& In
 	if (Type.GetScriptStruct() != nullptr)
 	{
 		ResetVariableToDefaultValue(InputNode.Input);
-		InputNode.SetDataInterface(nullptr);
+		if (InputNode.GetDataInterface() != nullptr)
+		{
+			InputNode.SetDataInterface(nullptr);
+		}
 	}
 	else
 	{
