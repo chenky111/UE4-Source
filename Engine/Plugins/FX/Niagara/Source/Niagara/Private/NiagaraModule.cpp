@@ -762,26 +762,8 @@ FNiagaraTypeDefinition FNiagaraTypeDefinition::GetNumericOutputType(const TArray
 	{
 		return SortedTypeDefinitions[0];
 	}
-}
 
-//////////////////////////////////////////////////////////////////////////
-
-template<>
-void FNiagaraVariable::SetValue(const bool& Data)
-{
-	check(TypeDef == FNiagaraTypeDefinition::GetBoolDef());
-	AllocateData();
-	FNiagaraBool* BoolStruct = (FNiagaraBool*)GetData();
-	BoolStruct->SetValue(Data);
-}
-
-template<>
-bool FNiagaraVariable::GetValue() const
-{
-	check(TypeDef == FNiagaraTypeDefinition::GetBoolDef());
-	check(IsDataAllocated());
-	FNiagaraBool* BoolStruct = (FNiagaraBool*)GetData();
-	return BoolStruct->GetValue();
+	return FNiagaraTypeDefinition::GetGenericNumericDef();
 }
 
 //////////////////////////////////////////////////////////////////////////

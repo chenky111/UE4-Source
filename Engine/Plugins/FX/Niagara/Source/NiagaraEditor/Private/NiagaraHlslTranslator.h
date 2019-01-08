@@ -540,7 +540,7 @@ private:
 	bool RequiresInterpolation() const;
 
 	/** If OutVar can be replaced by a literal constant, it's data is initialized with the correct value and we return true. Returns false otherwise. */
-	bool GetLiteralConstantVariable(FNiagaraVariable& OutVar);
+	bool GetLiteralConstantVariable(FNiagaraVariable& OutVar) const;
 
 	/** Map of symbol names to count of times it's been used. Used for generating unique symbol names. */
 	TMap<FName, uint32> SymbolCounts;

@@ -291,18 +291,36 @@ void FHlslNiagaraTranslator::GenerateFunctionSignature(ENiagaraScriptUsage Scrip
 
 		InName.Reserve(100 * InputsNodes.Num());
 		InputVars.Reserve(InputsNodes.Num());
+		TArray<uint32> ConstantInputIndicesToRemove;
 		for (int32 i = 0; i < InputsNodes.Num(); ++i)
 		{
 			//Only add to the signature if the caller has provided it, otherwise we use a local default.
 			if (Inputs[i] != INDEX_NONE)
 			{
-				InputVars.Add(InputsNodes[i]->Input);
-				if (bHadNumericInputs)
+				FNiagaraVariable LiteralConstant = InputsNodes[i]->Input;
+				if (GetLiteralConstantVariable(LiteralConstant))
 				{
-					InName += TEXT("_In");
-					InName += InputsNodes[i]->Input.GetType().GetName();
+					checkf(LiteralConstant.GetType() == FNiagaraTypeDefinition::GetBoolDef(), TEXT("Only boolean types are currently supported for literal constants."));
+					FString LiteralConstantAlias = LiteralConstant.GetName().ToString() + TEXT("_") + (LiteralConstant.GetValue<bool>() ? TEXT("true") : TEXT("false"));
+					InName += TEXT("_") + GetSanitizedSymbolName(LiteralConstantAlias.Replace(TEXT("."), TEXT("_")));
+					ConstantInputIndicesToRemove.Add(i);
+				}
+				else
+				{
+					InputVars.Add(InputsNodes[i]->Input);
+					if (bHadNumericInputs)
+					{
+						InName += TEXT("_In");
+						InName += InputsNodes[i]->Input.GetType().GetName();
+					}
 				}
 			}
+		}
+
+		// Remove the inputs which will be handled by inline constants
+		for (int32 i = ConstantInputIndicesToRemove.Num() - 1; i >= 0; i--)
+		{
+			Inputs.RemoveAt(i);
 		}
 
 		//Now actually remove the missing inputs so they match the signature.
@@ -2588,6 +2606,16 @@ int32 FHlslNiagaraTranslator::GetParameter(const FNiagaraVariable& Parameter)
 		}
 	}
 
+	if (FoundKnownVariable != nullptr)
+	{
+		FNiagaraVariable Var = *FoundKnownVariable;
+		//Some special variables can be replaced directly with constants which allows for extra optimization in the compiler.
+		if (GetLiteralConstantVariable(Var))
+		{
+			return GetConstant(Var);
+		}
+	}
+
 	// We don't pass in the input node here (really there could be multiple nodes for the same parameter)
 	// so we have to match up the input parameter map variable value through the pre-traversal histories 
 	// so that we know which parameter map we are referencing.
@@ -2667,7 +2695,18 @@ int32 FHlslNiagaraTranslator::GetConstant(const FNiagaraVariable& Constant)
 		return INDEX_NONE;
 	}
 
-	FString ConstantStr = GenerateConstantString(Constant);
+	FString ConstantStr;
+	FNiagaraVariable LiteralConstant = Constant;
+	if (GetLiteralConstantVariable(LiteralConstant))
+	{
+		checkf(LiteralConstant.GetType() == FNiagaraTypeDefinition::GetBoolDef(), TEXT("Only boolean types are currently supported for literal constants."));
+		ConstantStr = LiteralConstant.GetValue<bool>() ? TEXT("true") : TEXT("false");
+	}
+	else
+	{
+		ConstantStr = GenerateConstantString(Constant);
+	}
+
 	if (ConstantStr.IsEmpty())
 	{
 		return INDEX_NONE;
@@ -3166,7 +3205,7 @@ bool FHlslNiagaraTranslator::RequiresInterpolation() const
 	return false;
 }
 
-bool FHlslNiagaraTranslator::GetLiteralConstantVariable(FNiagaraVariable& OutVar)
+bool FHlslNiagaraTranslator::GetLiteralConstantVariable(FNiagaraVariable& OutVar) const
 {
 	if (FNiagaraParameterMapHistory::IsInNamespace(OutVar, PARAM_MAP_EMITTER_STR) || FNiagaraParameterMapHistory::IsInNamespace(OutVar, PARAM_MAP_SYSTEM_STR))
 	{

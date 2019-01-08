@@ -1050,7 +1050,7 @@ bool FNiagaraParameterMapHistoryBuilder::IsInEncounteredEmitterNamespace(FNiagar
 /**
 * Use the current alias map to resolve any aliases in this input variable name.
 */
-FNiagaraVariable FNiagaraParameterMapHistoryBuilder::ResolveAliases(const FNiagaraVariable& InVar)
+FNiagaraVariable FNiagaraParameterMapHistoryBuilder::ResolveAliases(const FNiagaraVariable& InVar) const
 {
 	return FNiagaraParameterMapHistory::ResolveAliases(InVar, AliasMap, TEXT("."));
 }
