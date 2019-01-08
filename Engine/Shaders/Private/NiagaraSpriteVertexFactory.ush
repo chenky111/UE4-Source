@@ -1013,5 +1013,9 @@ uint VertexFactoryGetEyeIndex(uint InstanceId)
 
 float4 VertexFactoryGetTranslatedPrimitiveVolumeBounds(FVertexFactoryInterpolantsVSToPS Interpolants)
 {
+#if USE_PARTICLE_POSITION
+	return Interpolants.ParticleTranslatedWorldPositionAndSize;
+#else
 	return 0;
+#endif
 }
