@@ -220,4 +220,6 @@ protected:
 	FNiagaraParameterStore ScriptDefinedDataInterfaceParameters;
 
 	bool bIsSolo;
+
+	TOptional<float> MaxDeltaTime;
 };

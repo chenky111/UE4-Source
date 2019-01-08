@@ -81,6 +81,7 @@ bool FNiagaraSystemSimulation::Init(UNiagaraSystem* InSystem, UWorld* InWorld, b
 	World = InWorld;
 
 	bIsSolo = bInIsSolo;
+	MaxDeltaTime = -1;
 
 	FNiagaraWorldManager* WorldMan = FNiagaraWorldManager::Get(InWorld);
 	check(WorldMan);
@@ -162,6 +163,11 @@ bool FNiagaraSystemSimulation::Init(UNiagaraSystem* InSystem, UWorld* InWorld, b
 			for (FName AttrName : EmitterSpawnAttrNames[EmitterIdx].SpawnAttributes)
 			{
 				EmitterSpawnInfoAccessors[EmitterIdx].Emplace(DataSet, FNiagaraVariable(FNiagaraTypeDefinition(FNiagaraSpawnInfo::StaticStruct()), AttrName));
+			}
+
+			if (Emitter->bLimitDeltaTime)
+			{
+				MaxDeltaTime = MaxDeltaTime.IsSet() ? FMath::Min(MaxDeltaTime.GetValue(), Emitter->MaxDeltaTimePerTick) : Emitter->MaxDeltaTimePerTick;
 			}
 		}
 
@@ -277,6 +283,11 @@ bool FNiagaraSystemSimulation::Tick(float DeltaSeconds)
 	{
 		// TODO: evaluate whether or not we should have removed this from the world manager instead?
 		return false;
+	}
+
+	if (MaxDeltaTime.IsSet())
+	{
+		DeltaSeconds = FMath::Clamp(DeltaSeconds, 0.0f, MaxDeltaTime.GetValue());
 	}
 
 	UNiagaraScript* SystemSpawnScript = System->GetSystemSpawnScript();
