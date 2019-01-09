@@ -149,6 +149,8 @@ public:
 
 		const TArray<FStackIssueFix>& GetFixes() const;
 
+		void InsertFix(int32 InsertionIdx, const FStackIssueFix& Fix);
+
 	private:
 		EStackIssueSeverity Severity;
 		FText ShortDescription;

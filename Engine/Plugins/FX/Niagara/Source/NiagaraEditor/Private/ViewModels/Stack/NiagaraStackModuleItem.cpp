@@ -240,6 +240,35 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 	}
 	if (FunctionCallNode != nullptr)
 	{
+		if (FunctionCallNode->FunctionScript != nullptr && FunctionCallNode->FunctionScript->bDeprecated)
+		{
+			FText LongMessage = FunctionCallNode->FunctionScript->DeprecationRecommendation != nullptr ? 
+				FText::Format(LOCTEXT("ModuleScriptDeprecationLong", "The script asset for the assigned module {0} has been deprecated. Suggested replacement: {1}"), FText::FromString(FunctionCallNode->GetFunctionName()),FText::FromString(FunctionCallNode->FunctionScript->DeprecationRecommendation->GetPathName())) :
+				FText::Format(LOCTEXT("ModuleScriptDeprecationUnknownLong", "The script asset for the assigned module {0} has been deprecated."), FText::FromString(FunctionCallNode->GetFunctionName()));
+
+			int32 AddIdx = NewIssues.Add(FStackIssue(
+				EStackIssueSeverity::Warning,
+				LOCTEXT("ModuleScriptDeprecationShort", "Deprecated module"),
+				LongMessage,
+				GetStackEditorDataKey(),
+				false,
+				{
+					FStackIssueFix(
+						LOCTEXT("SelectNewModuleScriptFix", "Select a new module script"),
+						FStackIssueFixDelegate::CreateLambda([this]() { this->bIsModuleScriptReassignmentPending = true; })),
+					FStackIssueFix(
+						LOCTEXT("DeleteFix", "Delete this module"),
+						FStackIssueFixDelegate::CreateLambda([this]() { this->Delete(); }))
+				}));
+			
+			if (FunctionCallNode->FunctionScript->DeprecationRecommendation != nullptr)
+			{
+				NewIssues[AddIdx].InsertFix(0,
+					FStackIssueFix(
+						LOCTEXT("SelectNewModuleScriptFixUseRecommended", "Use recommended replacement"),
+						FStackIssueFixDelegate::CreateLambda([this]() { ReassignModuleScript(FunctionCallNode->FunctionScript->DeprecationRecommendation); })));
+			}
+		}
 		if(FunctionCallNode->FunctionScript == nullptr && FunctionCallNode->GetClass() == UNiagaraNodeFunctionCall::StaticClass())
 		{
 			NewIssues.Add(FStackIssue(

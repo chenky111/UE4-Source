@@ -58,7 +58,8 @@ public:
 	virtual void AllocateDefaultPins() override;
 	virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;
 	virtual FText GetTooltipText() const override;
-	virtual FLinearColor GetNodeTitleColor() const override;
+	virtual FLinearColor GetNodeTitleColor() const override;// Returns true if this node is deprecated
+	virtual bool IsDeprecated() const override;
 	//~ End EdGraphNode Interface
 
 	bool FindAutoBoundInput(UNiagaraNodeInput* InputNode, UEdGraphPin* PinToAutoBind, FNiagaraVariable& OutFoundVar, ENiagaraInputNodeUsage& OutNodeUsage);

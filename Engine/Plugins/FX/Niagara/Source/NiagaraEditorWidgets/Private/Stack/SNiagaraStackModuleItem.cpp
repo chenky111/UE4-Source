@@ -362,6 +362,14 @@ void CollectModuleActions(FGraphActionListBuilderBase& ModuleActions, UNiagaraSt
 			Category = LOCTEXT("ModuleNotCategorized", "Uncategorized Modules");
 		}
 
+		uint32 bDeprecatedModule;
+		ModuleAsset.GetTagValue(GET_MEMBER_NAME_CHECKED(UNiagaraScript, bDeprecated), bDeprecatedModule);
+
+		if (bDeprecatedModule)
+		{
+			continue;
+		}
+
 		FString DisplayNameString = FName::NameToDisplayString(ModuleAsset.AssetName.ToString(), false);
 		FText DisplayName = FText::FromString(DisplayNameString);
 

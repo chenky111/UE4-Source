@@ -325,6 +325,15 @@ public:
 	/** Dependencies required by this module from other modules on the stack */
 	UPROPERTY(EditAnywhere, Category = Script)
 	TArray<FNiagaraModuleDependency> RequiredDependencies;
+
+	/* If this script is no longer meant to be used, this option should be set.*/
+	UPROPERTY(EditAnywhere, Category = "Script")
+	uint32 bDeprecated : 1;
+
+	/* Which script to use if this is deprecated.*/
+	UPROPERTY(EditAnywhere, Category = "Script", meta = (EditCondition = "bDeprecated"))
+	UNiagaraScript* DeprecationRecommendation;
+
 #endif
 
 

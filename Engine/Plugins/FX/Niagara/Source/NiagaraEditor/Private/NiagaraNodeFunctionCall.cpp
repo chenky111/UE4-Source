@@ -194,6 +194,17 @@ void UNiagaraNodeFunctionCall::AllocateDefaultPins()
 	{
 		ComputeNodeName();
 	}
+
+}
+
+// Returns true if this node is deprecated
+bool UNiagaraNodeFunctionCall::IsDeprecated() const
+{
+	if (FunctionScript)
+	{
+		return FunctionScript->bDeprecated;
+	}
+	return false;
 }
 
 FText UNiagaraNodeFunctionCall::GetNodeTitle(ENodeTitleType::Type TitleType) const
@@ -316,6 +327,21 @@ void UNiagaraNodeFunctionCall::Compile(class FHlslNiagaraTranslator* Translator,
 	UNiagaraGraph* CallerGraph = GetNiagaraGraph();
 	if (FunctionScript)
 	{
+		if (FunctionScript->bDeprecated && IsNodeEnabled())
+		{
+			if (FunctionScript->DeprecationRecommendation)
+			{
+				Translator->Warning(FText::Format(LOCTEXT("DeprecationErrorFmtRecommendation", "Function call \"{0}\" is deprecated. Please use {1} instead."), FText::FromString(FunctionDisplayName),
+					FText::FromString(FunctionScript->DeprecationRecommendation->GetPathName())),
+					this, nullptr);
+			}
+			else
+			{
+				Translator->Warning(FText::Format(LOCTEXT("DeprecationErrorFmtUnknown", "Function call \"{0}\" is deprecated. No recommendation was provided."), FText::FromString(FunctionDisplayName)),
+					this, nullptr);
+			}
+		}
+
 		TArray<UEdGraphPin*> CallerInputPins;
 		GetInputPins(CallerInputPins);
 
