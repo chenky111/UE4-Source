@@ -273,7 +273,7 @@ void FNiagaraUtilities::CollectScriptDataInterfaceParameters(const UObject& Owne
 
 bool FNiagaraScriptDataInterfaceCompileInfo::CanExecuteOnTarget(ENiagaraSimTarget SimTarget) const
 {
-	check(IsInGameThread());
+	// Note that this can be called on non-game threads. We ensure that the data interface CDO object is already in existence at application init time.
 	UNiagaraDataInterface* Obj = GetDefaultDataInterface();
 	if (Obj)
 	{
@@ -285,10 +285,11 @@ bool FNiagaraScriptDataInterfaceCompileInfo::CanExecuteOnTarget(ENiagaraSimTarge
 
 UNiagaraDataInterface* FNiagaraScriptDataInterfaceCompileInfo::GetDefaultDataInterface() const
 {
-	check(IsInGameThread());
-	UNiagaraDataInterface* Obj = CastChecked<UNiagaraDataInterface>(const_cast<UClass*>(Type.GetClass())->GetDefaultObject(true));
+	// Note that this can be called on non-game threads. We ensure that the data interface CDO object is already in existence at application init time, so we don't allow this to be auto-created.
+	UNiagaraDataInterface* Obj = CastChecked<UNiagaraDataInterface>(const_cast<UClass*>(Type.GetClass())->GetDefaultObject(false));
 	return Obj;
 }
+
 #if WITH_EDITORONLY_DATA
 void FNiagaraUtilities::PrepareRapidIterationParameters(const TArray<UNiagaraScript*>& Scripts, const TMap<UNiagaraScript*, UNiagaraScript*>& ScriptDependencyMap, const TMap<UNiagaraScript*, FString>& ScriptToEmitterNameMap)
 {
