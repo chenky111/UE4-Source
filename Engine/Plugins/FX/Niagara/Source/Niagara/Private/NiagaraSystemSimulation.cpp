@@ -81,7 +81,6 @@ bool FNiagaraSystemSimulation::Init(UNiagaraSystem* InSystem, UWorld* InWorld, b
 	World = InWorld;
 
 	bIsSolo = bInIsSolo;
-	MaxDeltaTime = -1;
 
 	FNiagaraWorldManager* WorldMan = FNiagaraWorldManager::Get(InWorld);
 	check(WorldMan);
