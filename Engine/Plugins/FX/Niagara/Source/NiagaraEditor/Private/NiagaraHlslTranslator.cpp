@@ -320,7 +320,7 @@ void FHlslNiagaraTranslator::GenerateFunctionSignature(ENiagaraScriptUsage Scrip
 		// Remove the inputs which will be handled by inline constants
 		for (int32 i = ConstantInputIndicesToRemove.Num() - 1; i >= 0; i--)
 		{
-			Inputs.RemoveAt(i);
+			Inputs.RemoveAt(ConstantInputIndicesToRemove[i]);
 		}
 
 		//Now actually remove the missing inputs so they match the signature.
