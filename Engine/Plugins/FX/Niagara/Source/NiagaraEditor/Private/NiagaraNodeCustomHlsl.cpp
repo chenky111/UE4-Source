@@ -158,7 +158,7 @@ void UNiagaraNodeCustomHlsl::InitAsCustomHlslDynamicInput(const FNiagaraTypeDefi
 	Modify();
 	ReallocatePins();
 	RequestNewTypedPin(EGPD_Input, FNiagaraTypeDefinition::GetParameterMapDef(), FName("Map"));
-	RequestNewTypedPin(EGPD_Output, OutputType, FName("Output"));
+	RequestNewTypedPin(EGPD_Output, OutputType, FName("CustomHLSLOutput"));
 	ScriptUsage = ENiagaraScriptUsage::DynamicInput;
 }
 
