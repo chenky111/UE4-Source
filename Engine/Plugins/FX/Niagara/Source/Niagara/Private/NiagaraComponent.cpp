@@ -1202,7 +1202,7 @@ void UNiagaraComponent::SetParameterValueOverriddenLocally(const FNiagaraVariabl
 		Asset->GetExposedParameters().CopyParameterData(OverrideParameters, InParam);
 	}
 	
-	if (bRequiresSystemInstanceReset)
+	if (bRequiresSystemInstanceReset && SystemInstance)
 	{
 		SystemInstance->Reset(FNiagaraSystemInstance::EResetMode::ResetAll, true);
 	}
