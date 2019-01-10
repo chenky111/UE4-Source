@@ -13,7 +13,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogNiagaraShaderCompiler, All, All);
 
-static int32 GShowNiagaraShaderWarnings = 1;
+static int32 GShowNiagaraShaderWarnings = 0;
 static FAutoConsoleVariableRef CVarShowNiagaraShaderWarnings(
 	TEXT("niagara.ShowShaderCompilerWarnings"),
 	GShowNiagaraShaderWarnings,
