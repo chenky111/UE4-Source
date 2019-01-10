@@ -1073,6 +1073,9 @@ void UNiagaraComponent::SynchronizeWithSourceSystem()
 	{
 		OverrideParameters.Empty();
 		EditorOverridesValue.Empty();
+#if WITH_EDITORONLY_DATA
+		OnSynchronizedWithAssetParametersDelegate.Broadcast();
+#endif
 		return;
 	}
 
