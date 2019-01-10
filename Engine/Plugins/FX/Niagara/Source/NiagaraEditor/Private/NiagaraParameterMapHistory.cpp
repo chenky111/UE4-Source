@@ -1341,7 +1341,8 @@ int32 FNiagaraParameterMapHistoryBuilder::HandleExternalVariableRead(int32 Param
 		}
 		else
 		{
-			UE_LOG(LogNiagaraEditor, Log, TEXT("Could not resolve variable: %s"), *Name.ToString());
+			// This is overly spammy and doesn't provide useful info. Disabling for now.
+			//UE_LOG(LogNiagaraEditor, Log, TEXT("Could not resolve variable: %s"), *Name.ToString());
 		}
 		
 	}
