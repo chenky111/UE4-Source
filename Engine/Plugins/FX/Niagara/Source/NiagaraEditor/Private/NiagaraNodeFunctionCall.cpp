@@ -506,6 +506,22 @@ bool UNiagaraNodeFunctionCall::RefreshFromExternalChanges()
 				bReload = true;
 			}
 		}
+
+		if (FunctionScript->bDeprecated)
+		{
+			bHasCompilerMessage = true;
+			ErrorType = EMessageSeverity::Warning;
+			FFormatNamedArguments Args;
+			Args.Add(TEXT("NodeName"), GetNodeTitle(ENodeTitleType::ListView));
+			Args.Add(TEXT("Recommendation"), FunctionScript->DeprecationRecommendation != nullptr ? FText::FromString(FunctionScript->DeprecationRecommendation->GetPathName()) : LOCTEXT("UnspecifiedName","Unspecified"));
+			ErrorMsg = FText::Format(LOCTEXT("DeprecationWarning", "{NodeName} is deprecated. Suggested replacement: {Recommendation}"), Args).ToString();
+		}
+		else
+		{
+			bHasCompilerMessage = false;
+			ErrorMsg = FString();
+		}
+
 	}
 	else
 	{
