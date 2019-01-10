@@ -833,10 +833,14 @@ void FNiagaraSystemInstance::UnbindParameters()
 			Component->GetOverrideParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
 			Component->GetOverrideParameters().Unbind(&SystemSimulation->GetUpdateExecutionContext().Parameters);
 		}
-		else
+		else 
 		{
-			GetSystem()->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
-			GetSystem()->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+			UNiagaraSystem* System = GetSystem();
+			if (System)
+			{
+				System->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+				System->GetExposedParameters().Unbind(&SystemSimulation->GetSpawnExecutionContext().Parameters);
+			}
 		}
 	}
 
