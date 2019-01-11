@@ -75,6 +75,7 @@ protected:
 	virtual bool CanMovePin(const UEdGraphPin* Pin) const override { return false; }
 	virtual void OnNewTypedPinAdded(UEdGraphPin* NewPin) override;
 	virtual void OnPinRenamed(UEdGraphPin* RenamedPin, const FString& OldName) override;
+	virtual bool CanRemovePin(const UEdGraphPin* Pin) const override;
 	//~ End UNiagaraNodeWithDynamicPins Interface
 	
 private:

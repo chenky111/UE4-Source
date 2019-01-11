@@ -162,6 +162,25 @@ void UNiagaraNodeOp::PostLoad()
 		UE_LOG(LogNiagaraEditor, Log, TEXT("OpNode: Converted %s to %s, Package: %s"), *OriginalOpName.ToString(), *OpName.ToString(), *GetOutermost()->GetName());
 	}
 
+
+	if (AllowDynamicPins())
+	{
+		bool HasAddPin = false;
+		for (UEdGraphPin* Pin : Pins)
+		{
+			if (IsAddPin(Pin))
+			{
+				HasAddPin = true;
+				break;
+			}
+		}
+		if (!HasAddPin)
+		{
+			// This adds the "plus" pin to nodes that were created before the feature was added
+			ReallocatePins();
+			UE_LOG(LogNiagaraEditor, Log, TEXT("OpNode %s, Package %s: reallocated existing pins to add new extension pin"), *OpName.ToString(), *GetOutermost()->GetName());
+		}
+	}
 }
 
 bool UNiagaraNodeOp::RefreshFromExternalChanges()
@@ -238,6 +257,25 @@ void UNiagaraNodeOp::OnPinRenamed(UEdGraphPin* RenamedPin, const FString& OldNam
 			break;
 		}
 	}
+}
+
+bool UNiagaraNodeOp::CanRemovePin(const UEdGraphPin* Pin) const
+{
+	if (!Pin || Pin->Direction != EGPD_Input || !Super::CanRemovePin(Pin))
+	{
+		return false;
+	}
+
+	// check if the pin was added by the user, only those can be removed
+	for (int32 SrcIndex = 0; SrcIndex < AddedPins.Num(); ++SrcIndex)
+	{
+		const FAddedPinData& PinData = AddedPins[SrcIndex];
+		if (Pin->PinType == PinData.PinType && Pin->PinName == PinData.PinName)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 FName UNiagaraNodeOp::GetUniqueAdditionalPinName() const
