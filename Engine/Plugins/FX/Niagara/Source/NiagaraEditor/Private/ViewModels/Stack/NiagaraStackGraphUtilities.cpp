@@ -1506,15 +1506,20 @@ bool TryGetStackFunctionInputValue(UNiagaraScript& OwningScript, const UEdGraphP
 	}
 	else if (InputPin.LinkedTo.Num() == 1)
 	{
-		if (InputPin.LinkedTo[0]->GetOwningNode()->IsA<UNiagaraNodeParameterMapGet>())
+		const UEdGraphSchema_Niagara* NiagaraSchema = GetDefault<UEdGraphSchema_Niagara>();
+		UEdGraphNode* PreviousOwningNode = InputPin.LinkedTo[0]->GetOwningNode();
+
+		
+		if (PreviousOwningNode->IsA<UNiagaraNodeParameterMapGet>())
 		{
 			OutStackFunctionInputValue.LinkedValue = InputPin.LinkedTo[0]->GetFName();
 		}
-		else if (InputPin.LinkedTo[0]->GetOwningNode()->IsA<UNiagaraNodeInput>())
+		else if (PreviousOwningNode->IsA<UNiagaraNodeInput>())
 		{
 			OutStackFunctionInputValue.DataValue = CastChecked<UNiagaraNodeInput>(InputPin.LinkedTo[0]->GetOwningNode())->GetDataInterface();
 		}
-		else if (InputPin.LinkedTo[0]->GetOwningNode()->IsA<UNiagaraNodeFunctionCall>())
+		else if (PreviousOwningNode->IsA<UNiagaraNodeFunctionCall>() && 
+			FNiagaraStackGraphUtilities::GetParameterMapInputPin(*(static_cast<UNiagaraNodeFunctionCall*>(PreviousOwningNode))) != nullptr)
 		{
 			UNiagaraNodeFunctionCall* DynamicInputFunctionCall = CastChecked<UNiagaraNodeFunctionCall>(InputPin.LinkedTo[0]->GetOwningNode());
 			OutStackFunctionInputValue.DynamicValue = DynamicInputFunctionCall;
