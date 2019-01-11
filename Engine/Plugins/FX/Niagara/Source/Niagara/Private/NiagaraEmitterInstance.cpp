@@ -311,6 +311,16 @@ void FNiagaraEmitterInstance::Init(int32 InEmitterIdx, FName InSystemInstanceNam
 		EmitterAgeBindingGPU.Init(GPUExecContext->CombinedParamStore, EmitterAgeParam);
 	}
 
+	// Initialize the random seed
+	FNiagaraVariable EmitterRandomSeedParam = CachedEmitter->ToEmitterParameter(SYS_PARAM_EMITTER_RANDOM_SEED);
+	SpawnRandomSeedBinding.Init(SpawnExecContext.Parameters, EmitterRandomSeedParam);
+	UpdateRandomSeedBinding.Init(UpdateExecContext.Parameters, EmitterRandomSeedParam);
+	if (CachedEmitter->SimTarget == ENiagaraSimTarget::GPUComputeSim && GPUExecContext != nullptr)
+	{
+		GPURandomSeedBinding.Init(GPUExecContext->CombinedParamStore, CachedEmitter->ToEmitterParameter(EmitterRandomSeedParam));
+	}
+
+	// Initialize the exec count
 	SpawnExecCountBinding.Init(SpawnExecContext.Parameters, SYS_PARAM_ENGINE_EXEC_COUNT);
 	UpdateExecCountBinding.Init(UpdateExecContext.Parameters, SYS_PARAM_ENGINE_EXEC_COUNT);
 	EventExecCountBindings.SetNum(NumEvents);
@@ -349,6 +359,7 @@ void FNiagaraEmitterInstance::ResetSimulation()
 	Age = 0;
 	Loops = 0;
 	TickCount = 0;
+	TotalSpawnedParticles = 0;
 	CachedBounds.Init();
 
 	ParticleDataSet->ResetBuffers();
@@ -953,9 +964,13 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 			Binding.SetValue(Age);
 		}
 		
+		SpawnRandomSeedBinding.SetValue(CachedEmitter->RandomSeed);
+		UpdateRandomSeedBinding.SetValue(CachedEmitter->RandomSeed);
+
 		if (CachedEmitter->SimTarget == ENiagaraSimTarget::GPUComputeSim && GPUExecContext != nullptr)
 		{
 			EmitterAgeBindingGPU.SetValue(Age);
+			GPURandomSeedBinding.SetValue(CachedEmitter->RandomSeed);
 		}
 	}
 	
@@ -999,6 +1014,11 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 			uint32 EventSpawnNum = CalculateEventSpawnCount(EventHandlerProps, EventSpawnCounts[i], EventSet[i]);
 			EventSpawnTotal += EventSpawnNum;
 			EventHandlerSpawnCounts[i] = EventSpawnNum;
+			if (CachedEmitter->SimTarget == ENiagaraSimTarget::GPUComputeSim && GPUExecContext != nullptr) {
+				// NOTE(mv): Separate particle count path for GPU emitters, as they early out..
+				// not actually reached yet due to GPU events not working. CPU events are counted further down...
+				TotalSpawnedParticles += EventSpawnNum;
+			}
 		}
 	}
 
@@ -1046,6 +1066,9 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 				UE_LOG(LogNiagara, Log, TEXT("Multiple spawns are happening this frame. Only doing the first!"));
 				break;
 			}
+
+			// NOTE(mv): Separate particle count path for GPU emitters, as they early out..
+			TotalSpawnedParticles += Info.Count;
 		}
 
 		//GPUExecContext.UpdateInterfaces = CachedEmitter->UpdateScriptProps.Script->GetCachedDefaultDataInterfaces();
@@ -1219,6 +1242,12 @@ void FNiagaraEmitterInstance::Tick(float DeltaSeconds)
 			{
 				int32 OrigNum = Data.GetNumInstances();
 				Data.SetNumInstances(OrigNum + Num);
+
+				// NOTE(mv): Updates the count after setting the variable, such that the TotalSpawnedParticles value read 
+				//           in the script has the count at the start of the frame. 
+				//           This way UniqueID = TotalSpawnedParticles + ExecIndex provide unique and sequential identifiers. 
+				// NOTE(mv): Only for CPU particles, as GPU particles early outs further up and has a separate increment. 
+				TotalSpawnedParticles += Num;
 
 				SpawnExecCountBinding.SetValue(Num);
 				DataSetExecInfos.SetNum(1, false);

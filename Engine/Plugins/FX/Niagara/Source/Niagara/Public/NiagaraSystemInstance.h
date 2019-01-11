@@ -173,7 +173,7 @@ public:
 	Manually advances this system's simulation by the specified number of ticks and tick delta. 
 	To be advanced in this way a system must be in solo mode or moved into solo mode which will add additional overhead.
 	*/
-	void AdvanceSimulation(int32 TickCount, float TickDeltaSeconds);
+	void AdvanceSimulation(int32 TickCountToSimulate, float TickDeltaSeconds);
 
 #if WITH_EDITORONLY_DATA
 	/** Request that this simulation capture a frame. Cannot capture if disabled or already completed.*/
@@ -231,6 +231,9 @@ private:
 	/** The age of the System instance. */
 	float Age;
 
+	/** The tick count of the System instance. */
+	int32 TickCount;
+
 	TMap<FNiagaraDataSetID, FNiagaraDataSet> ExternalEvents;
 
 	TArray< TSharedRef<FNiagaraEmitterInstance> > Emitters;
@@ -283,6 +286,7 @@ private:
 	FNiagaraParameterDirectBinding<float> OwnerEngineTimeParam;
 	FNiagaraParameterDirectBinding<float> OwnerEngineRealtimeParam;
 	FNiagaraParameterDirectBinding<float> SystemAgeParam;
+	FNiagaraParameterDirectBinding<int32> SystemTickCountParam;
 
 	FNiagaraParameterDirectBinding<float> OwnerMinDistanceToCameraParam;
 	FNiagaraParameterDirectBinding<int32> SystemNumEmittersParam;
@@ -293,6 +297,7 @@ private:
 	FNiagaraParameterDirectBinding<int32> OwnerExecutionStateParam;
 
 	TArray<FNiagaraParameterDirectBinding<int32>> ParameterNumParticleBindings;
+	TArray<FNiagaraParameterDirectBinding<int32>> ParameterTotalSpawnedParticlesBindings;
 
 	/** Indicates whether this instance must update itself rather than being batched up as most instances are. */
 	uint32 bSolo : 1;

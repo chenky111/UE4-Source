@@ -775,7 +775,7 @@ void FNiagaraOpInfo::Init()
 		Op->BuildName(TEXT("Length"), CategoryName);
 		OpInfoMap.Add(Op->Name) = Idx;
 
-		//Temporarily here. Rand will be reworked shortly.
+		// Non-deterministic random number generation. Calls FRandomStream on the CPU. 
 		Idx = OpInfos.AddDefaulted();
 		Op = &OpInfos[Idx];
 		Op->Category = CategoryText;
@@ -784,6 +784,30 @@ void FNiagaraOpInfo::Init()
 		Op->Inputs.Add(FNiagaraOpInOutInfo(A, Type, AText, AText, DefaultStr_One));
 		Op->Outputs.Add(FNiagaraOpInOutInfo(Result, Type, ResultText, ResultText, DefaultStr_One, TEXT("rand({0})")));
 		Op->BuildName(TEXT("Rand"), CategoryName);
+		OpInfoMap.Add(Op->Name) = Idx;
+
+
+		// Deterministic/seeded random number generation. 
+		static FName SeedName1(TEXT("Seed 1"));
+		static FName SeedName2(TEXT("Seed 2"));
+		static FName SeedName3(TEXT("Seed 3"));
+		static FText SeedText1 = NSLOCTEXT("NiagaraOpInfo", "Seed1 Desc", "Seed 1");
+		static FText SeedText2 = NSLOCTEXT("NiagaraOpInfo", "Seed2 Desc", "Seed 2");
+		static FText SeedText3 = NSLOCTEXT("NiagaraOpInfo", "Seed3 Desc", "Seed 3");
+		FString DefaultSeed_Zero(TEXT("0"));
+		FNiagaraTypeDefinition SeedType = FNiagaraTypeDefinition::GetIntDef();
+
+		Idx = OpInfos.AddDefaulted();
+		Op = &OpInfos[Idx];
+		Op->Category = CategoryText;
+		Op->FriendlyName = NSLOCTEXT("NiagaraOpInfo", "Seeded Rand Name", "Seeded Random");
+		Op->Description = NSLOCTEXT("NiagaraOpInfo", "Seeded Rand Desc", "Returns a random value between 0 and A, but not including A.");
+		Op->Inputs.Add(FNiagaraOpInOutInfo(A, Type, AText, AText, DefaultStr_One));
+		Op->Inputs.Add(FNiagaraOpInOutInfo(SeedName1, SeedType, SeedText1, SeedText1, DefaultSeed_Zero));
+		Op->Inputs.Add(FNiagaraOpInOutInfo(SeedName2, SeedType, SeedText2, SeedText2, DefaultSeed_Zero));
+		Op->Inputs.Add(FNiagaraOpInOutInfo(SeedName3, SeedType, SeedText3, SeedText3, DefaultSeed_Zero));
+		Op->Outputs.Add(FNiagaraOpInOutInfo(Result, Type, ResultText, ResultText, DefaultStr_One, TEXT("rand({0}, {1}, {2}, {3})")));
+		Op->BuildName(TEXT("SeededRand"), CategoryName);
 		OpInfoMap.Add(Op->Name) = Idx;
 
 		//Comparison ops

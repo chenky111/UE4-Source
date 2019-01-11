@@ -673,8 +673,12 @@ UNiagaraParameterCollection* FNiagaraParameterMapHistory::IsParameterCollectionP
 
 bool FNiagaraParameterMapHistory::ShouldIgnoreVariableDefault(const FNiagaraVariable& Var)const
 {
-	//For now just skip default for ID but maybe other cases/reasons?
-	return Var == FNiagaraVariable(FNiagaraTypeDefinition::GetIDDef(), TEXT("Particles.ID"));
+	// NOTE(mv): Used for variables that are explicitly assigned to (on spawn) and should not be default initialized
+	//           These are explicitly written to in NiagaraHlslTranslator::DefineMain
+	bool bShouldBeIgnored = false;
+	bShouldBeIgnored |= (Var == FNiagaraVariable(FNiagaraTypeDefinition::GetIDDef(), TEXT("Particles.ID")));
+	bShouldBeIgnored |= (Var == FNiagaraVariable(FNiagaraTypeDefinition::GetIntDef(), TEXT("Particles.UniqueID")));
+	return bShouldBeIgnored;
 }
 
 FNiagaraParameterMapHistoryBuilder::FNiagaraParameterMapHistoryBuilder()

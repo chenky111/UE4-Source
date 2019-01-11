@@ -40,6 +40,7 @@ FNiagaraSystemInstance::FNiagaraSystemInstance(UNiagaraComponent* InComponent)
 	: SystemInstanceIndex(INDEX_NONE)
 	, Component(InComponent)
 	, Age(0.0f)
+	, TickCount(0)
 	, ID(FGuid::NewGuid())
 	, IDName(*ID.ToString())
 	, InstanceParameters(Component)
@@ -463,6 +464,7 @@ void FNiagaraSystemInstance::Reset(FNiagaraSystemInstance::EResetMode Mode, bool
 
 			//Reset age to zero.
 			Age = 0.0f;
+			TickCount = 0;
 		}
 	}
 
@@ -474,6 +476,7 @@ void FNiagaraSystemInstance::Reset(FNiagaraSystemInstance::EResetMode Mode, bool
 void FNiagaraSystemInstance::ResetInternal(bool bResetSimulations)
 {
 	Age = 0;
+	TickCount = 0;
 	UNiagaraSystem* System = GetSystem();
 	if (System == nullptr || Component == nullptr || IsDisabled())
 	{
@@ -520,15 +523,15 @@ UNiagaraParameterCollectionInstance* FNiagaraSystemInstance::GetParameterCollect
 	return SystemSimulation->GetParameterCollectionInstance(Collection);
 }
 
-void FNiagaraSystemInstance::AdvanceSimulation(int32 TickCount, float TickDeltaSeconds)
+void FNiagaraSystemInstance::AdvanceSimulation(int32 TickCountToSimulate, float TickDeltaSeconds)
 {
-	if (TickCount > 0)
+	if (TickCountToSimulate > 0)
 	{
 		SCOPE_CYCLE_COUNTER(STAT_NiagaraSystemAdvanceSim);
 		bool bWasSolo = bSolo;
 		SetSolo(true);
 
-		for (int32 TickIdx = 0; TickIdx < TickCount; ++TickIdx)
+		for (int32 TickIdx = 0; TickIdx < TickCountToSimulate; ++TickIdx)
 		{
 			ComponentTick(TickDeltaSeconds);
 		}
@@ -585,6 +588,7 @@ void FNiagaraSystemInstance::ReInitInternal()
 {
 	SCOPE_CYCLE_COUNTER(STAT_NiagaraSystemReinit);
 	Age = 0;
+	TickCount = 0;
 	UNiagaraSystem* System = GetSystem();
 	if (System == nullptr || Component == nullptr)
 	{
@@ -652,6 +656,7 @@ void FNiagaraSystemInstance::ReInitInternal()
 	InstanceParameters.AddParameter(SYS_PARAM_ENGINE_SYSTEM_NUM_EMITTERS, true, false);
 	InstanceParameters.AddParameter(SYS_PARAM_ENGINE_SYSTEM_NUM_EMITTERS_ALIVE, true, false);
 	InstanceParameters.AddParameter(SYS_PARAM_ENGINE_SYSTEM_AGE);
+	InstanceParameters.AddParameter(SYS_PARAM_ENGINE_SYSTEM_TICK_COUNT);
 
 	// This is required for user default data interface's (like say static meshes) to be set up properly.
 	// Additionally, it must happen here for data to be properly found below.
@@ -659,15 +664,26 @@ void FNiagaraSystemInstance::ReInitInternal()
 	System->GetExposedParameters().CopyParametersTo(InstanceParameters, bOnlyAdd, FNiagaraParameterStore::EDataInterfaceCopyMethod::Reference);
 
 	TArray<FNiagaraVariable> NumParticleVars;
+	TArray<FNiagaraVariable> TotalSpawnedParticlesVars;
 	for (int32 i = 0; i < Emitters.Num(); i++)
 	{
 		TSharedRef<FNiagaraEmitterInstance> Simulation = Emitters[i];
 		FString EmitterName = Simulation->GetEmitterHandle().GetInstance()->GetUniqueEmitterName();
-		FNiagaraVariable Var = SYS_PARAM_ENGINE_EMITTER_NUM_PARTICLES;
-		FString ParamName = Var.GetName().ToString().Replace(TEXT("Emitter"), *EmitterName);
-		Var.SetName(*ParamName);
-		InstanceParameters.AddParameter(Var, true, false);
-		NumParticleVars.Add(Var);
+		
+		{
+			FNiagaraVariable Var = SYS_PARAM_ENGINE_EMITTER_NUM_PARTICLES;
+			FString ParamName = Var.GetName().ToString().Replace(TEXT("Emitter"), *EmitterName);
+			Var.SetName(*ParamName);
+			InstanceParameters.AddParameter(Var, true, false);
+			NumParticleVars.Add(Var);
+		}
+		{
+			FNiagaraVariable Var = SYS_PARAM_ENGINE_EMITTER_TOTAL_SPAWNED_PARTICLES;
+			FString ParamName = Var.GetName().ToString().Replace(TEXT("Emitter"), *EmitterName);
+			Var.SetName(*ParamName);
+			InstanceParameters.AddParameter(Var, true, false);
+			TotalSpawnedParticlesVars.Add(Var);
+		}
 	}
 
 	// Make sure all parameters are added before initializing the bindings, otherwise parameter store layout changes might invalidate the bindings.
@@ -691,6 +707,7 @@ void FNiagaraSystemInstance::ReInitInternal()
 	OwnerInverseDeltaSecondsParam.Init(InstanceParameters, SYS_PARAM_ENGINE_INV_DELTA_TIME);
 
 	SystemAgeParam.Init(InstanceParameters, SYS_PARAM_ENGINE_SYSTEM_AGE);
+	SystemTickCountParam.Init(InstanceParameters, SYS_PARAM_ENGINE_SYSTEM_TICK_COUNT);
 	OwnerEngineTimeParam.Init(InstanceParameters, SYS_PARAM_ENGINE_TIME);
 	OwnerEngineRealtimeParam.Init(InstanceParameters, SYS_PARAM_ENGINE_REAL_TIME);
 
@@ -706,6 +723,12 @@ void FNiagaraSystemInstance::ReInitInternal()
 	for (int32 i = 0; i < NumParticleVars.Num(); i++)
 	{
 		ParameterNumParticleBindings[i].Init(InstanceParameters, NumParticleVars[i]);
+	}
+
+	ParameterTotalSpawnedParticlesBindings.SetNum(TotalSpawnedParticlesVars.Num());
+	for (int32 i = 0; i < TotalSpawnedParticlesVars.Num(); i++)
+	{
+		ParameterTotalSpawnedParticlesBindings[i].Init(InstanceParameters, TotalSpawnedParticlesVars[i]);
 	}
 
 	// rebind now after all parameters have been added
@@ -1080,6 +1103,7 @@ void FNiagaraSystemInstance::TickInstanceParameters(float DeltaSeconds)
 		OwnerEngineRealtimeParam.SetValue(Age);
 	}
 	SystemAgeParam.SetValue(Age);
+	SystemTickCountParam.SetValue(TickCount);
 
 	int32 NumAlive = 0;
 	for (int32 i = 0; i < Emitters.Num(); i++)
@@ -1090,6 +1114,7 @@ void FNiagaraSystemInstance::TickInstanceParameters(float DeltaSeconds)
 			NumAlive++;
 		}
 		ParameterNumParticleBindings[i].SetValue(NumParticles);
+		ParameterTotalSpawnedParticlesBindings[i].SetValue(Emitters[i]->GetTotalSpawnedParticles());
 	}
 	SystemNumEmittersParam.SetValue(Emitters.Num());
 	SystemNumEmittersAliveParam.SetValue(NumAlive);
@@ -1309,6 +1334,7 @@ void FNiagaraSystemInstance::PostSimulateTick(float DeltaSeconds)
 	}
 
 	Age += DeltaSeconds;
+	TickCount += 1;
 }
 
 #if WITH_EDITORONLY_DATA

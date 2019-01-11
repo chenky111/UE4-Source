@@ -195,8 +195,17 @@ public:
 	virtual void PostLoad() override;
 	//End UObject Interface
 
+	/** Toggles whether or not the particles within this emitter are relative to the emitter origin or in global space. */ 
 	UPROPERTY(EditAnywhere, Category = "Emitter")
 	bool bLocalSpace;
+
+	/** Toggles whether to globally make the random number generator be deterministic or non-deterministic. Any random calculation that is set to the emitter defaults will inherit this value. It is still possible to tweak individual random to be deterministic or not. In this case deterministic means that it will return the same results for the same configuration of the emitter as long as delta time is not variable. Any changes to the emitter's individual scripts will adjust the results. */
+	UPROPERTY(EditAnywhere, Category = "Emitter")
+	bool bDeterminism;
+
+	/** An emitter-based seed for the deterministic random number generator. */
+	UPROPERTY(EditAnywhere, Category = "Emitter", meta = (EditCondition = "bDeterminism"))
+	int32 RandomSeed;
 
 	//UPROPERTY(EditAnywhere, Category = "Emitter")
 	//float StartTime;
