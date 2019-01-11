@@ -124,6 +124,7 @@ void UNiagaraStackEntry::FStackIssue::InsertFix(int32 InsertionIdx, const UNiaga
 UNiagaraStackEntry::UNiagaraStackEntry()
 	: IndentLevel(0)
 	, bIsFinalized(false)
+	, bIsSearchResult(false)
 {
 }
 
@@ -236,14 +237,14 @@ bool UNiagaraStackEntry::GetShouldShowInStack() const
 	return true;
 }
 
-void UNiagaraStackEntry::GetFilteredChildren(TArray<UNiagaraStackEntry*>& OutFilteredChildren)
+void UNiagaraStackEntry::GetFilteredChildren(TArray<UNiagaraStackEntry*>& OutFilteredChildren) const
 {
 	OutFilteredChildren.Append(ErrorChildren);
 	for (UNiagaraStackEntry* Child : Children)
 	{
 		bool bPassesFilter = true;
-		for(const FOnFilterChild& ChildFilter : ChildFilters)
-		{ 
+		for (const FOnFilterChild& ChildFilter : ChildFilters)
+		{
 			if (ChildFilter.Execute(*Child) == false)
 			{
 				bPassesFilter = false;
@@ -256,12 +257,6 @@ void UNiagaraStackEntry::GetFilteredChildren(TArray<UNiagaraStackEntry*>& OutFil
 			OutFilteredChildren.Add(Child);
 		}
 	}
-}
-
-void UNiagaraStackEntry::GetUnfilteredChildren(TArray<UNiagaraStackEntry*>& OutUnfilteredChildren)
-{
-	OutUnfilteredChildren.Append(ErrorChildren);
-	OutUnfilteredChildren.Append(Children);
 }
 
 void UNiagaraStackEntry::GetUnfilteredChildren(TArray<UNiagaraStackEntry*>& OutUnfilteredChildren) const
@@ -325,7 +320,6 @@ int32 UNiagaraStackEntry::GetIndentLevel() const
 void UNiagaraStackEntry::GetSearchItems(TArray<UNiagaraStackEntry::FStackSearchItem>& SearchItems) const
 {
 	SearchItems.Add({FName("DisplayName"), GetDisplayName()}); 
-	GetAdditionalSearchItemsInternal(SearchItems);
 }
 
 UObject* UNiagaraStackEntry::GetExternalAsset() const
@@ -378,8 +372,14 @@ void UNiagaraStackEntry::SetOnRequestDrop(FOnRequestDrop InOnRequestDrop)
 	OnRequestDropDelegate = InOnRequestDrop;
 }
 
-void UNiagaraStackEntry::GetAdditionalSearchItemsInternal(TArray<FStackSearchItem>& SearchItems) const
+const bool UNiagaraStackEntry::GetIsSearchResult() const
 {
+	return bIsSearchResult;
+}
+
+void UNiagaraStackEntry::SetIsSearchResult(bool bInIsSearchResult)
+{
+	bIsSearchResult = bInIsSearchResult;
 }
 
 TOptional<UNiagaraStackEntry::FDropResult> UNiagaraStackEntry::CanDropInternal(const TArray<UNiagaraStackEntry*>& DraggedEntries)

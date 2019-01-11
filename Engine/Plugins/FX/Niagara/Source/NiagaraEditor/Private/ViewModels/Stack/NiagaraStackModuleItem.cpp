@@ -5,6 +5,7 @@
 #include "ViewModels/NiagaraSystemViewModel.h"
 #include "ViewModels/NiagaraEmitterHandleViewModel.h"
 #include "ViewModels/NiagaraEmitterViewModel.h"
+#include "Viewmodels/Stack/NiagaraStackModuleItemLinkedInputCollection.h"
 #include "ViewModels/Stack/NiagaraStackFunctionInputCollection.h"
 #include "ViewModels/Stack/NiagaraStackFunctionInput.h"
 #include "ViewModels/Stack/NiagaraStackInputCategory.h"
@@ -128,7 +129,13 @@ void UNiagaraStackModuleItem::Initialize(FRequiredEntryData InRequiredEntryData,
 	GroupAddUtilities = InGroupAddUtilities;
 	FunctionCallNode = &InFunctionCallNode;
 	OutputNode = FNiagaraStackGraphUtilities::GetEmitterOutputNodeForStackNode(*FunctionCallNode);
-	AddChildFilter(FOnFilterChild::CreateUObject(this, &UNiagaraStackModuleItem::FilterOutputCollection));
+
+	// We do not need to include child filters for NiagaraNodeAssignments as they do not display their output or linked input collections
+	if (!FunctionCallNode->IsA<UNiagaraNodeAssignment>())
+	{
+		AddChildFilter(FOnFilterChild::CreateUObject(this, &UNiagaraStackModuleItem::FilterOutputCollection));
+		AddChildFilter(FOnFilterChild::CreateUObject(this, &UNiagaraStackModuleItem::FilterLinkedInputCollection));
+	}
 
 	// Update bCanMoveAndDelete
 	if (GetSystemViewModel()->GetEditMode() == ENiagaraSystemViewModelEditMode::EmitterAsset)
@@ -214,16 +221,38 @@ void UNiagaraStackModuleItem::RefreshChildrenInternal(const TArray<UNiagaraStack
 			InputCollection->Initialize(CreateDefaultChildRequiredData(), *FunctionCallNode, *FunctionCallNode, GetStackEditorDataKey());
 		}
 
-		InputCollection->SetShouldShowInStack(GetStackEditorData().GetShowOutputs());
-
-		if (OutputCollection == nullptr)
+		// NiagaraNodeAssignments should not display OutputCollection and LinkedInputCollection as they effectively handle this through their InputCollection 
+		if (!FunctionCallNode->IsA<UNiagaraNodeAssignment>())
 		{
-			OutputCollection = NewObject<UNiagaraStackModuleItemOutputCollection>(this);
-			OutputCollection->Initialize(CreateDefaultChildRequiredData(), *FunctionCallNode);
-		}
 
-		NewChildren.Add(InputCollection);
-		NewChildren.Add(OutputCollection);
+			if (LinkedInputCollection == nullptr)
+			{
+				LinkedInputCollection = NewObject<UNiagaraStackModuleItemLinkedInputCollection>(this);
+				LinkedInputCollection->Initialize(CreateDefaultChildRequiredData(), *FunctionCallNode);
+				LinkedInputCollection->AddChildFilter(FOnFilterChild::CreateUObject(this, &UNiagaraStackModuleItem::FilterLinkedInputCollectionChild));
+			}
+
+			if (OutputCollection == nullptr)
+			{
+				OutputCollection = NewObject<UNiagaraStackModuleItemOutputCollection>(this);
+				OutputCollection->Initialize(CreateDefaultChildRequiredData(), *FunctionCallNode);
+				OutputCollection->AddChildFilter(FOnFilterChild::CreateUObject(this, &UNiagaraStackModuleItem::FilterOutputCollectionChild));
+			}
+
+			InputCollection->SetShouldShowInStack(GetStackEditorData().GetShowOutputs() || GetStackEditorData().GetShowLinkedInputs());
+
+			NewChildren.Add(LinkedInputCollection);
+			NewChildren.Add(InputCollection);
+			NewChildren.Add(OutputCollection);
+		
+		}
+		else
+		{
+			// We do not show the expander arrow for InputCollections of NiagaraNodeAssignments as they only have this one collection
+			InputCollection->SetShouldShowInStack(false);
+
+			NewChildren.Add(InputCollection);
+		}
 	}
 
 	RefreshIsEnabled();
@@ -609,9 +638,56 @@ void UNiagaraStackModuleItem::RefreshIssues(TArray<FStackIssue>& NewIssues)
 
 bool UNiagaraStackModuleItem::FilterOutputCollection(const UNiagaraStackEntry& Child) const
 {
-	if (Child.IsA<UNiagaraStackModuleItemOutputCollection>() && GetStackEditorData().GetShowOutputs() == false)
+	if (Child.IsA<UNiagaraStackModuleItemOutputCollection>())
 	{
-		return false;
+		TArray<UNiagaraStackEntry*> FilteredChildren;
+		Child.GetFilteredChildren(FilteredChildren);
+		if (FilteredChildren.Num() != 0)
+		{
+			return true;
+		}
+		else if (GetStackEditorData().GetShowOutputs() == false)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool UNiagaraStackModuleItem::FilterOutputCollectionChild(const UNiagaraStackEntry& Child) const
+{
+	// Filter to only show search result matches inside collapsed collection
+	if (GetStackEditorData().GetShowOutputs() == false)
+	{
+		return Child.GetIsSearchResult();
+	}
+	return true;
+}
+
+bool UNiagaraStackModuleItem::FilterLinkedInputCollection(const UNiagaraStackEntry& Child) const
+{
+	if (Child.IsA<UNiagaraStackModuleItemLinkedInputCollection>())
+	{
+		TArray<UNiagaraStackEntry*> FilteredChildren;
+		Child.GetFilteredChildren(FilteredChildren);
+		if (FilteredChildren.Num() != 0)
+		{
+ 			return true;
+		}
+		else if (GetStackEditorData().GetShowLinkedInputs() == false && Child.GetShouldShowInStack())
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool UNiagaraStackModuleItem::FilterLinkedInputCollectionChild(const UNiagaraStackEntry& Child) const
+{
+	// Filter to only show search result matches inside collapsed collection
+	if (GetStackEditorData().GetShowLinkedInputs() == false)
+	{
+		return Child.GetIsSearchResult();
 	}
 	return true;
 }

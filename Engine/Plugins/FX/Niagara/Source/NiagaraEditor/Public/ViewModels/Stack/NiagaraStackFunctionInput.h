@@ -207,6 +207,13 @@ public:
 	/** Reassigns the function script for the current dynamic input without resetting the sub-inputs. */
 	void ReassignDynamicInputScript(UNiagaraScript* DynamicInputScript);
 
+	/** Gets whether or not this input is filtered from search results and appearing in stack due to visibility metadata*/
+	bool GetShouldPassFilterForVisibleCondition() const;
+
+public:
+	//~ UNiagaraStackEntry interface
+	virtual void GetSearchItems(TArray<FStackSearchItem>& SearchItems) const override;
+
 protected:
 	//~ UNiagaraStackEntry interface
 	virtual void FinalizeInternal() override;

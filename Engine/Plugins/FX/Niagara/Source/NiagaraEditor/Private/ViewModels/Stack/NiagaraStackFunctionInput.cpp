@@ -1542,6 +1542,19 @@ void UNiagaraStackFunctionInput::ReassignDynamicInputScript(UNiagaraScript* Dyna
 	}
 }
 
+bool UNiagaraStackFunctionInput::GetShouldPassFilterForVisibleCondition() const
+{
+	return GetHasVisibleCondition() == false || GetVisibleConditionEnabled();
+}
+
+void UNiagaraStackFunctionInput::GetSearchItems(TArray<FStackSearchItem>& SearchItems) const
+{
+	if (GetShouldPassFilterForVisibleCondition() && GetIsInlineEditConditionToggle() == false)
+	{
+		SearchItems.Add({ FName("DisplayName"), GetDisplayName() });
+	}
+}
+
 void UNiagaraStackFunctionInput::OnGraphChanged(const struct FEdGraphEditAction& InAction)
 {
 	if (bUpdatingGraphDirectly == false)

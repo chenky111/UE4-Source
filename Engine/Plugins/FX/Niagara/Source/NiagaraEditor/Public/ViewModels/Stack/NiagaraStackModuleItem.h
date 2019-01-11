@@ -7,6 +7,7 @@
 #include "NiagaraStackModuleItem.generated.h"
 
 class UNiagaraNodeFunctionCall;
+class UNiagaraStackModuleItemLinkedInputCollection;
 class UNiagaraStackFunctionInputCollection;
 class UNiagaraStackModuleItemOutputCollection;
 class UNiagaraScript;
@@ -70,6 +71,9 @@ protected:
 
 private:
 	bool FilterOutputCollection(const UNiagaraStackEntry& Child) const;
+	bool FilterOutputCollectionChild(const UNiagaraStackEntry& Child) const;
+	bool FilterLinkedInputCollection(const UNiagaraStackEntry& Child) const;
+	bool FilterLinkedInputCollectionChild(const UNiagaraStackEntry& Child) const;
 	void RefreshIssues(TArray<FStackIssue>& NewIssues);
 
 private:
@@ -81,6 +85,9 @@ private:
 	bool bCanMoveAndDelete;
 	bool bIsEnabled;
 	bool bCanRefresh;
+
+	UPROPERTY()
+	UNiagaraStackModuleItemLinkedInputCollection* LinkedInputCollection;
 
 	UPROPERTY()
 	UNiagaraStackFunctionInputCollection* InputCollection;
