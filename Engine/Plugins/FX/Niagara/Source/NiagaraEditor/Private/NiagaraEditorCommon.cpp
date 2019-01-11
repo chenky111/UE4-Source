@@ -780,7 +780,7 @@ void FNiagaraOpInfo::Init()
 		Op = &OpInfos[Idx];
 		Op->Category = CategoryText;
 		Op->FriendlyName = NSLOCTEXT("NiagaraOpInfo", "Rand Name", "Random");
-		Op->Description = NSLOCTEXT("NiagaraOpInfo", "Rand Desc", "Returns a random value between 0 and A.");
+		Op->Description = NSLOCTEXT("NiagaraOpInfo", "Rand Desc", "Returns a non-deterministic random value between 0 and A.");
 		Op->Inputs.Add(FNiagaraOpInOutInfo(A, Type, AText, AText, DefaultStr_One));
 		Op->Outputs.Add(FNiagaraOpInOutInfo(Result, Type, ResultText, ResultText, DefaultStr_One, TEXT("rand({0})")));
 		Op->BuildName(TEXT("Rand"), CategoryName);
@@ -801,7 +801,7 @@ void FNiagaraOpInfo::Init()
 		Op = &OpInfos[Idx];
 		Op->Category = CategoryText;
 		Op->FriendlyName = NSLOCTEXT("NiagaraOpInfo", "Seeded Rand Name", "Seeded Random");
-		Op->Description = NSLOCTEXT("NiagaraOpInfo", "Seeded Rand Desc", "Returns a random value between 0 and A, but not including A.");
+		Op->Description = NSLOCTEXT("NiagaraOpInfo", "Seeded Rand Desc", "Returns a deterministic random value between 0 and A.");
 		Op->Inputs.Add(FNiagaraOpInOutInfo(A, Type, AText, AText, DefaultStr_One));
 		Op->Inputs.Add(FNiagaraOpInOutInfo(SeedName1, SeedType, SeedText1, SeedText1, DefaultSeed_Zero));
 		Op->Inputs.Add(FNiagaraOpInOutInfo(SeedName2, SeedType, SeedText2, SeedText2, DefaultSeed_Zero));
