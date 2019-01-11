@@ -880,7 +880,11 @@ const FNiagaraTranslateResults &FHlslNiagaraTranslator::Translate(const FNiagara
 			CompilationOutput.ScriptData.ParameterCollectionPaths.AddUnique(FSoftObjectPath(Collection).ToString());
 		}
 	}
-    ValidateParticleIDUsage();
+	ENiagaraScriptUsage Usage = CompileOptions.TargetUsage;
+	if (Usage != ENiagaraScriptUsage::SystemSpawnScript && Usage != ENiagaraScriptUsage::SystemUpdateScript)
+	{
+		ValidateParticleIDUsage();
+	}
 	
 	//Create main scope pin cache.
 	PinToCodeChunks.AddDefaulted(1);
@@ -3425,7 +3429,7 @@ void FHlslNiagaraTranslator::ValidateParticleIDUsage()
         {
             if (Variable.GetName() == particleIDName) 
 			{
-                Error(LOCTEXT("PersistentIDActivationFail", "Before the Particles.ID parameter can be used, the 'Requires persistent IDs' option has to be activated in the emitter properties. Note that this comes with additional memory and CPU costs."), nullptr, nullptr);
+				Error(LOCTEXT("PersistentIDActivationFail", "Before the Particles.ID parameter can be used, the 'Requires persistent IDs' option has to be activated in the emitter properties. Note that this comes with additional memory and CPU costs."), nullptr, nullptr);
             }
         }
     }
