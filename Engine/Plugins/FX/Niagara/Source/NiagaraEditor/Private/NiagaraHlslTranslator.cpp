@@ -880,6 +880,7 @@ const FNiagaraTranslateResults &FHlslNiagaraTranslator::Translate(const FNiagara
 			CompilationOutput.ScriptData.ParameterCollectionPaths.AddUnique(FSoftObjectPath(Collection).ToString());
 		}
 	}
+    ValidateParticleIDUsage();
 	
 	//Create main scope pin cache.
 	PinToCodeChunks.AddDefaulted(1);
@@ -3408,6 +3409,26 @@ bool FHlslNiagaraTranslator::ParameterMapRegisterUniformAttributeVariable(const 
 		return ParameterMapRegisterNamespaceAttributeVariable(NewVar, InNode, InParamMapHistoryIdx, Output);
 	}
 	return false;
+}
+
+void FHlslNiagaraTranslator::ValidateParticleIDUsage()
+{
+    if (CompileOptions.AdditionalDefines.Contains(TEXT("RequiresPersistentIDs"))) 
+	{
+        // persistent IDs are active and can be safely used as inputs
+        return;
+    }
+    FName particleIDName(TEXT("Particles.ID"));
+    for (FNiagaraParameterMapHistory& History : ParamMapHistories)
+    {
+        for (const FNiagaraVariable& Variable : History.Variables)
+        {
+            if (Variable.GetName() == particleIDName) 
+			{
+                Error(LOCTEXT("PersistentIDActivationFail", "Before the Particles.ID parameter can be used, the 'Requires persistent IDs' option has to be activated in the emitter properties. Note that this comes with additional memory and CPU costs."), nullptr, nullptr);
+            }
+        }
+    }
 }
 
 bool FHlslNiagaraTranslator::ParameterMapRegisterNamespaceAttributeVariable(const FNiagaraVariable& InVariable, UNiagaraNode* InNode, int32 InParamMapHistoryIdx, int32& Output)

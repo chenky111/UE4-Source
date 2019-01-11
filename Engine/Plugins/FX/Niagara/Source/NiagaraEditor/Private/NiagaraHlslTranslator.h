@@ -527,6 +527,8 @@ private:
 	// Register an attribute in its namespaced form
 	bool ParameterMapRegisterUniformAttributeVariable(const FNiagaraVariable& InVariable, UNiagaraNode* InNode, int32 InParamMapHistoryIdx, int32& Output);
 
+    // Checks that the Partices.ID parameter is only used if persistent IDs are active
+    void ValidateParticleIDUsage();
 	bool ValidateTypePins(UNiagaraNode* NodeToValidate);
 	void GenerateFunctionSignature(ENiagaraScriptUsage ScriptUsage, FString InName, const FString& InFullName, UNiagaraGraph* FuncGraph, TArray<int32>& Inputs, 
 		bool bHadNumericInputs, bool bHasParameterMapParameters, FNiagaraFunctionSignature& OutSig)const;
