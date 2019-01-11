@@ -165,7 +165,8 @@ int rand(int x, int Seed1, int Seed2, int Seed3)
 {
 	// NOTE: Scaling a uniform float range provides better distribution of 
 	//       numbers than using %.
-	return int(rand3(Seed1, Seed2, Seed3).x * x);
+	// NOTE: Inclusive! So [0, x] instead of [0, x)
+	return int(rand3(Seed1, Seed2, Seed3).x * (x+1));
 }
 
 /* -----------------------------------------------------------------
@@ -207,7 +208,7 @@ int rand(int x, int Seed1, int Seed2, int Seed3)
 	// Note: integer randoms are INCLUSIVE, i.e. includes both the upper and lower limit
 	int rand(int x)
 	{
-		return int(rand4(GDispatchThreadId.x, EmitterTickCounter, 0).x * (x+1.0));
+		return int(rand4(GDispatchThreadId.x, EmitterTickCounter, 0).x * (x+1));
 	}
 #else
 	// Old unseeded, passthrough to FRandomStream
