@@ -228,6 +228,10 @@ void UNiagaraSystem::PostLoad()
 		}
 	}
 
+#if UE_EDITOR
+	ExposedParameters.RecreateRedirections();
+#endif
+
 #if WITH_EDITORONLY_DATA
 	TArray<UNiagaraScript*> AllSystemScripts;
 	

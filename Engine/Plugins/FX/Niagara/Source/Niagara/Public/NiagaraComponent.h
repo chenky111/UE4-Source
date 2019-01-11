@@ -8,7 +8,7 @@
 #include "PrimitiveViewRelevance.h"
 #include "PrimitiveSceneProxy.h"
 #include "Components/PrimitiveComponent.h"
-#include "NiagaraParameterStore.h"
+#include "NiagaraUserRedirectionParameterStore.h"
 #include "NiagaraSystemInstance.h"
 
 #include "NiagaraComponent.generated.h"
@@ -48,7 +48,7 @@ private:
 	Should expose anything in the "User" namespace.
 	*/
 	UPROPERTY(EditAnywhere, Category = Parameters)
-	FNiagaraParameterStore OverrideParameters;
+	FNiagaraUserRedirectionParameterStore OverrideParameters;
 
 #if WITH_EDITORONLY_DATA
 	UPROPERTY()
@@ -280,6 +280,7 @@ public:
 
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 
+	void PostLoadNormalizeOverrideNames();
 	bool IsParameterValueOverriddenLocally(const FName& InParamName);
 	void SetParameterValueOverriddenLocally(const FNiagaraVariable& InParam, bool bInOverridden, bool bRequiresSystemInstanceReset);
 	
@@ -288,7 +289,7 @@ public:
 	FOnSynchronizedWithAssetParameters& OnSynchronizedWithAssetParameters() { return OnSynchronizedWithAssetParametersDelegate; }
 #endif
 
-	FNiagaraParameterStore& GetOverrideParameters() { return OverrideParameters; }
+	FNiagaraUserRedirectionParameterStore& GetOverrideParameters() { return OverrideParameters; }
 
 	const FNiagaraParameterStore& GetOverrideParameters() const { return OverrideParameters; }
 

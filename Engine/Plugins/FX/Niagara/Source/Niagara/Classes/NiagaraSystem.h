@@ -10,6 +10,7 @@
 #include "NiagaraEmitterInstance.h"
 #include "NiagaraEmitterHandle.h"
 #include "NiagaraParameterCollection.h"
+#include "NiagaraUserRedirectionParameterStore.h"
 #include "NiagaraSystem.generated.h"
 
 #if WITH_EDITORONLY_DATA
@@ -124,9 +125,8 @@ public:
 	}
 
 	/** From the last compile, what are the variables that were exported out of the system for external use?*/
-	const FNiagaraParameterStore& GetExposedParameters() const {	return ExposedParameters; }
-	FNiagaraParameterStore& GetExposedParameters()  { return ExposedParameters; }
-
+	const FNiagaraUserRedirectionParameterStore& GetExposedParameters() const {	return ExposedParameters; }
+	FNiagaraUserRedirectionParameterStore& GetExposedParameters()  { return ExposedParameters; }
 
 	/** Gets the System script which is used to populate the System parameters and parameter bindings. */
 	UNiagaraScript* GetSystemSpawnScript();
@@ -271,7 +271,7 @@ protected:
 
 	/** Variables exposed to the outside work for tweaking*/
 	UPROPERTY()
-	FNiagaraParameterStore ExposedParameters;
+	FNiagaraUserRedirectionParameterStore ExposedParameters;
 
 #if WITH_EDITORONLY_DATA	
 

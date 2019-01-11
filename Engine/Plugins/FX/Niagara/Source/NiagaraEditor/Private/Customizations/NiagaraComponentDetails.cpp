@@ -46,6 +46,7 @@
 #include "INiagaraEditorTypeUtilities.h"
 #include "Widgets/Layout/SBox.h"
 #include "UObject/WeakObjectPtr.h"
+#include "NiagaraUserRedirectionParameterStore.h"
 #define LOCTEXT_NAMESPACE "NiagaraComponentDetails"
 
 class FNiagaraComponentNodeBuilder : public IDetailCustomNodeBuilder
@@ -90,8 +91,8 @@ public:
 	{
 		check(Component.IsValid());
 		TArray<FNiagaraVariable> Parameters;
-		FNiagaraParameterStore& ParamStore = Component->GetOverrideParameters();
-		ParamStore.GetParameters(Parameters);
+		FNiagaraUserRedirectionParameterStore& ParamStore = Component->GetOverrideParameters();
+		ParamStore.GetUserParameters(Parameters);
 
 		FNiagaraEditorModule& NiagaraEditorModule = FModuleManager::GetModuleChecked<FNiagaraEditorModule>("NiagaraEditor");
 		

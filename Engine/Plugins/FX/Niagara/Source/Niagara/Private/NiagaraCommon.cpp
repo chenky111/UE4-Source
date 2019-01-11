@@ -335,7 +335,7 @@ void FNiagaraUtilities::PrepareRapidIterationParameters(const TArray<UNiagaraScr
 		}
 		else
 		{
-			const TMap<FNiagaraVariable, int32>& SourceParameterOffsets = Script->RapidIterationParameters.GetParameterOffests();
+			const TMap<FNiagaraVariable, int32>& SourceParameterOffsets = Script->RapidIterationParameters.GetParameterOffsets();
 			for (auto ParameterOffsetIt = SourceParameterOffsets.CreateConstIterator(); ParameterOffsetIt; ++ParameterOffsetIt)
 			{
 				const FNiagaraVariable& SourceParameter = ParameterOffsetIt.Key();
