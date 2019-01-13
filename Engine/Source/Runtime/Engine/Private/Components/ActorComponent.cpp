@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 // ActorComponent.cpp: Actor component implementation.
 
 #include "Components/ActorComponent.h"
@@ -28,6 +28,7 @@
 #include "ComponentRecreateRenderStateContext.h"
 #include "Engine/SimpleConstructionScript.h"
 #include "ComponentUtils.h"
+#include "Engine/Engine.h"
 
 #if WITH_EDITOR
 #include "Kismet2/ComponentEditorUtils.h"
@@ -52,7 +53,7 @@ DECLARE_CYCLE_STAT(TEXT("Component DestroyPhysicsState"), STAT_ComponentDestroyP
 // Should we tick latent actions fired for a component at the same time as the component?
 // - Non-zero values behave the same way as actors do, ticking pending latent action when the component ticks, instead of later on in the frame
 // - Prior to 4.16, components behaved as if the value were 0, which meant their latent actions behaved differently to actors
-//DEPRECATED(4.16, "This CVar will be removed, with the behavior permanently changing in the future to always tick component latent actions along with the component")
+//UE_DEPRECATED(4.16, "This CVar will be removed, with the behavior permanently changing in the future to always tick component latent actions along with the component")
 int32 GTickComponentLatentActionsWithTheComponent = 1;
 
 // Should we tick latent actions fired for a component at the same time as the component?
@@ -156,6 +157,8 @@ UActorComponent::UActorComponent(const FObjectInitializer& ObjectInitializer /*=
 	PrimaryComponentTick.bCanEverTick = false;
 	PrimaryComponentTick.SetTickFunctionEnable(false);
 
+	MarkedForEndOfFrameUpdateArrayIndex = INDEX_NONE;
+
 	CreationMethod = EComponentCreationMethod::Native;
 
 	bAllowReregistration = true;
@@ -195,6 +198,14 @@ void UActorComponent::PostInitProperties()
 		else
 		{
 			OwnerPrivate->AddOwnedComponent(this);
+		}
+	}
+
+	for (UAssetUserData* Datum : AssetUserData)
+	{
+		if (Datum != nullptr)
+		{
+			Datum->PostEditChangeOwner();
 		}
 	}
 }
@@ -498,17 +509,25 @@ int32 UActorComponent::GetFunctionCallspace( UFunction* Function, void* Paramete
 
 bool UActorComponent::CallRemoteFunction( UFunction* Function, void* Parameters, FOutParmRec* OutParms, FFrame* Stack )
 {
+	bool bProcessed = false;
+
 	if (AActor* MyOwner = GetOwner())
 	{
-		UNetDriver* NetDriver = MyOwner->GetNetDriver();
-		if (NetDriver)
+		FWorldContext* const Context = GEngine->GetWorldContextFromWorld(GetWorld());
+		if (Context != nullptr)
 		{
-			NetDriver->ProcessRemoteFunction(MyOwner, Function, Parameters, OutParms, Stack, this);
-			return true;
+			for (FNamedNetDriver& Driver : Context->ActiveNetDrivers)
+			{
+				if (Driver.NetDriver != nullptr && Driver.NetDriver->ShouldReplicateFunction(MyOwner, Function))
+				{
+					Driver.NetDriver->ProcessRemoteFunction(MyOwner, Function, Parameters, OutParms, Stack, this);
+					bProcessed = true;
+				}
+			}
 		}
 	}
 
-	return false;
+	return bProcessed;
 }
 
 #if WITH_EDITOR
@@ -803,6 +822,23 @@ FString FActorComponentTickFunction::DiagnosticMessage()
 {
 	return Target->GetFullName() + TEXT("[TickComponent]");
 }
+
+FName FActorComponentTickFunction::DiagnosticContext(bool bDetailed)
+{
+	if (bDetailed)
+	{
+		AActor* OwningActor = Target->GetOwner();
+		FString OwnerClassName = OwningActor ? OwningActor->GetClass()->GetName() : TEXT("None");
+		// Format is "ComponentClass/OwningActorClass/ComponentName"
+		FString ContextString = FString::Printf(TEXT("%s/%s/%s"), *Target->GetClass()->GetName(), *OwnerClassName, *Target->GetName());
+		return FName(*ContextString);
+	}
+	else
+	{
+		return Target->GetClass()->GetFName();
+	}
+}
+
 
 bool UActorComponent::SetupActorComponentTickFunction(struct FTickFunction* TickFunction)
 {

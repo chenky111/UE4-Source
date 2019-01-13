@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections;
@@ -289,22 +289,34 @@ namespace UnrealBuildTool
 		public EGeneratedCodeVersion GeneratedCodeVersion = EGeneratedCodeVersion.None;
 
 		/// <summary>
-		/// Whether to compile the Apeiron physics plugin.
+		/// Whether to enable the mesh editor.
 		/// </summary>
 		[RequiresUniqueBuildEnvironment]
-		public bool bCompileApeiron = false;
+		public bool bEnableMeshEditor = false; // {Dev-Physics:false, Dev-Destruction:true}
 
-        /// <summary>
-        /// Whether to use the Apeiron physics interface. This overrides the physx flags to disable APEX and NvCloth
-        /// </summary>
-        [RequiresUniqueBuildEnvironment]
-        public bool bUseApeiron = false;
+		/// <summary>
+		/// Whether to compile the Chaos physics plugin.
+		/// </summary>
+		[RequiresUniqueBuildEnvironment]
+		public bool bCompileChaos = false; // {Dev-Physics:false, Dev-Destruction:true}
 
-        /// <summary>
-        /// Whether to include the immediate mode physics interface. This overrides the physx flags to disable APEX and NvCloth
-        /// </summary>
-        [RequiresUniqueBuildEnvironment]
+		/// <summary>
+		/// Whether to use the Chaos physics interface. This overrides the physx flags to disable APEX and NvCloth
+		/// </summary>
+		[RequiresUniqueBuildEnvironment]
+        public bool bUseChaos = false;
+
+		/// <summary>
+		/// Whether to include the immediate mode physics interface. This overrides the physx flags to disable APEX and NvCloth
+		/// </summary>
+		[RequiresUniqueBuildEnvironment]
 		public bool bCompileImmediatePhysics = false;
+
+		/// <summary>
+		/// Whether scene query acceleration is done by UE4. The physx scene query structure is still created, but we do not use it.
+		/// </summary>
+		[RequiresUniqueBuildEnvironment]
+		public bool bCustomSceneQueryStructure = false; // {Dev-Physics:false, Dev-Destruction:true}
 
 		/// <summary>
 		/// Whether to include PhysX support.
@@ -390,7 +402,14 @@ namespace UnrealBuildTool
 		[ConfigFile(ConfigHierarchyType.Engine, "/Script/BuildSettings.BuildSettings", "bCompileSimplygonSSF")]
         public bool bCompileSimplygonSSF = true;
 
-        /// <summary>
+		/// <summary>
+		/// Whether we should compile SQLite using the custom "Unreal" platform (true), or using the native platform (false).
+		/// </summary>
+		[RequiresUniqueBuildEnvironment]
+		[ConfigFile(ConfigHierarchyType.Engine, "/Script/BuildSettings.BuildSettings", "bCompileCustomSQLitePlatform")]
+		public bool bCompileCustomSQLitePlatform = true;
+
+		/// <summary>
 		/// Whether to compile lean and mean version of UE.
 		/// </summary>
 		[RequiresUniqueBuildEnvironment]
@@ -421,13 +440,6 @@ namespace UnrealBuildTool
 		/// </summary>
 		[RequiresUniqueBuildEnvironment]
 		public bool bCompileAgainstApplicationCore = true;
-
-		/// <summary>
-		/// If true, include ADO database support in core.
-		/// </summary>
-		[RequiresUniqueBuildEnvironment]
-		[ConfigFile(ConfigHierarchyType.Engine, "/Script/BuildSettings.BuildSettings", "bIncludeADO")]
-		public bool bIncludeADO;
 
 		/// <summary>
 		/// Whether to compile Recast navmesh generation.
@@ -934,6 +946,11 @@ namespace UnrealBuildTool
 		/// </summary>
 		[CommandLine("-ToolChain")]
 		public string ToolChainName = null;
+
+		/// <summary>
+		/// Whether to allow engine configuration to determine if we can load unverified certificates.
+		/// </summary>
+		public bool bDisableUnverifiedCertificates = false;
 
 		/// <summary>
 		/// Whether to load generated ini files in cooked build, (GameUserSettings.ini loaded either way)
@@ -1561,20 +1578,29 @@ namespace UnrealBuildTool
 		{
 			get { return Inner.GeneratedCodeVersion; }
 		}
-
-		public bool bCompileApeiron
+		public bool bEnableMeshEditor
 		{
-			get { return Inner.bCompileApeiron; }
+			get { return Inner.bEnableMeshEditor; }
 		}
 
-        public bool bUseApeiron
+		public bool bCompileChaos
+		{
+			get { return Inner.bCompileChaos; }
+		}
+
+        public bool bUseChaos
         {
-            get { return Inner.bUseApeiron; }
+            get { return Inner.bUseChaos; }
         }
 
         public bool bCompileImmediatePhysics
 		{
 			get { return Inner.bCompileImmediatePhysics; }
+		}
+
+		public bool bCustomSceneQueryStructure
+		{
+			get { return Inner.bCustomSceneQueryStructure; }
 		}
 
 		public bool bCompilePhysX
@@ -1643,6 +1669,11 @@ namespace UnrealBuildTool
 			get { return Inner.bCompileSimplygonSSF; }
 		}
 
+		public bool bCompileCustomSQLitePlatform
+		{
+			get { return Inner.bCompileCustomSQLitePlatform; }
+		}
+
 		public bool bCompileLeanAndMeanUE
 		{
 			get { return Inner.bCompileLeanAndMeanUE; }
@@ -1666,11 +1697,6 @@ namespace UnrealBuildTool
 		public bool bCompileAgainstApplicationCore
 		{
 			get { return Inner.bCompileAgainstApplicationCore; }
-		}
-
-		public bool bIncludeADO
-		{
-			get { return Inner.bIncludeADO; }
 		}
 
 		public bool bCompileRecast

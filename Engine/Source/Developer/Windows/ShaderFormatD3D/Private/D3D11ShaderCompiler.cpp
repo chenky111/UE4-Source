@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "ShaderFormatD3D.h"
 #include "ShaderPreprocessor.h"
@@ -154,7 +154,8 @@ static const TCHAR* GetShaderProfileName(FShaderTarget Target)
 	{
 		checkSlow(Target.Frequency == SF_Vertex ||
 			Target.Frequency == SF_Pixel ||
-			Target.Frequency == SF_Geometry);
+			Target.Frequency == SF_Geometry || 
+			Target.Frequency == SF_Compute);
 
 		//set defines and profiles for the appropriate shader paths
 		switch(Target.Frequency)
@@ -165,6 +166,8 @@ static const TCHAR* GetShaderProfileName(FShaderTarget Target)
 			return TEXT("vs_5_0");
 		case SF_Geometry:
 			return TEXT("gs_5_0");
+		case SF_Compute:
+			return TEXT("cs_5_0");
 		}
 	}
 
@@ -1073,6 +1076,10 @@ void CompileD3D11Shader(const FShaderCompilerInput& Input,FShaderCompilerOutput&
 		}
 	}
 
+	if (Input.RootParameterBindings.Num())
+	{
+		MoveShaderParametersToRootConstantBuffer(Input, PreprocessedShaderSource);
+	}
 	RemoveUniformBuffersFromSource(Input.Environment, PreprocessedShaderSource);
 
 	// Override default compiler path to newer dll

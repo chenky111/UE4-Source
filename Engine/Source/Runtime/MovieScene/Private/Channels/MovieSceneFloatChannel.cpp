@@ -1,10 +1,67 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Channels/MovieSceneFloatChannel.h"
 #include "MovieSceneFwd.h"
 #include "Channels/MovieSceneChannelProxy.h"
 #include "MovieSceneFrameMigration.h"
+#include "UObject/SequencerObjectVersion.h"
 
+bool FMovieSceneTangentData::Serialize(FArchive& Ar)
+{
+	Ar.UsingCustomVersion(FSequencerObjectVersion::GUID);
+	if (Ar.CustomVer(FSequencerObjectVersion::GUID) < FSequencerObjectVersion::SerializeFloatChannel)
+	{
+		return false;
+	}
+
+	// Serialization is handled manually to avoid the extra size overhead of UProperty tagging.
+	// Otherwise with many keys in a FMovieSceneTangentData the size can become quite large.
+	Ar << ArriveTangent;
+	Ar << LeaveTangent;
+	Ar << TangentWeightMode;
+	Ar << ArriveTangentWeight;
+	Ar << LeaveTangentWeight;
+
+	return true;
+}
+
+bool FMovieSceneTangentData::operator==(const FMovieSceneTangentData& TangentData) const
+{
+	return (ArriveTangent == TangentData.ArriveTangent) && (LeaveTangent == TangentData.LeaveTangent) && (TangentWeightMode == TangentData.TangentWeightMode) && (ArriveTangentWeight == TangentData.ArriveTangentWeight) && (LeaveTangentWeight == TangentData.LeaveTangentWeight);
+}
+
+bool FMovieSceneTangentData::operator!=(const FMovieSceneTangentData& Other) const
+{
+	return !(*this == Other);
+}
+
+bool FMovieSceneFloatValue::Serialize(FArchive& Ar)
+{
+	Ar.UsingCustomVersion(FSequencerObjectVersion::GUID);
+	if (Ar.CustomVer(FSequencerObjectVersion::GUID) < FSequencerObjectVersion::SerializeFloatChannel)
+	{
+		return false;
+	}
+
+	// Serialization is handled manually to avoid the extra size overhead of UProperty tagging.
+	// Otherwise with many keys in a FMovieSceneFloatValue the size can become quite large.
+	Ar << Value;
+	Ar << InterpMode;
+	Ar << TangentMode;
+	Ar << Tangent;
+
+	return true;
+}
+
+bool FMovieSceneFloatValue::operator==(const FMovieSceneFloatValue& FloatValue) const
+{
+	return (Value == FloatValue.Value) && (InterpMode == FloatValue.InterpMode) && (TangentMode == FloatValue.TangentMode) && (Tangent == FloatValue.Tangent);
+}
+
+bool FMovieSceneFloatValue::operator!=(const FMovieSceneFloatValue& Other) const
+{
+	return !(*this == Other);
+}
 
 bool FMovieSceneFloatChannel::SerializeFromMismatchedTag(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot)
 {
@@ -877,4 +934,16 @@ void Dilate(FMovieSceneFloatChannel* InChannel, FFrameNumber Origin, float Dilat
 		Time = Origin + FFrameNumber(FMath::FloorToInt((Time - Origin).Value * DilationFactor));
 	}
 	InChannel->AutoSetTangents();
+}
+
+void FMovieSceneFloatChannel::AddKeys(const TArray<FFrameNumber>& InTimes, const TArray<FMovieSceneFloatValue>& InValues)
+{
+	check(InTimes.Num() == InValues.Num());
+	int32 Index = Times.Num();
+	Times.Append(InTimes);
+	Values.Append(InValues);
+	for (; Index < Times.Num(); ++Index)
+	{
+		KeyHandles.AllocateHandle(Index);
+	}
 }

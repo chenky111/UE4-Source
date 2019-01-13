@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -31,12 +31,6 @@ public:
 				EMovieSceneCompletionMode::ProjectDefault);
 	}
 
-	DEPRECATED(4.18, "Camera guid no longer supported, Use GetCameraBindingID.")
-	FGuid GetCameraGuid() const
-	{
-		return FGuid();
-	}
-
 	/** Sets the camera binding for this CameraCut section. Evaluates from the sequence binding ID */
 	void SetCameraGuid(const FGuid& InGuid)
 	{
@@ -58,6 +52,7 @@ public:
 	//~ UMovieSceneSection interface
 	virtual FMovieSceneEvalTemplatePtr GenerateTemplate() const override;
 	virtual void OnBindingsUpdated(const TMap<FGuid, FGuid>& OldGuidToNewGuidMap) override;
+	virtual void GetReferencedBindings(TArray<FGuid>& OutBindings) override;
 
 	/** ~UObject interface */
 	virtual void PostLoad() override;

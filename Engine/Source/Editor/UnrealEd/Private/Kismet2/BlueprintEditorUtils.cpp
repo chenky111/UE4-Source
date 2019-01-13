@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "BlueprintCompilationManager.h"
@@ -2808,6 +2808,9 @@ void FBlueprintEditorUtils::RenameGraph(UEdGraph* Graph, const FString& NewNameS
 			}
 		}
 
+		// We should let the blueprint know we renamed a graph, some stuff may need to be fixed up.
+		Blueprint->NotifyGraphRenamed(Graph, OldGraphName, NewGraphName);
+
 		if (!Blueprint->bIsRegeneratingOnLoad && !Blueprint->bBeingCompiled)
 		{
 			FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
@@ -3944,7 +3947,7 @@ void FBlueprintEditorUtils::SetBlueprintVariableCategory(UBlueprint* Blueprint, 
 		{
 			if (UTimelineTemplate* Timeline = Blueprint->FindTimelineTemplateByVariableName(TargetProperty->GetFName()))
 			{
-				Timeline->SetMetaData(TEXT("Category"), *SetCategory.ToString());
+				Timeline->SetMetaData(TEXT("Category"), SetCategory.ToString());
 			}
 			else if (UBaseWidgetBlueprint* WidgetBP = Cast<UBaseWidgetBlueprint>(Blueprint))
 			{
@@ -7111,7 +7114,7 @@ void FBlueprintEditorUtils::RemoveTimeline(UBlueprint* Blueprint, UTimelineTempl
 UK2Node_Timeline* FBlueprintEditorUtils::FindNodeForTimeline(UBlueprint* Blueprint, UTimelineTemplate* Timeline)
 {
 	check(Timeline);
-	const FName TimelineVarName = *UTimelineTemplate::TimelineTemplateNameToVariableName(Timeline->GetFName());
+	const FName TimelineVarName = Timeline->GetVariableName();
 
 	TArray<UK2Node_Timeline*> TimelineNodes;
 	FBlueprintEditorUtils::GetAllNodesOfClass<UK2Node_Timeline>(Blueprint, TimelineNodes);

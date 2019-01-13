@@ -1,10 +1,9 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 // Implementation of Device Context State Caching to improve draw
 //	thread performance by removing redundant device context calls.
 
 #pragma once
-
 #include "D3D12DirectCommandListManager.h"
 
 //-----------------------------------------------------------------------------
@@ -278,7 +277,7 @@ protected:
 		struct
 		{
 			// Cache
-			FD3D12GraphicsPipelineState* CurrentPipelineStateObject;
+			TRefCountPtr<FD3D12GraphicsPipelineState> CurrentPipelineStateObject;
 
 			// Note: Current root signature is part of the bound shader state, which is part of the PSO
 			bool bNeedSetRootSignature;
@@ -321,12 +320,14 @@ protected:
 
 			float MinDepth;
 			float MaxDepth;
+
+			EPrimitiveType PrimitiveType = PT_Num;
 		} Graphics;
 
 		struct
 		{
 			// Cache
-			FD3D12ComputePipelineState* CurrentPipelineStateObject;
+			TRefCountPtr<FD3D12ComputePipelineState> CurrentPipelineStateObject;
 
 			// Note: Current root signature is part of the bound compute shader, which is part of the PSO
 			bool bNeedSetRootSignature;
@@ -442,6 +443,11 @@ public:
 	const FD3D12RootSignature* GetGraphicsRootSignature()
 	{
 		return PipelineState.Graphics.CurrentPipelineStateObject ? PipelineState.Graphics.CurrentPipelineStateObject->RootSignature : nullptr;
+	}
+
+	inline EPrimitiveType GetGraphicsPipelinePrimitiveType() const
+	{
+		return PipelineState.Graphics.PrimitiveType;
 	}
 
 	const FD3D12RootSignature* GetComputeRootSignature()
@@ -678,6 +684,7 @@ public:
 			// Save the PSO
 			PipelineState.Common.bNeedSetPSO = true;
 			PipelineState.Graphics.CurrentPipelineStateObject = GraphicsPipelineState;
+			PipelineState.Graphics.PrimitiveType = GraphicsPipelineState->PipelineStateInitializer.PrimitiveType;
 
 			// Set the PSO
 			InternalSetPipelineState<false>();

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -350,6 +350,13 @@ namespace UnrealBuildTool
 		public virtual Tuple<ProjectFile, string> WriteAdditionalProjFile(ProjectFile ProjectFile)
 		{
 			return null;
+		}
+
+		/// <summary>
+		/// Gets the text to insert into the UnrealVS configuration file
+		/// </summary>
+		public virtual void GetUnrealVSConfigurationEntries( StringBuilder UnrealVSContent )
+		{
 		}
 	}
 }

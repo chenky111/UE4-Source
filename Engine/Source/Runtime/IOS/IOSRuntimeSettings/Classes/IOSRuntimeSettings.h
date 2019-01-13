@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -349,8 +349,11 @@ public:
 	UPROPERTY(GlobalConfig, EditAnywhere, Category = DeviceOrientations)
 	uint32 bSupportsLandscapeRightOrientation : 1;
 
+	UPROPERTY(GlobalConfig, EditAnywhere, Category = FileSystem)
+	uint32 bSupportsITunesFileSharing : 1;
+	
 	// The Preferred Orientation will be used as the initial orientation at launch when both Landscape Left and Landscape Right orientations are to be supported.
-	UPROPERTY(GlobalConfig, EditAnywhere, Category = DeviceOrientations)
+	UPROPERTY(GlobalConfig, EditAnywhere, Category = DeviceOrientations, meta = (DisplayName = "Preferred Landscape Orientation"))
 	EIOSLandscapeOrientation PreferredLandscapeOrientation;
 
 	// Specifies the the display name for the application. This will be displayed under the icon on the device.
@@ -411,7 +414,7 @@ public:
 
 	// The team ID of the apple developer account to be used to autmatically sign IOS builds
 	UPROPERTY(GlobalConfig, EditAnywhere, Category = Build, meta = (ConfigHierarchyEditable))
-		FString IOSTeamID;
+	FString IOSTeamID;
 
 	// Whether the app supports HTTPS
 	UPROPERTY(GlobalConfig, EditAnywhere, Category = Online, meta = (DisplayName = "Allow web connections to non-HTTPS websites"))
@@ -506,10 +509,20 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "Audio|CookOverrides")
 	float CompressionQualityModifier;
 
+	// When set to anything beyond 0, this will ensure any SoundWaves longer than this value, in seconds, to stream directly off of the disk.
+	UPROPERTY(GlobalConfig, EditAnywhere, Category = "Audio|CookOverrides", meta = (DisplayName = "Stream All Soundwaves Longer Than: "))
+	float AutoStreamingThreshold;
+
+	virtual void PostReloadConfig(class UProperty* PropertyThatWasLoaded) override;
+
 #if WITH_EDITOR
 	// UObject interface
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual void PostInitProperties() override;
 	// End of UObject interface
 #endif
+
+private:
+	virtual void EnsureOrientationInProjectDefaultEngine();
+
 };

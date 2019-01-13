@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -96,7 +96,7 @@ public:
 	}
 
 	template <typename FmtType, typename... Types>
-	DEPRECATED(4.20, "The formatting string must now be a TCHAR string literal.")
+	UE_DEPRECATED(4.20, "The formatting string must now be a TCHAR string literal.")
 	static FORCEINLINE typename TEnableIf<!TIsArrayOrRefOfType<FmtType, TCHAR>::Value, bool>::Type OptionallyLogFormattedEnsureMessageReturningFalse(bool bLog, const ANSICHAR* Expr, const ANSICHAR* File, int32 Line, const FmtType& FormattedMsg, Types... Args)
 	{
 		// NOTE: When this deprecated function is removed, the return type of the overload above
@@ -254,10 +254,10 @@ public:
 		#define UE_ENSURE_BREAK_ONCE() (UE4Asserts_Private::TrueOnFirstCallOnly([]{}) && UE_ENSURE_BREAK())
 	#endif
 
-	#define ensure(           InExpression                ) (LIKELY(!!(InExpression)) || FDebug::OptionallyLogFormattedEnsureMessageReturningFalse(UE4Asserts_Private::TrueOnFirstCallOnly([]{}), #InExpression, __FILE__, __LINE__, TEXT("")               ) || UE_ENSURE_BREAK_ONCE())
-	#define ensureMsgf(       InExpression, InFormat, ... ) (LIKELY(!!(InExpression)) || FDebug::OptionallyLogFormattedEnsureMessageReturningFalse(UE4Asserts_Private::TrueOnFirstCallOnly([]{}), #InExpression, __FILE__, __LINE__, InFormat, ##__VA_ARGS__) || UE_ENSURE_BREAK_ONCE())
-	#define ensureAlways(     InExpression                ) (LIKELY(!!(InExpression)) || FDebug::OptionallyLogFormattedEnsureMessageReturningFalse(true,                                          #InExpression, __FILE__, __LINE__, TEXT("")               ) || UE_ENSURE_BREAK())
-	#define ensureAlwaysMsgf( InExpression, InFormat, ... ) (LIKELY(!!(InExpression)) || FDebug::OptionallyLogFormattedEnsureMessageReturningFalse(true,                                          #InExpression, __FILE__, __LINE__, InFormat, ##__VA_ARGS__) || UE_ENSURE_BREAK())
+	#define ensure(           InExpression                ) (LIKELY(!!(InExpression)) || (FDebug::OptionallyLogFormattedEnsureMessageReturningFalse(UE4Asserts_Private::TrueOnFirstCallOnly([]{}) && FPlatformMisc::IsEnsureAllowed(), #InExpression, __FILE__, __LINE__, TEXT("")               )) || UE_ENSURE_BREAK_ONCE())
+	#define ensureMsgf(       InExpression, InFormat, ... ) (LIKELY(!!(InExpression)) || (FDebug::OptionallyLogFormattedEnsureMessageReturningFalse(UE4Asserts_Private::TrueOnFirstCallOnly([]{}) && FPlatformMisc::IsEnsureAllowed(), #InExpression, __FILE__, __LINE__, InFormat, ##__VA_ARGS__)) || UE_ENSURE_BREAK_ONCE())
+	#define ensureAlways(     InExpression                ) (LIKELY(!!(InExpression)) || (FPlatformMisc::IsEnsureAllowed() && FDebug::OptionallyLogFormattedEnsureMessageReturningFalse(true,                                          #InExpression, __FILE__, __LINE__, TEXT("")               )) || UE_ENSURE_BREAK())
+	#define ensureAlwaysMsgf( InExpression, InFormat, ... ) (LIKELY(!!(InExpression)) || (FPlatformMisc::IsEnsureAllowed() && FDebug::OptionallyLogFormattedEnsureMessageReturningFalse(true,                                          #InExpression, __FILE__, __LINE__, InFormat, ##__VA_ARGS__)) || UE_ENSURE_BREAK())
 
 #else	// DO_CHECK
 

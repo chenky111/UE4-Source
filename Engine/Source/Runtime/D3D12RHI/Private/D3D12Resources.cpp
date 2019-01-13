@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 D3D12Resources.cpp: D3D RHI utility implementation.
@@ -173,7 +173,11 @@ FD3D12Resource::FD3D12Resource(FD3D12Device* ParentDevice,
 	FPlatformAtomics::InterlockedIncrement(&TotalResourceCount);
 #endif
 
-	if (Resource)
+	if (Resource
+#if PLATFORM_WINDOWS
+		&& Desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER
+#endif
+		)
 	{
 		GPUVirtualAddress = Resource->GetGPUVirtualAddress();
 	}
@@ -366,6 +370,7 @@ FD3D12ResourceLocation::FD3D12ResourceLocation(FD3D12Device* Parent)
 	, OffsetFromBaseOfResource(0)
 	, Size(0)
 	, bTransient(false)
+	, AllocatorType(AT_Unknown)
 {
 	FMemory::Memzero(AllocatorData);
 }
@@ -402,6 +407,7 @@ void FD3D12ResourceLocation::InternalClear()
 	FMemory::Memzero(AllocatorData);
 
 	Allocator = nullptr;
+	AllocatorType = AT_Unknown;
 }
 
 void FD3D12ResourceLocation::TransferOwnership(FD3D12ResourceLocation& Destination, FD3D12ResourceLocation& Source)
@@ -465,7 +471,17 @@ void FD3D12ResourceLocation::ReleaseResource()
 	case ResourceLocationType::eSubAllocation:
 	{
 		check(Allocator != nullptr);
-		Allocator->Deallocate(*this);
+		if (AllocatorType == AT_SegList)
+		{
+			SegListAllocator->Deallocate(
+				GetResource(),
+				GetSegListAllocatorPrivateData().Offset,
+				GetSize());
+		}
+		else
+		{
+			Allocator->Deallocate(*this);
+		}
 		break;
 	}
 	case ResourceLocationType::eNodeReference:

@@ -1,11 +1,14 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "MovieSceneCommonHelpers.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
 #include "Camera/CameraComponent.h"
 #include "KeyParams.h"
+#include "MovieScene.h"
 #include "MovieSceneSection.h"
+#include "MovieSceneSequence.h"
+#include "Sections/MovieSceneSubSection.h"
 #include "Algo/Sort.h"
 #include "Sound/SoundWave.h"
 #include "Sound/SoundCue.h"
@@ -122,6 +125,30 @@ void MovieSceneHelpers::FixupConsecutiveSections(TArray<UMovieSceneSection*>& Se
 	SortConsecutiveSections(Sections);
 }
 
+
+void MovieSceneHelpers::GetDescendantMovieScenes(UMovieSceneSequence* InSequence, TArray<UMovieScene*> & InMovieScenes)
+{
+	UMovieScene* InMovieScene = InSequence->GetMovieScene();
+	if (InMovieScene == nullptr || InMovieScenes.Contains(InMovieScene))
+	{
+		return;
+	}
+
+	InMovieScenes.Add(InMovieScene);
+
+	for (auto Section : InMovieScene->GetAllSections())
+	{
+		UMovieSceneSubSection* SubSection = Cast<UMovieSceneSubSection>(Section);
+		if (SubSection != nullptr)
+		{
+			UMovieSceneSequence* SubSequence = SubSection->GetSequence();
+			if (SubSequence != nullptr)
+			{
+				GetDescendantMovieScenes(SubSequence, InMovieScenes);
+			}
+		}
+	}
+}
 
 
 USceneComponent* MovieSceneHelpers::SceneComponentFromRuntimeObject(UObject* Object)
@@ -511,5 +538,53 @@ template<> void FTrackInstancePropertyBindings::SetCurrentValue<bool>(UObject& O
 	if (UFunction* NotifyFunction = PropAndFunction.NotifyFunction.Get())
 	{
 		Object.ProcessEvent(NotifyFunction, nullptr);
+	}
+}
+
+
+template<> void FTrackInstancePropertyBindings::CallFunction<UObject*>(UObject& InRuntimeObject, UObject* PropertyValue)
+{
+	FPropertyAndFunction PropAndFunction = FindOrAdd(InRuntimeObject);
+	if (UFunction* SetterFunction = PropAndFunction.SetterFunction.Get())
+	{
+		// ProcessEvent should really be taking const void*
+		InRuntimeObject.ProcessEvent(SetterFunction, (void*)&PropertyValue);
+	}
+	else if (UObjectPropertyBase* ObjectProperty = Cast<UObjectPropertyBase>(PropAndFunction.PropertyAddress.GetProperty()))
+	{
+		uint8* ValuePtr = ObjectProperty->ContainerPtrToValuePtr<uint8>(PropAndFunction.PropertyAddress.Address);
+		ObjectProperty->SetObjectPropertyValue(ValuePtr, PropertyValue);
+	}
+
+	if (UFunction* NotifyFunction = PropAndFunction.NotifyFunction.Get())
+	{
+		InRuntimeObject.ProcessEvent(NotifyFunction, nullptr);
+	}
+}
+
+template<> UObject* FTrackInstancePropertyBindings::GetCurrentValue<UObject*>(const UObject& InRuntimeObject)
+{
+	FPropertyAndFunction PropAndFunction = FindOrAdd(InRuntimeObject);
+	if (UObjectPropertyBase* ObjectProperty = Cast<UObjectPropertyBase>(PropAndFunction.PropertyAddress.GetProperty()))
+	{
+		const uint8* ValuePtr = ObjectProperty->ContainerPtrToValuePtr<uint8>(PropAndFunction.PropertyAddress.Address);
+		return ObjectProperty->GetObjectPropertyValue(ValuePtr);
+	}
+
+	return nullptr;
+}
+
+template<> void FTrackInstancePropertyBindings::SetCurrentValue<UObject*>(UObject& InRuntimeObject, UObject* InValue)
+{
+	FPropertyAndFunction PropAndFunction = FindOrAdd(InRuntimeObject);
+	if (UObjectPropertyBase* ObjectProperty = Cast<UObjectPropertyBase>(PropAndFunction.PropertyAddress.GetProperty()))
+	{
+		uint8* ValuePtr = ObjectProperty->ContainerPtrToValuePtr<uint8>(PropAndFunction.PropertyAddress.Address);
+		ObjectProperty->SetObjectPropertyValue(ValuePtr, InValue);
+	}
+
+	if (UFunction* NotifyFunction = PropAndFunction.NotifyFunction.Get())
+	{
+		InRuntimeObject.ProcessEvent(NotifyFunction, nullptr);
 	}
 }

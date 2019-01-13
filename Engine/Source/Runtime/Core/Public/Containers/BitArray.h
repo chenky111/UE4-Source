@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -565,7 +565,7 @@ public:
 	}
 
 	/** Tracks the container's memory use through an archive. */
-	void CountBytes(FArchive& Ar)
+	void CountBytes(FArchive& Ar) const
 	{
 		Ar.CountBytes(
 			FMath::DivideAndRoundUp(NumBits, NumBitsPerDWORD) * sizeof(uint32),

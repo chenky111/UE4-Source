@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 D3D12Adapter.h: D3D12 Adapter Interfaces
@@ -206,7 +206,6 @@ public:
 		const D3D12_RESOURCE_DESC& Desc,
 		uint32 Alignment, uint32 Stride, uint32 Size, uint32 InUsage,
 		FRHIResourceCreateInfo& CreateInfo,
-		bool SkipCreate,
 		FRHIGPUMask GPUMask = FRHIGPUMask::All());
 
 	// Queue up a command to signal the frame fence on the command list. This should only be called from the rendering thread.

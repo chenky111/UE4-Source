@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Fonts/LegacySlateFontInfoCache.h"
 #include "Misc/Paths.h"
@@ -26,7 +26,7 @@ FLegacySlateFontInfoCache::FLegacySlateFontInfoCache()
 	, LocalizedFallbackFontFrameCounter(0)
 {
 	LastResortFontPath = FPaths::EngineContentDir() / TEXT("SlateDebug/Fonts/LastResort.ttf");
-	bIsLastResortFontAvailable = FPaths::FileExists(LastResortFontPath);
+	bIsLastResortFontAvailable = !FPlatformProperties::RequiresCookedData() && FPaths::FileExists(LastResortFontPath);
 }
 
 TSharedPtr<const FCompositeFont> FLegacySlateFontInfoCache::GetCompositeFont(const FName& InLegacyFontName, const EFontHinting InLegacyFontHinting)

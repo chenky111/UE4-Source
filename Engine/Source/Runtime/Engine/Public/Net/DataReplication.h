@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	DataReplication.h:
@@ -20,6 +20,7 @@ class FRepLayout;
 class FRepState;
 class UNetConnection;
 class UNetDriver;
+class AActor;
 
 bool FORCEINLINE IsCustomDeltaProperty( const UProperty* Property )
 {
@@ -64,6 +65,8 @@ public:
 
 	FRepChangelistState* GetRepChangelistState() const { return RepChangelistState.Get(); }
 
+	void CountBytes(FArchive& Ar) const;
+
 private:
 	UNetDriver*							Driver;
 	TSharedPtr< FRepLayout >			RepLayout;
@@ -92,22 +95,8 @@ private:
 class ENGINE_API FObjectReplicator
 {
 public:
-	FObjectReplicator() : 
-		ObjectClass(nullptr),
-		ObjectPtr(nullptr),
-		bLastUpdateEmpty( false ), 
-		bOpenAckCalled( false ),
-		bForceUpdateUnmapped( false ),
-		Connection(nullptr),
-		OwningChannel(nullptr),
-		RepState(nullptr),
-		RemoteFunctions(nullptr)
-	{ }
-
-	~FObjectReplicator() 
-	{
-		CleanUp();
-	}
+	FObjectReplicator();
+	~FObjectReplicator();
 
 	UClass *										ObjectClass;
 	FNetworkGUID									ObjectNetGUID;
@@ -133,7 +122,7 @@ public:
 	TMap< UProperty*, TArray<uint8> >				RepNotifyMetaData;
 
 	TSharedPtr< FRepLayout >						RepLayout;
-	TSharedPtr< FRepState > 						RepState;
+	TUniquePtr< FRepState > 						RepState;
 
 	TSet< FNetworkGUID >							ReferencedGuids;
 	int32											TrackedGuidMemoryBytes;
@@ -170,6 +159,8 @@ public:
 		FRPCPendingLocalCall(const FFieldNetCache* InRPCField, const FReplicationFlags& InRepFlags, FNetBitReader& InReader, const TSet<FNetworkGUID>& InUnmappedGuids)
 			: RPCFieldIndex(InRPCField->FieldNetIndex), RepFlags(InRepFlags), Buffer(InReader.GetBuffer()), NumBits(InReader.GetNumBits()), UnmappedGuids(InUnmappedGuids)
 		{}
+
+		void CountBytes(FArchive& Ar) const;
 	};
 
 	TArray< FRPCPendingLocalCall >					PendingLocalRPCs;			// Information on RPCs that have been received but not yet executed
@@ -218,8 +209,9 @@ public:
 
 	void UpdateUnmappedObjects( bool & bOutHasMoreUnmapped );
 
+	FORCEINLINE TWeakObjectPtr<UObject>	GetWeakObjectPtr() const { return WeakObjectPtr; }
 	FORCEINLINE UObject *	GetObject() const { return ObjectPtr; }
-	FORCEINLINE void		SetObject( UObject* NewObj ) { ObjectPtr = NewObj; }
+	FORCEINLINE void		SetObject( UObject* NewObj ) { ObjectPtr = NewObj; WeakObjectPtr = NewObj; }
 
 	FORCEINLINE void PreNetReceive()		
 	{ 
@@ -247,4 +239,17 @@ public:
 		FNetFieldExportGroup*	NetFieldExportGroup,
 		FNetBitWriter&			Bunch,
 		FNetBitWriter&			Payload ) const;
+
+private:
+	TWeakObjectPtr<UObject> WeakObjectPtr;
+};
+
+class FScopedActorRoleSwap : public FNoncopyable
+{
+public:
+	FScopedActorRoleSwap(AActor* InActor);
+	~FScopedActorRoleSwap();
+
+private:
+	AActor* Actor;
 };

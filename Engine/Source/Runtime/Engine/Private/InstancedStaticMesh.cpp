@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	InstancedStaticMesh.cpp: Static mesh rendering code.
@@ -641,7 +641,7 @@ void FInstancedStaticMeshRenderData::InitStaticMeshVertexFactories(
 }
 
 FPerInstanceRenderData::FPerInstanceRenderData(FStaticMeshInstanceData& Other, ERHIFeatureLevel::Type InFeaureLevel, bool InRequireCPUAccess)
-	: ResourceSize(Other.GetResourceSize()) // 2x when with CPU access?
+	: ResourceSize(InRequireCPUAccess ? Other.GetResourceSize() : 0)
 	, InstanceBuffer(InFeaureLevel, InRequireCPUAccess)
 {
 	InstanceBuffer.InitFromPreallocatedData(Other);
@@ -660,7 +660,7 @@ FPerInstanceRenderData::~FPerInstanceRenderData()
 void FPerInstanceRenderData::UpdateFromPreallocatedData(FStaticMeshInstanceData& InOther)
 {
 	InstanceBuffer.RequireCPUAccess = (InOther.GetOriginResourceArray()->GetAllowCPUAccess() || InOther.GetTransformResourceArray()->GetAllowCPUAccess() || InOther.GetLightMapResourceArray()->GetAllowCPUAccess()) ? true : InstanceBuffer.RequireCPUAccess;
-	ResourceSize = InOther.GetResourceSize(); // 2x when with CPU access?
+	ResourceSize = InstanceBuffer.RequireCPUAccess ? InOther.GetResourceSize() : 0;
 
 	InOther.SetAllowCPUAccess(InstanceBuffer.RequireCPUAccess);
 
@@ -2155,7 +2155,7 @@ void UInstancedStaticMeshComponent::InitPerInstanceRenderData(bool InitializeFro
 	}
 
 	UWorld* World = GetWorld();
-	ERHIFeatureLevel::Type FeatureLevel = World != nullptr ? World->FeatureLevel : GMaxRHIFeatureLevel;
+	ERHIFeatureLevel::Type FeatureLevel = World != nullptr ? World->FeatureLevel.GetValue() : GMaxRHIFeatureLevel;
 
 	bool KeepInstanceBufferCPUAccess = GIsEditor || InRequireCPUAccess || ComponentRequestsCPUAccess(this, FeatureLevel);
 
@@ -2186,7 +2186,10 @@ void UInstancedStaticMeshComponent::OnComponentCreated()
 
 	if (FApp::CanEverRender() && !HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
 	{
-		InitPerInstanceRenderData(false);
+		// if we are pasting/duplicating this component, it may be created with some instances already in place
+		// in this case, need to ensure that the instance render data is properly created
+		const bool InitializeFromCurrentData = PerInstanceSMData.Num() > 0;
+		InitPerInstanceRenderData(InitializeFromCurrentData);
 	}
 }
 

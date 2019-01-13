@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 
 #pragma once
@@ -101,6 +101,9 @@ class ENGINE_API UMeshComponent : public UPrimitiveComponent
 
 public:
 	/** Material parameter setting and caching */
+
+	UPROPERTY(EditAnywhere, AdvancedDisplay, BlueprintReadOnly, Category = MaterialParameters)
+	bool bEnableMaterialParameterCaching;
 
 	/** Set all occurrences of Scalar Material Parameters with ParameterName in the set of materials of the SkeletalMesh to ParameterValue */
 	UFUNCTION(BlueprintCallable, Category = "Rendering|Material")

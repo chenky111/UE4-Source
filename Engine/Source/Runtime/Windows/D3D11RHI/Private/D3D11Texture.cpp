@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	D3D11VertexBuffer.cpp: D3D texture RHI implementation.
@@ -545,7 +545,6 @@ TD3D11Texture2D<BaseResourceType>* FD3D11DynamicRHI::CreateD3D11Texture2D(uint32
 	D3D11_SRV_DIMENSION ShaderResourceViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 	uint32 CPUAccessFlags = 0;
 	D3D11_USAGE TextureUsage = D3D11_USAGE_DEFAULT;
-	uint32 BindFlags = D3D11_BIND_SHADER_RESOURCE;
 	bool bCreateShaderResource = true;
 
 	uint32 ActualMSAACount = NumSamples;
@@ -581,7 +580,6 @@ TD3D11Texture2D<BaseResourceType>* FD3D11DynamicRHI::CreateD3D11Texture2D(uint32
 
 		CPUAccessFlags = D3D11_CPU_ACCESS_READ;
 		TextureUsage = D3D11_USAGE_STAGING;
-		BindFlags = 0;
 		bCreateShaderResource = false;
 	}
 
@@ -589,7 +587,6 @@ TD3D11Texture2D<BaseResourceType>* FD3D11DynamicRHI::CreateD3D11Texture2D(uint32
 	{
 		CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 		TextureUsage = D3D11_USAGE_STAGING;
-		BindFlags = 0;
 		bCreateShaderResource = false;
 	}
 
@@ -604,9 +601,14 @@ TD3D11Texture2D<BaseResourceType>* FD3D11DynamicRHI::CreateD3D11Texture2D(uint32
 	TextureDesc.SampleDesc.Count = ActualMSAACount;
 	TextureDesc.SampleDesc.Quality = ActualMSAAQuality;
 	TextureDesc.Usage = TextureUsage;
-	TextureDesc.BindFlags = BindFlags;
+	TextureDesc.BindFlags = bCreateShaderResource? D3D11_BIND_SHADER_RESOURCE : 0;
 	TextureDesc.CPUAccessFlags = CPUAccessFlags;
 	TextureDesc.MiscFlags = bCubeTexture ? D3D11_RESOURCE_MISC_TEXTURECUBE : 0;
+
+	if (Flags & TexCreate_DisableSRVCreation)
+	{
+		bCreateShaderResource = false;
+	}
 
 	if (Flags & TexCreate_Shared)
 	{
@@ -659,6 +661,12 @@ TD3D11Texture2D<BaseResourceType>* FD3D11DynamicRHI::CreateD3D11Texture2D(uint32
 	{
 		TextureDesc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 		bPooledTexture = false;
+	}
+
+	if (bCreateDSV && !(Flags & TexCreate_ShaderResource))
+	{
+		TextureDesc.BindFlags &= ~D3D11_BIND_SHADER_RESOURCE;
+		bCreateShaderResource = false;
 	}
 
 	if (bCreateDSV || bCreateRTV || bCubeTexture || bTextureArray)
@@ -1617,7 +1625,7 @@ void* FD3D11DynamicRHI::RHILockTexture2D(FTexture2DRHIParamRef TextureRHI,uint32
 {
 	check(TextureRHI);
 	FD3D11Texture2D* Texture = ResourceCast(TextureRHI);
-	ConditionalClearShaderResource(Texture);
+	ConditionalClearShaderResource(Texture, false);
 	return Texture->Lock(MipIndex,0,LockMode,DestStride);
 }
 
@@ -1631,7 +1639,7 @@ void FD3D11DynamicRHI::RHIUnlockTexture2D(FTexture2DRHIParamRef TextureRHI,uint3
 void* FD3D11DynamicRHI::RHILockTexture2DArray(FTexture2DArrayRHIParamRef TextureRHI,uint32 TextureIndex,uint32 MipIndex,EResourceLockMode LockMode,uint32& DestStride,bool bLockWithinMiptail)
 {
 	FD3D11Texture2DArray* Texture = ResourceCast(TextureRHI);
-	ConditionalClearShaderResource(Texture);
+	ConditionalClearShaderResource(Texture, false);
 	return Texture->Lock(MipIndex,TextureIndex,LockMode,DestStride);
 }
 
@@ -1696,7 +1704,7 @@ FTextureCubeRHIRef FD3D11DynamicRHI::RHICreateTextureCubeArray(uint32 Size, uint
 void* FD3D11DynamicRHI::RHILockTextureCubeFace(FTextureCubeRHIParamRef TextureCubeRHI,uint32 FaceIndex,uint32 ArrayIndex,uint32 MipIndex,EResourceLockMode LockMode,uint32& DestStride,bool bLockWithinMiptail)
 {
 	FD3D11TextureCube* TextureCube = ResourceCast(TextureCubeRHI);
-	ConditionalClearShaderResource(TextureCube);
+	ConditionalClearShaderResource(TextureCube, false);
 	uint32 D3DFace = GetD3D11CubeFace((ECubeFace)FaceIndex);
 	return TextureCube->Lock(MipIndex,D3DFace + ArrayIndex * 6,LockMode,DestStride);
 }

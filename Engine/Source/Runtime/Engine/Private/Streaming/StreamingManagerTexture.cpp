@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	TextureStreamingManager.cpp: Implementation of content streaming classes.
@@ -1172,7 +1172,7 @@ void FStreamingManagerTexture::UpdateResourceStreaming( float DeltaTime, bool bP
 	FScopeLock ScopeLock(&CriticalSection);
 
 	SCOPE_CYCLE_COUNTER(STAT_TextureStreaming_GameThreadUpdateTime);
-	CSV_SCOPED_TIMING_STAT(Basic, TextureStreamingGameThread);
+	CSV_SCOPED_TIMING_STAT_EXCLUSIVE(TextureStreaming);
 
 	LogViewLocationChange();
 	STAT(DisplayedStats.Apply();)

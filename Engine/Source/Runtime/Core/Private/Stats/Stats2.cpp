@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Stats/Stats2.h"
 #include "Misc/AssertionMacros.h"
@@ -1443,5 +1443,7 @@ void FThreadStats::WaitForStats()
 #endif // !UE_BUILD_SHIPPING
 	}
 }
+
+bool FStatPacket::bDumpStatPacket = false;
 
 #endif

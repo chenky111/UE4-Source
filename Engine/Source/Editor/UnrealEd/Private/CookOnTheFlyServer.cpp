@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	CookOnTheFlyServer.cpp: handles polite cook requests via network ;)
@@ -3205,7 +3205,13 @@ bool UCookOnTheFlyServer::HasExceededMaxMemory() const
 		return true;
 	}
 
-	
+#if UE_GC_TRACK_OBJ_AVAILABLE
+	if (GUObjectArray.GetObjectArrayEstimatedAvailable() < MinFreeUObjectIndicesBeforeGC)
+	{
+		UE_LOG(LogCook, Display, TEXT("Running out of available UObject indices (%d remaining)"), GUObjectArray.GetObjectArrayEstimatedAvailable());
+		return true;
+	}
+#endif // UE_GC_TRACK_OBJ_AVAILABLE
 
 	return false;
 }
@@ -4083,6 +4089,10 @@ void UCookOnTheFlyServer::Initialize( ECookMode::Type DesiredCookMode, ECookInit
 	MinMemoryBeforeGCInMB = FMath::Max(MinMemoryBeforeGCInMB, 0);
 	MinMemoryBeforeGC = MinMemoryBeforeGCInMB * 1024LL * 1024LL;
 	MinMemoryBeforeGC = FMath::Min(MaxMemoryAllowance, MinMemoryBeforeGC);
+
+	MinFreeUObjectIndicesBeforeGC = 5000;
+	GConfig->GetInt(TEXT("CookSettings"), TEXT("MinFreeUObjectIndicesBeforeGC"), MinFreeUObjectIndicesBeforeGC, GEditorIni);
+	MinFreeUObjectIndicesBeforeGC = FMath::Max(MinFreeUObjectIndicesBeforeGC, 0);
 
 	int32 MinFreeMemoryInMB = 0;
 	GConfig->GetInt(TEXT("CookSettings"), TEXT("MinFreeMemory"), MinFreeMemoryInMB, GEditorIni);
@@ -6083,7 +6093,9 @@ void UCookOnTheFlyServer::ProcessShaderCodeLibraries(const FString& LibraryName)
 
 
 					FString Args(TEXT("build "));
+					Args += TEXT("\"");
 					Args += StablePCPath;
+					Args += TEXT("\"");
 
 					int32 NumMatched = 0;
 					for (int32 Index = 0; Index < SCLCSVPaths->Num(); Index++)
@@ -6094,7 +6106,9 @@ void UCookOnTheFlyServer::ProcessShaderCodeLibraries(const FString& LibraryName)
 						}
 						NumMatched++;
 						Args += TEXT(" ");
+						Args += TEXT("\"");
 						Args += (*SCLCSVPaths)[Index];
+						Args += TEXT("\"");
 					}
 					if (!NumMatched)
 					{
@@ -6107,7 +6121,9 @@ void UCookOnTheFlyServer::ProcessShaderCodeLibraries(const FString& LibraryName)
 					}
 
 					Args += TEXT(" ");
+					Args += TEXT("\"");
 					Args += PCPath;
+					Args += TEXT("\"");
 					UE_LOG(LogCook, Display, TEXT("  With Args: %s"), *Args);
 
 					int32 Result = UShaderPipelineCacheToolsCommandlet::StaticMain(Args);
@@ -6246,7 +6262,9 @@ void UCookOnTheFlyServer::CookByTheBookFinished()
 			// Save shader code map
 			FString LibraryName = !IsCookingDLC() ? FApp::GetProjectName() : CookByTheBookOptions->DlcName;
 			SaveShaderCodeLibrary(LibraryName);
-            CleanShaderCodeLibraries();
+			
+			// Don't clean Saved/Shaders/<LibraryPlatform(s)>/ at the end as we might iterate next time - Next cook at startup will decide if clean on iterate flag
+            // /*CleanShaderCodeLibraries();*/
 			ProcessShaderCodeLibraries(LibraryName);
             
 			FShaderCodeLibrary::Shutdown();
@@ -6319,7 +6337,7 @@ void UCookOnTheFlyServer::CookByTheBookFinished()
 					IgnorePackageNames.Add(UncookedEditorOnlyPackage);
 				}
 				{
-					Generator.PreSave();
+					Generator.PreSave(CookedPackageNames);
 				}
 				{
 					SCOPE_TIMER(BuildChunkManifest);
@@ -7513,7 +7531,7 @@ uint32 UCookOnTheFlyServer::FullLoadAndSave(uint32& CookedPackageCount)
 							for (TPair<FName, FName>& RedirectedPath : RedirectedPaths)
 							{
 								GRedirectCollector.AddAssetPathRedirection(RedirectedPath.Key, RedirectedPath.Value);
-								PackagesToLoad.Add(RedirectedPath.Value.ToString());
+								PackagesToLoad.Add(FPackageName::ObjectPathToPackageName(RedirectedPath.Value.ToString()));
 							}
 						}
 						else
@@ -7711,6 +7729,14 @@ uint32 UCookOnTheFlyServer::FullLoadAndSave(uint32& CookedPackageCount)
 						const bool bSucceededSavePackage = (SaveResult == ESavePackageResult::Success || SaveResult == ESavePackageResult::GenerateStub || SaveResult == ESavePackageResult::ReplaceCompletely);
 						if (bSucceededSavePackage)
 						{
+							FAssetRegistryGenerator* Generator = RegistryGenerators.FindRef(FName(*Target->PlatformName()));
+							if (Generator)
+							{
+								FAssetPackageData* PackageData = Generator->GetAssetPackageData(Package->GetFName());
+								PackageData->DiskSize = SaveResult.TotalFileSize;
+								PackageData->CookedHash = SaveResult.CookedHash;
+							}
+
 							FPlatformAtomics::InterlockedIncrement(&ParallelSavedPackages);
 						}
 

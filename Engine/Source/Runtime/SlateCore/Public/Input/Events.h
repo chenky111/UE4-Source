@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -40,7 +40,7 @@ enum class EFocusCause : uint8
 	WindowActivate,
 };
 
-DEPRECATED(4.18, "EKeyboardFocusCause is deprecated and was renamed to EFocusCause. Please use that type instead.")
+UE_DEPRECATED(4.18, "EKeyboardFocusCause is deprecated and was renamed to EFocusCause. Please use that type instead.")
 typedef EFocusCause EKeyboardFocusCause;
 
 /**
@@ -326,6 +326,14 @@ public:
 	bool AreCapsLocked() const
 	{
 		return ModifierKeys.AreCapsLocked();
+	}
+
+	/**
+	 * @return the complete set of modifier keys
+	 */
+	const FModifierKeysState& GetModifierKeys() const
+	{
+		return ModifierKeys;
 	}
 
 	/**
@@ -725,7 +733,7 @@ public:
 	{ }
 
 	/** A constructor for touch events */
-	DEPRECATED(4.20, "FPointerEvent constructor now takes a Force parameter")
+	UE_DEPRECATED(4.20, "FPointerEvent constructor now takes a Force parameter")
 	FPointerEvent(
 		uint32 InUserIndex,
 		uint32 InPointerIndex,
@@ -840,6 +848,8 @@ public:
 	/** @return Is the gesture delta inverted */
 	bool IsDirectionInvertedFromDevice() const { return bIsDirectionInvertedFromDevice; }
 
+	/** @return the full set of pressed buttons */
+	const TSet<FKey>& GetPressedButtons() const { return PressedButtons; }
 
 	/** We override the assignment operator to allow generated code to compile with the const ref member. */
 	void operator=( const FPointerEvent& Other )

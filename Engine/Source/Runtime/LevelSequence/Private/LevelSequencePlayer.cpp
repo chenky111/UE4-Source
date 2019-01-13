@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "LevelSequencePlayer.h"
 #include "GameFramework/Actor.h"
@@ -20,6 +20,7 @@
 #include "Tracks/MovieSceneCinematicShotTrack.h"
 #include "Sections/MovieSceneCinematicShotSection.h"
 #include "LevelSequenceActor.h"
+#include "Modules/ModuleManager.h"
 
 
 /* ULevelSequencePlayer structors
@@ -27,9 +28,7 @@
 
 ULevelSequencePlayer::ULevelSequencePlayer(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
-{
-	SpawnRegister = MakeShareable(new FLevelSequenceSpawnRegister);
-}
+{}
 
 
 /* ULevelSequencePlayer interface
@@ -52,6 +51,10 @@ ULevelSequencePlayer* ULevelSequencePlayer::CreateLevelSequencePlayer(UObject* W
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	SpawnParams.ObjectFlags |= RF_Transient;
 	SpawnParams.bAllowDuringConstructionScript = true;
+
+	// Defer construction for autoplay so that BeginPlay() is called
+	SpawnParams.bDeferConstruction = true;
+
 	ALevelSequenceActor* Actor = World->SpawnActor<ALevelSequenceActor>(SpawnParams);
 
 	Actor->PlaybackSettings = Settings;
@@ -59,6 +62,9 @@ ULevelSequencePlayer* ULevelSequencePlayer::CreateLevelSequencePlayer(UObject* W
 
 	Actor->InitializePlayer();
 	OutActor = Actor;
+
+	FTransform DefaultTransform;
+	Actor->FinishSpawning(DefaultTransform);
 
 	return Actor->SequencePlayer;
 }
@@ -69,6 +75,7 @@ ULevelSequencePlayer* ULevelSequencePlayer::CreateLevelSequencePlayer(UObject* W
 void ULevelSequencePlayer::Initialize(ULevelSequence* InLevelSequence, UWorld* InWorld, const FMovieSceneSequencePlaybackSettings& Settings)
 {
 	World = InWorld;
+	SpawnRegister = MakeShareable(new FLevelSequenceSpawnRegister);
 	UMovieSceneSequencePlayer::Initialize(InLevelSequence, Settings);
 }
 
@@ -108,6 +115,20 @@ void ULevelSequencePlayer::OnStopped()
 			Actor->PrimaryActorTick.RemovePrerequisite(LevelSequenceActor, LevelSequenceActor->PrimaryActorTick);
 		}
 	}
+
+	if (World != nullptr && World->GetGameInstance() != nullptr)
+	{
+		APlayerController* PC = World->GetGameInstance()->GetFirstLocalPlayerController();
+
+		if (PC != nullptr)
+		{
+			if (PC->PlayerCameraManager)
+			{
+				PC->PlayerCameraManager->bClientSimulatingViewTarget = false;
+			}
+		}
+	}
+
 	PrerequisiteActors.Reset();
 	LastViewTarget.Reset();
 }
@@ -184,6 +205,12 @@ void ULevelSequencePlayer::UpdateCameraCut(UObject* CameraObject, UObject* Unloc
 	if (CameraActor == nullptr)
 	{
 		CameraActor = LastViewTarget.Get();
+
+		// Skip if the last view target is the same as the current view target so that there's no additional camera cut
+		if (CameraActor == ViewTarget)
+		{
+			return;
+		}
 	}
 
 	FViewTargetTransitionParams TransitionParams;
@@ -256,13 +283,18 @@ TArray<UObject*> ULevelSequencePlayer::GetEventContexts() const
 		GetEventContexts(*World, EventContexts);
 	}
 
-	for (UObject* Object : AdditionalEventReceivers)
+	ALevelSequenceActor* OwningActor = GetTypedOuter<ALevelSequenceActor>();
+	if (OwningActor)
 	{
-		if (Object)
+		for (AActor* Actor : OwningActor->AdditionalEventReceivers)
 		{
-			EventContexts.Add(Object);
+			if (Actor)
+			{
+				EventContexts.Add(Actor);
+			}
 		}
 	}
+
 	return EventContexts;
 }
 
@@ -304,6 +336,7 @@ void ULevelSequencePlayer::TakeFrameSnapshot(FLevelSequencePlayerSnapshot& OutSn
 	OutSnapshot.CurrentShotLocalTime = FQualifiedFrameTime(CurrentPlayTime, PlayPosition.GetInputRate());
 	OutSnapshot.CameraComponent = CachedCameraComponent.IsValid() ? CachedCameraComponent.Get() : nullptr;
 	OutSnapshot.ShotID = MovieSceneSequenceID::Invalid;
+	OutSnapshot.ActiveShot = nullptr;
 
 	UMovieSceneCinematicShotTrack* ShotTrack = Sequence->GetMovieScene()->FindMasterTrack<UMovieSceneCinematicShotTrack>();
 	if (ShotTrack)
@@ -357,6 +390,7 @@ void ULevelSequencePlayer::TakeFrameSnapshot(FLevelSequencePlayerSnapshot& OutSn
 			OutSnapshot.CurrentShotName = ActiveShot->GetShotDisplayName();
 			OutSnapshot.CurrentShotLocalTime = FQualifiedFrameTime(InnerDisplayTime, InnerFrameRate);
 			OutSnapshot.ShotID = ActiveShot->GetSequenceID();
+			OutSnapshot.ActiveShot = Cast<ULevelSequence>(ActiveShot->GetSequence());
 
 #if WITH_EDITORONLY_DATA
 			FFrameNumber  InnerFrameNumber = InnerFrameRate.AsFrameNumber(InnerFrameRate.AsSeconds(InnerDisplayTime));

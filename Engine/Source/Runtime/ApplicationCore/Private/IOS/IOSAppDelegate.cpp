@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "IOS/IOSAppDelegate.h"
 #include "IOS/IOSCommandLineHelper.h"
@@ -20,6 +20,7 @@
 #include "Misc/OutputDeviceError.h"
 #include "Misc/OutputDeviceRedirector.h"
 #include "Misc/FeedbackContext.h"
+#include "Misc/App.h"
 #include "Algo/AllOf.h"
 #if USE_MUTE_SWITCH_DETECTION
 #include "SharkfoodMuteSwitchDetector.h"
@@ -259,7 +260,7 @@ bool FIOSCoreDelegates::PassesPushNotificationFilters(NSDictionary* Payload)
 	}
 	self.savedOpenUrlParameters = nil; // clear after saved openurl delegate running
 
-	while( !GIsRequestingExit )
+    while( !GIsRequestingExit )
 	{
         if (self.bIsSuspended)
         {
@@ -494,15 +495,15 @@ bool FIOSCoreDelegates::PassesPushNotificationFilters(NSDictionary* Payload)
 					else
 					{
 						AVAudioSessionCategoryOptions opts =
-    						AVAudioSessionCategoryOptionAllowBluetoothA2DP |
+							AVAudioSessionCategoryOptionAllowBluetoothA2DP |
 #if !PLATFORM_TVOS
-    						AVAudioSessionCategoryOptionDefaultToSpeaker |
+							AVAudioSessionCategoryOptionDefaultToSpeaker |
 #endif
-    						AVAudioSessionCategoryOptionMixWithOthers;
+							AVAudioSessionCategoryOptionMixWithOthers;
 						
 						if (@available(iOS 10, *))
 						{
-							[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord mode:AVAudioSessionModeVoiceChat options:opts error:&ActiveError];
+							[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord mode:AVAudioSessionModeDefault options:opts error:&ActiveError];
 						}
 						else
 						{
@@ -567,15 +568,15 @@ bool FIOSCoreDelegates::PassesPushNotificationFilters(NSDictionary* Payload)
 				else
 				{
 					AVAudioSessionCategoryOptions opts =
-					AVAudioSessionCategoryOptionAllowBluetoothA2DP |
+						AVAudioSessionCategoryOptionAllowBluetoothA2DP |
 #if !PLATFORM_TVOS
-					AVAudioSessionCategoryOptionDefaultToSpeaker |
+						AVAudioSessionCategoryOptionDefaultToSpeaker |
 #endif
-					AVAudioSessionCategoryOptionMixWithOthers;
+						AVAudioSessionCategoryOptionMixWithOthers;
 					
 					if (@available(iOS 10, *))
 					{
-						[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord mode:AVAudioSessionModeVoiceChat options:opts error:&ActiveError];
+						[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord mode:AVAudioSessionModeDefault options:opts error:&ActiveError];
 					}
 					else
 					{
@@ -615,8 +616,15 @@ bool FIOSCoreDelegates::PassesPushNotificationFilters(NSDictionary* Payload)
 
 - (void)EnableVoiceChat:(bool)bEnable
 {
-    self.bVoiceChatEnabled = bEnable;
-	[self ToggleAudioSession:self.bAudioActive force:true];
+	self.bVoiceChatEnabled = false;
+	
+	if (FApp::IsUnattended())
+	{
+		return;
+	}
+	
+	self.bVoiceChatEnabled = bEnable;
+	[self ToggleAudioSession : self.bAudioActive force : true];
 }
 
 - (bool)IsVoiceChatEnabled
@@ -667,6 +675,15 @@ bool FIOSCoreDelegates::PassesPushNotificationFilters(NSDictionary* Payload)
     return self.bBatteryState;
 #endif
 }
+
+- (void)CheckForZoomAccessibility
+{
+#if !PLATFORM_TVOS
+    // warn about zoom conflicting
+    UIAccessibilityRegisterGestureConflictWithZoom();
+#endif
+}
+
 
 - (NSProcessInfoThermalState)GetThermalState
 {
@@ -1193,8 +1210,11 @@ FCriticalSection RenderSuspend;
     FCoreDelegates::ApplicationHasEnteredForegroundDelegate.Broadcast();
 }
 
+extern double GCStartTime;
 - (void)applicationDidBecomeActive:(UIApplication *)application
 {
+    // make sure a GC will not timeout because it was started before entering background
+    GCStartTime = FPlatformTime::Seconds();
 	/*
 	 Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
 	 */
@@ -1279,6 +1299,11 @@ FCriticalSection RenderSuspend;
 #ifdef __IPHONE_8_0
 - (void)application:(UIApplication *)application didRegisterUserNotificationSettings:(UIUserNotificationSettings *)notificationSettings
 {
+	if (FApp::IsUnattended())
+	{
+		return;
+	}
+	
 	[application registerForRemoteNotifications];
 	int32 types = (int32)[notificationSettings types];
     FFunctionGraphTask::CreateAndDispatchWhenReady([types]()

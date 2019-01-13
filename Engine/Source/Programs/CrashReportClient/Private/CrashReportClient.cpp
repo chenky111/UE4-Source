@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "CrashReportClient.h"
 #include "Misc/CommandLine.h"
@@ -127,7 +127,7 @@ FReply FCrashReportClient::SubmitAndRestart()
 				CrashedAppPathUri.RemoveAt(CrashedAppPathUri.Len() - 1);
 
 				// Re-run the application via the Launcher
-				FOpenLauncherOptions OpenOptions(FString::Printf(TEXT("apps/%s"), *CrashedAppPathUri));
+				FOpenLauncherOptions OpenOptions(FString::Printf(TEXT("apps/%s?action=launch"), *CrashedAppPathUri));
 				OpenOptions.bSilent = true;
 				if (LauncherPlatform->OpenLauncher(OpenOptions))
 				{

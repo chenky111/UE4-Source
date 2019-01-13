@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	RHIDefinitions.h: Render Hardware Interface definitions
@@ -384,18 +384,40 @@ enum EUniformBufferUsage
 enum EUniformBufferBaseType
 {
 	UBMT_INVALID,
+
+	// Parameter types.
 	UBMT_BOOL,
 	UBMT_INT32,
 	UBMT_UINT32,
 	UBMT_FLOAT32,
-	UBMT_STRUCT,
-	UBMT_SRV,
-	UBMT_UAV,
-	UBMT_SAMPLER,
+
+	// Untracked resources.
 	UBMT_TEXTURE,
+	UBMT_SRV,
+	UBMT_SAMPLER,
+
+	// Render graph tracked resources.
+	UBMT_GRAPH_TRACKED_TEXTURE,
+	UBMT_GRAPH_TRACKED_SRV,
+	UBMT_GRAPH_TRACKED_UAV,
+	UBMT_GRAPH_TRACKED_BUFFER,
+	UBMT_GRAPH_TRACKED_BUFFER_SRV,
+	UBMT_GRAPH_TRACKED_BUFFER_UAV,
+
+	// Nested structure.
+	UBMT_NESTED_STRUCT,
+
+	// Structure that is nested on C++ side, but included on shader side.
+	UBMT_INCLUDED_STRUCT,
+
+	// GPU Indirection reference of struct, like is currently named Uniform buffer.
+	UBMT_REFERENCED_STRUCT,
+
+	// Structure dedicated to setup render targets for a rasterizer pass.
+	UBMT_RENDER_TARGET_BINDING_SLOTS,
 
 	EUniformBufferBaseType_Num,
-	EUniformBufferBaseType_NumBits = 4,
+	EUniformBufferBaseType_NumBits = 5,
 };
 static_assert(EUniformBufferBaseType_Num <= (1 << EUniformBufferBaseType_NumBits), "EUniformBufferBaseType_Num will not fit on EUniformBufferBaseType_NumBits");
 
@@ -655,13 +677,14 @@ enum ETextureCreateFlags
 	TexCreate_DepthStencilTargetable= 1<<2,
 	// Texture can be used as a shader resource.
 	TexCreate_ShaderResource		= 1<<3,
-
 	// Texture is encoded in sRGB gamma space
 	TexCreate_SRGB					= 1<<4,
 	// Texture data is writable by the CPU
 	TexCreate_CPUWritable			= 1<<5,
 	// Texture will be created with an un-tiled format
 	TexCreate_NoTiling				= 1<<6,
+	// Texture will be used for video decode on Switch
+	TexCreate_VideoDecode			= 1<<7,
 	// Texture that may be updated every frame
 	TexCreate_Dynamic				= 1<<8,
 	// Texture will be used as a render pass attachment that will be read from
@@ -674,6 +697,8 @@ enum ETextureCreateFlags
 	TexCreate_GenerateMipCapable	= 1<<12,
 	// The texture can be partially allocated in fastvram
 	TexCreate_FastVRAMPartialAlloc  = 1<<13,
+	// Do not create associated shader resource view, only applicable to D3D11 and D3D12
+	TexCreate_DisableSRVCreation = 1 << 14,
 	// UnorderedAccessView (DX11 only)
 	// Warning: Causes additional synchronization between draw calls when using a render target allocated with this flag, use sparingly
 	// See: GCNPerformanceTweets.pdf Tip 37
@@ -1039,11 +1064,6 @@ inline bool RHIHasTiledGPU(const EShaderPlatform Platform)
 	return Platform == SP_METAL || Platform == SP_METAL_TVOS || Platform == SP_OPENGL_ES2_IOS || Platform == SP_OPENGL_ES2_ANDROID || Platform == SP_OPENGL_ES3_1_ANDROID;
 }
 
-inline bool RHISupportsVertexShaderLayer(const EShaderPlatform Platform)
-{
-	return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM4) && IsPCPlatform(Platform) && IsMetalPlatform(Platform);
-}
-
 inline bool RHISupportsMobileMultiView(const EShaderPlatform Platform)
 {
 	return (Platform == EShaderPlatform::SP_OPENGL_ES3_1_ANDROID || Platform == EShaderPlatform::SP_OPENGL_ES2_ANDROID);
@@ -1094,7 +1114,33 @@ inline int32 GetFeatureLevelMaxNumberOfBones(ERHIFeatureLevel::Type FeatureLevel
 
 inline bool IsUniformBufferResourceType(EUniformBufferBaseType BaseType)
 {
-	return BaseType == UBMT_SRV || BaseType == UBMT_UAV || BaseType == UBMT_SAMPLER || BaseType == UBMT_TEXTURE;
+	return
+		BaseType == UBMT_TEXTURE ||
+		BaseType == UBMT_SRV ||
+		BaseType == UBMT_SAMPLER ||
+		BaseType == UBMT_GRAPH_TRACKED_TEXTURE ||
+		BaseType == UBMT_GRAPH_TRACKED_SRV ||
+		BaseType == UBMT_GRAPH_TRACKED_UAV ||
+		BaseType == UBMT_GRAPH_TRACKED_BUFFER ||
+		BaseType == UBMT_GRAPH_TRACKED_BUFFER_SRV ||
+		BaseType == UBMT_GRAPH_TRACKED_BUFFER_UAV ||
+		BaseType == UBMT_RENDER_TARGET_BINDING_SLOTS;
+}
+
+inline bool IsUniformBufferResourceTypeIgnoreByRHI(EUniformBufferBaseType BaseType)
+{
+	return BaseType == UBMT_RENDER_TARGET_BINDING_SLOTS;
+}
+
+inline bool IsUniformBufferResourceIndirectionType(EUniformBufferBaseType BaseType)
+{
+	return
+		BaseType == UBMT_GRAPH_TRACKED_TEXTURE ||
+		BaseType == UBMT_GRAPH_TRACKED_SRV ||
+		BaseType == UBMT_GRAPH_TRACKED_UAV ||
+		BaseType == UBMT_GRAPH_TRACKED_BUFFER ||
+		BaseType == UBMT_GRAPH_TRACKED_BUFFER_SRV ||
+		BaseType == UBMT_GRAPH_TRACKED_BUFFER_UAV;
 }
 
 inline const TCHAR* GetShaderFrequencyString(EShaderFrequency Frequency, bool bIncludePrefix = true)

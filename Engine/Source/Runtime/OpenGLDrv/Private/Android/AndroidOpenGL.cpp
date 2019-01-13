@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "CoreMinimal.h"
 #include "Android/AndroidPlatform.h"
@@ -813,7 +813,7 @@ void FAndroidOpenGL::ProcessExtensions(const FString& ExtensionsString)
 	}
 
 	// Get procedures
-	if (bSupportsOcclusionQueries || bSupportsDisjointTimeQueries)
+	if (bSupportsOcclusionQueries || SupportsDisjointTimeQueries())
 	{
 		if (bES30Support || bES31Support)
 		{
@@ -836,7 +836,7 @@ void FAndroidOpenGL::ProcessExtensions(const FString& ExtensionsString)
 			glGetQueryObjectuivEXT = (PFNGLGETQUERYOBJECTUIVEXTPROC)((void*)eglGetProcAddress("glGetQueryObjectuivEXT"));
 		}
 
-		if (bSupportsDisjointTimeQueries)
+		if (SupportsDisjointTimeQueries())
 		{
 			glQueryCounterEXT			= (PFNGLQUERYCOUNTEREXTPROC)		((void*)eglGetProcAddress("glQueryCounterEXT"));
 			glGetQueryObjectui64vEXT	= (PFNGLGETQUERYOBJECTUI64VEXTPROC)	((void*)eglGetProcAddress("glGetQueryObjectui64vEXT"));

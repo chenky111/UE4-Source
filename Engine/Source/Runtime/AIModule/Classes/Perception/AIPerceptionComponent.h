@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -37,10 +37,7 @@ struct AIMODULE_API FActorPerceptionInfo
 	FActorPerceptionInfo(AActor* InTarget = NULL)
 		: Target(InTarget), DominantSense(FAISenseID::InvalidID())
 	{
-		for (uint32 Index = 0; Index < FAISenseID::GetSize(); ++Index)
-		{
-			LastSensedStimuli.Add(FAIStimulus());
-		}
+		LastSensedStimuli.AddDefaulted(FAISenseID::GetSize());
 	}
 
 	/** Retrieves last known location. Active (last reported as "successful")
@@ -293,7 +290,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "AI|Perception")
 	void GetKnownPerceivedActors(TSubclassOf<UAISense> SenseToUse, TArray<AActor*>& OutActors) const;
 	
-	DEPRECATED(4.13, "GetPerceivedActors is deprecated. Use GetCurrentlyPerceivedActors or GetKnownPerceivedActors")
+	UE_DEPRECATED(4.13, "GetPerceivedActors is deprecated. Use GetCurrentlyPerceivedActors or GetKnownPerceivedActors")
 	UFUNCTION(BlueprintCallable, Category = "AI|Perception")
 	void GetPerceivedActors(TSubclassOf<UAISense> SenseToUse, TArray<AActor*>& OutActors) const;
 	
@@ -316,7 +313,7 @@ public:
 	FActorPerceptionUpdatedDelegate OnTargetPerceptionUpdated;
 
 protected:
-	DEPRECATED(4.11, "Function has been renamed and made public. Please use UpdatePerceptionWhitelist instead")
+	UE_DEPRECATED(4.11, "Function has been renamed and made public. Please use UpdatePerceptionWhitelist instead")
 	void UpdatePerceptionFilter(FAISenseID Channel, bool bNewValue);
 
 	FActorPerceptionContainer& GetPerceptualData() { return PerceptualData; }

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -894,6 +894,12 @@ public:
 	 * @return The media player facade.
 	 */
 	TSharedRef<FMediaPlayerFacade, ESPMode::ThreadSafe> GetPlayerFacade() const;
+
+	/**
+	 * Register player with media module to be ticked
+	 *
+	 */
+	void RegisterWithMediaModule();
 
 	/**
 	 * Get the current play list.

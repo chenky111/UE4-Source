@@ -1,9 +1,10 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using AutomationTool;
+using AutomationTool.DeviceReservation;
 using UnrealBuildTool;
 using System.Threading;
 using System.Text;
@@ -62,6 +63,11 @@ namespace Gauntlet
 		/// List of files to copy to the device.
 		/// </summary>
 		public List<UnrealFileToCopy> FilesToCopy;
+
+		/// <summary>
+		/// Role device configuration 
+		/// </summary>
+		public ConfigureDeviceHandler ConfigureDevice;
 
 		/// <summary>
 		/// Properties we require our build to have
@@ -127,7 +133,7 @@ namespace Gauntlet
 				RequiredBuildFlags |= BuildFlags.CanReplaceExecutable;
 			}
 
-            if (Globals.Params.ParseParam("bulk") && InPlatform == UnrealTargetPlatform.Android)
+            if (Globals.Params.ParseParam("bulk") && (InPlatform == UnrealTargetPlatform.Android || InPlatform == UnrealTargetPlatform.IOS))
             {
                 RequiredBuildFlags |= BuildFlags.Bulk;
             }
@@ -496,8 +502,9 @@ namespace Gauntlet
 				return;
 			}
 
-			// @todo Notify service of problem (reboot device, notify email, etc)
-			// also, pass problem devices to service when asking for reservation, so don't get that device back
+			// report device has a problem to the pool
+			DevicePool.Instance.ReportDeviceError(Device, "MarkProblemDevice");
+
 			ProblemDevices.Add(new ProblemDevice(Device.Name, Device.Platform));
 		}
 
@@ -792,12 +799,14 @@ namespace Gauntlet
 						InstallSuccess = false;
 						break;
 					}
-										
 
 					if (Globals.CancelSignalled)
 					{
 						break;
 					}
+
+					// Device has app installed, give role a chance to configure device
+					Role.ConfigureDevice?.Invoke(Device);
 
 					InstallsToRoles[Install] = Role;
 				}

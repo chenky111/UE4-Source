@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "BoneControllers/AnimNode_SkeletalControlBase.h"
 #include "Animation/AnimInstanceProxy.h"
@@ -81,7 +81,7 @@ void FAnimNode_SkeletalControlBase::Update_AnyThread(const FAnimationUpdateConte
 	ActualAlpha = 0.f;
 	if (IsLODEnabled(Context.AnimInstanceProxy))
 	{
-		EvaluateGraphExposedInputs.Execute(Context);
+		GetEvaluateGraphExposedInputs().Execute(Context);
 
 		// Apply the skeletal control if it's valid
 		switch (AlphaInputType)

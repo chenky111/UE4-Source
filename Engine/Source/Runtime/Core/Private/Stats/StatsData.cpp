@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Stats/StatsData.h"
 #include "Templates/Greater.h"
@@ -809,6 +809,18 @@ void FStatsThreadState::ToggleFindMemoryExtensiveStats()
 {
 	bFindMemoryExtensiveStats = !bFindMemoryExtensiveStats;
 	UE_LOG(LogStats, Log, TEXT("bFindMemoryExtensiveStats is %s now"), bFindMemoryExtensiveStats?TEXT("enabled"):TEXT("disabled"));
+}
+
+void FStatsThreadState::EnableFindMemoryExtensiveStats()
+{
+	bFindMemoryExtensiveStats = true;
+	UE_LOG(LogStats, Log, TEXT("bFindMemoryExtensiveStats is enabled now"));
+}
+
+void FStatsThreadState::DisableFindMemoryExtensiveStats()
+{
+	bFindMemoryExtensiveStats = false;
+	UE_LOG(LogStats, Log, TEXT("bFindMemoryExtensiveStats is disabled now"));
 }
 
 void FStatsThreadState::ProcessNonFrameStats(FStatMessagesArray& Data, TSet<FName>* NonFrameStatsFound)

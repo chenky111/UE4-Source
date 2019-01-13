@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "EditableSkeleton.h"
 #include "Editor.h"
@@ -247,7 +247,7 @@ bool FEditableSkeleton::AddSmartname(const FName& InContainerName, const FName& 
 	return false;
 }
 
-void FEditableSkeleton::RenameSmartname(const FName& InContainerName, SmartName::UID_Type InNameUid, const FName& InNewName)
+void FEditableSkeleton::RenameSmartname(const FName InContainerName, SmartName::UID_Type InNameUid, const FName InNewName)
 {
 	FSmartName CurveToRename;
 	if (!Skeleton->GetSmartNameByUID(USkeleton::AnimCurveMappingName, InNameUid, CurveToRename))
@@ -560,7 +560,7 @@ static USkeletalMeshSocket* FindSocket(const FName& InSocketName, USkeletalMesh*
 	return Socket;
 }
 
-void FEditableSkeleton::RenameSocket(const FName& OldSocketName, const FName& NewSocketName, USkeletalMesh* InSkeletalMesh)
+void FEditableSkeleton::RenameSocket(const FName OldSocketName, const FName NewSocketName, USkeletalMesh* InSkeletalMesh)
 {
 	USkeletalMeshSocket* SocketData = FindSocket(OldSocketName, InSkeletalMesh, Skeleton);
 
@@ -672,6 +672,13 @@ void FEditableSkeleton::HandlePasteSockets(const FName& InBoneName, USkeletalMes
 		                                            } );
 		TextObjectFactory.ProcessBuffer(nullptr, RF_Transactional, PastePtr);
 	}
+}
+
+USkeletalMeshSocket* FEditableSkeleton::AddSocket(const FName& InBoneName)
+{
+	USkeletalMeshSocket* NewSocket = HandleAddSocket(InBoneName);
+	OnTreeRefresh.Broadcast();
+	return NewSocket;
 }
 
 USkeletalMeshSocket* FEditableSkeleton::HandleAddSocket(const FName& InBoneName)
@@ -1007,7 +1014,7 @@ bool FEditableSkeleton::DoesVirtualBoneAlreadyExist(const FString& InVBName) con
 	return false;
 }
 
-void FEditableSkeleton::RenameVirtualBone(const FName& OriginalName, const FName& InVBName)
+void FEditableSkeleton::RenameVirtualBone(const FName OriginalName, const FName InVBName)
 {
 	FScopedTransaction Transaction(LOCTEXT("RenameVirtualBone", "Rename Virtual Bone in Skeleton"));
 	Skeleton->RenameVirtualBone(OriginalName, InVBName);
@@ -1122,7 +1129,7 @@ void FEditableSkeleton::AddSyncMarker(FName NewName)
 	Skeleton->RegisterMarkerName(NewName);
 }
 
-int32 FEditableSkeleton::RenameNotify(const FName& NewName, const FName& OldName)
+int32 FEditableSkeleton::RenameNotify(const FName NewName, const FName OldName)
 {
 	const FScopedTransaction Transaction(LOCTEXT("RenameAnimNotify", "Rename Anim Notify"));
 	Skeleton->Modify();
@@ -1244,7 +1251,7 @@ void FEditableSkeleton::SetAdditionalPreviewSkeletalMeshes(class UDataAsset* InP
 	}
 }
 
-void FEditableSkeleton::RenameRetargetSource(const FName& InOldName, const FName& InNewName)
+void FEditableSkeleton::RenameRetargetSource(const FName InOldName, const FName InNewName)
 {
 	const FScopedTransaction Transaction(LOCTEXT("RetargetSourceWindow_Rename", "Rename Retarget Source"));
 
@@ -1611,7 +1618,7 @@ void FEditableSkeleton::DeleteSlotGroup(const FName& InGroupName)
 	Skeleton->RemoveSlotGroup(InGroupName);
 }
 
-void FEditableSkeleton::RenameSlotName(const FName& InOldSlotName, const FName& InNewSlotName)
+void FEditableSkeleton::RenameSlotName(const FName InOldSlotName, const FName InNewSlotName)
 {
 	const FScopedTransaction Transaction(LOCTEXT("RenameSlotName", "Rename Slot Name"));
 	Skeleton->Modify();

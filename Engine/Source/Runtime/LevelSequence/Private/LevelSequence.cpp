@@ -1,6 +1,7 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "LevelSequence.h"
+#include "ILevelSequenceMetaData.h"
 #include "Engine/EngineTypes.h"
 #include "HAL/IConsoleManager.h"
 #include "Components/ActorComponent.h"
@@ -52,7 +53,6 @@ ULevelSequence::ULevelSequence(const FObjectInitializer& ObjectInitializer)
 
 void ULevelSequence::Initialize()
 {
-	// @todo sequencer: gmp: fix me
 	MovieScene = NewObject<UMovieScene>(this, NAME_None, RF_Transactional);
 
 	const bool bFrameLocked = CVarDefaultEvaluationType.GetValueOnGameThread() != 0;
@@ -104,7 +104,30 @@ void ULevelSequence::GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) co
 	}
 #endif
 
+	for (UObject* MetaData : MetaDataObjects)
+	{
+		ILevelSequenceMetaData* MetaDataInterface = Cast<ILevelSequenceMetaData>(MetaData);
+		if (MetaDataInterface)
+		{
+			MetaDataInterface->ExtendAssetRegistryTags(OutTags);
+		}
+	}
+
 	Super::GetAssetRegistryTags(OutTags);
+}
+
+void ULevelSequence::GetAssetRegistryTagMetadata(TMap<FName, FAssetRegistryTagMetadata>& OutMetadata) const
+{
+	for (UObject* MetaData : MetaDataObjects)
+	{
+		ILevelSequenceMetaData* MetaDataInterface = Cast<ILevelSequenceMetaData>(MetaData);
+		if (MetaDataInterface)
+		{
+			MetaDataInterface->ExtendAssetRegistryTagMetaData(OutMetadata);
+		}
+	}
+
+	Super::GetAssetRegistryTagMetadata(OutMetadata);
 }
 
 void PurgeLegacyBlueprints(UObject* InObject, UPackage* Package)
@@ -329,6 +352,16 @@ void ULevelSequence::UnbindPossessableObjects(const FGuid& ObjectId)
 
 	// Legacy object references
 	ObjectReferences.Map.Remove(ObjectId);
+}
+
+void ULevelSequence::UnbindObjects(const FGuid& ObjectId, const TArray<UObject*>& InObjects, UObject* InContext)
+{
+	BindingReferences.RemoveObjects(ObjectId, InObjects, InContext);
+}
+
+void ULevelSequence::UnbindInvalidObjects(const FGuid& ObjectId, UObject* InContext)
+{
+	BindingReferences.RemoveInvalidObjects(ObjectId, InContext);
 }
 
 #if WITH_EDITOR

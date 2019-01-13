@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "GenericPlatform/GenericPlatformProcess.h"
 #include "Misc/Timespan.h"
@@ -16,6 +16,7 @@
 #include "Misc/CoreStats.h"
 #include "Misc/EventPool.h"
 #include "Misc/EngineVersion.h"
+#include "ProfilingDebugging/CsvProfiler.h"
 
 #ifndef DEFAULT_NO_THREADING
 	#define DEFAULT_NO_THREADING 0
@@ -349,6 +350,7 @@ bool FPThreadEvent::Wait(uint32 WaitTime, const bool bIgnoreThreadIdleStats /*= 
 	WaitForStats();
 
 	SCOPE_CYCLE_COUNTER(STAT_EventWait);
+	CSV_SCOPED_TIMING_STAT_EXCLUSIVE_CONDITIONAL(EventWait, IsInGameThread());
 	FThreadIdleStats::FScopeIdle Scope(bIgnoreThreadIdleStats);
 
 	check(bInitialized);

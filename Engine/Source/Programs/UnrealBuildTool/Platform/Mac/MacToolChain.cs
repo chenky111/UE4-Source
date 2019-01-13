@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections;
@@ -401,11 +401,6 @@ namespace UnrealBuildTool
 				PCHArguments.Append("\"");
 			}
 
-			foreach(FileItem ForceIncludeFile in CompileEnvironment.ForceIncludeFiles)
-			{
-				PCHArguments.Append(String.Format(" -include \"{0}\"", ForceIncludeFile.Location));
-			}
-
 			// Add include paths to the argument list.
 			HashSet<DirectoryReference> AllIncludes = new HashSet<DirectoryReference>(CompileEnvironment.IncludePaths.UserIncludePaths);
 			AllIncludes.UnionWith(CompileEnvironment.IncludePaths.SystemIncludePaths);
@@ -422,6 +417,19 @@ namespace UnrealBuildTool
 				Arguments.Append(" -D\"");
 				Arguments.Append(DefinitionArgument);
 				Arguments.Append("\"");
+			}
+
+			List<string> FrameworksSearchPaths = new List<string>();
+			foreach (UEBuildFramework Framework in CompileEnvironment.AdditionalFrameworks)
+			{
+				string FrameworkPath = Path.GetDirectoryName(Path.GetFullPath(Framework.FrameworkName));
+				if (!FrameworksSearchPaths.Contains(FrameworkPath))
+				{
+					Arguments.Append(" -F \"");
+					Arguments.Append(FrameworkPath);
+					Arguments.Append("\"");
+					FrameworksSearchPaths.Add(FrameworkPath);
+				}
 			}
 
 			CPPOutput Result = new CPPOutput();
@@ -464,6 +472,11 @@ namespace UnrealBuildTool
 
 					// only use PCH for .cpp files
 					FileArguments += PCHArguments.ToString();
+				}
+
+				foreach (FileItem ForceIncludeFile in CompileEnvironment.ForceIncludeFiles)
+				{
+					FileArguments += String.Format(" -include \"{0}\"", ForceIncludeFile.Location);
 				}
 
 				// Add the C++ source file and its included files to the prerequisite item list.
@@ -1156,8 +1169,8 @@ namespace UnrealBuildTool
 			// Deletes ay existing file on the building machine. Also, waits 30 seconds, if needed, for the input file to be created in an attempt to work around
 			// a problem where dsymutil would exit with an error saying the input file did not exist.
 			// Note that the source and dest are switched from a copy command
-			GenDebugAction.CommandArguments = string.Format("-c 'rm -rf \"{2}\"; for i in {{1..30}}; do if [ -f \"{1}\" ] ; then break; else echo\"Waiting for {1} before generating dSYM file.\"; sleep 1; fi; done; \"{0}\"dsymutil -f \"{1}\" -o \"{2}\"'",
-				Settings.ToolchainDir,
+			GenDebugAction.CommandArguments = string.Format("-c 'rm -rf \"{2}\"; for i in {{1..30}}; do if [ -f \"{1}\" ] ; then break; else echo\"Waiting for {1} before generating dSYM file.\"; sleep 1; fi; done; \"{0}\" -f \"{1}\" -o \"{2}\"'",
+                GetDsymutilPath(),
 				MachOBinary.AbsolutePath,
 				OutputFile.AbsolutePath);
 			if (LinkEnvironment.bIsCrossReferenced)
@@ -1352,7 +1365,7 @@ namespace UnrealBuildTool
 							BuildProducts.Add(FileReference.Combine(BundleContentsDirectory, Resource.BundleContentsSubdir, ResourceFile.Substring(Path.GetDirectoryName(Resource.ResourcePath).Length + 1)), BuildProductType.RequiredResource);
 						}
 					}
-					else
+					else if (BundleContentsDirectory != null)
 					{
 						BuildProducts.Add(FileReference.Combine(BundleContentsDirectory, Resource.BundleContentsSubdir, Path.GetFileName(Resource.ResourcePath)), BuildProductType.RequiredResource);
 					}

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -11,7 +11,9 @@
 
 class AActor;
 class UCameraComponent;
+class UMovieScene;
 class UMovieSceneSection;
+class UMovieSceneSequence;
 class USceneComponent;
 class USoundBase;
 struct FRichCurve;
@@ -50,6 +52,11 @@ public:
  	 * Sort consecutive sections so that they are in order based on start time
  	 */
 	static void SortConsecutiveSections(TArray<UMovieSceneSection*>& Sections);
+
+	/*
+	 * Gather up descendant movie scenes from the incoming sequence
+	 */
+	static void GetDescendantMovieScenes(UMovieSceneSequence* InSequence, TArray<UMovieScene*> & InMovieScenes);
 
 	/**
 	 * Get the scene component from the runtime object
@@ -243,17 +250,6 @@ public:
 		return PropertyName;
 	}
 
-	template<typename ValueType>
-	DEPRECATED(4.15, "Please use GetCurrentValue(const UObject&)")
-	ValueType GetCurrentValue(const UObject* Object) { check(Object) return GetCurrentValue<ValueType>(*Object); }
-	template <typename ValueType>
-	DEPRECATED(4.15, "Please use CallFunction(UObject&)")
-	void CallFunction( UObject* InRuntimeObject, ValueType* PropertyValue ) { CallFunction<ValueType>(*InRuntimeObject, *PropertyValue); }
-	DEPRECATED(4.15, "UpdateBindings is no longer necessary")
-	void UpdateBindings( const TArray<TWeakObjectPtr<UObject>>& InRuntimeObjects ){}
-	DEPRECATED(4.15, "UpdateBindings is no longer necessary")
-	void UpdateBinding( const TWeakObjectPtr<UObject>& InRuntimeObject ) {}
-
 private:
 
 	struct FPropertyAddress
@@ -337,3 +333,7 @@ private:
 template<> MOVIESCENE_API void FTrackInstancePropertyBindings::CallFunction<bool>(UObject& InRuntimeObject, TCallTraits<bool>::ParamType PropertyValue);
 template<> MOVIESCENE_API bool FTrackInstancePropertyBindings::GetCurrentValue<bool>(const UObject& Object);
 template<> MOVIESCENE_API void FTrackInstancePropertyBindings::SetCurrentValue<bool>(UObject& Object, TCallTraits<bool>::ParamType InValue);
+
+template<> MOVIESCENE_API void FTrackInstancePropertyBindings::CallFunction<UObject*>(UObject& InRuntimeObject, UObject* PropertyValue);
+template<> MOVIESCENE_API UObject* FTrackInstancePropertyBindings::GetCurrentValue<UObject*>(const UObject& InRuntimeObject);
+template<> MOVIESCENE_API void FTrackInstancePropertyBindings::SetCurrentValue<UObject*>(UObject& InRuntimeObject, UObject* InValue);

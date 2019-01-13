@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "AnimNodes/AnimNode_CurveSource.h"
 #include "AnimationRuntime.h"
@@ -98,5 +98,5 @@ void FAnimNode_CurveSource::Evaluate_AnyThread(FPoseContext& Output)
 void FAnimNode_CurveSource::Update_AnyThread(const FAnimationUpdateContext& Context)
 {
 	// Evaluate any BP logic plugged into this node
-	EvaluateGraphExposedInputs.Execute(Context);
+	GetEvaluateGraphExposedInputs().Execute(Context);
 }

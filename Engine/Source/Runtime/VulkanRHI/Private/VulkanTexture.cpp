@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	VulkanTexture.cpp: Vulkan texture RHI implementation.
@@ -10,6 +10,17 @@
 #include "VulkanPendingState.h"
 #include "Containers/ResourceArray.h"
 #include "VulkanLLM.h"
+
+
+int32 GVulkanSubmitOnTextureUnlock = 1;
+static FAutoConsoleVariableRef CVarVulkanSubmitOnTextureUnlock(
+	TEXT("r.Vulkan.SubmitOnTextureUnlock"),
+	GVulkanSubmitOnTextureUnlock,
+	TEXT("Whether to submit upload cmd buffer on each texture unlock.\n")
+	TEXT(" 0: Do not submit\n")
+	TEXT(" 1: Submit (default)"),
+	ECVF_Default
+);
 
 static FCriticalSection GTextureMapLock;
 
@@ -136,7 +147,10 @@ inline void FVulkanSurface::InternalLockWrite(FVulkanCommandListContext& Context
 
 	Surface->Device->GetStagingManager().ReleaseBuffer(CmdBuffer, StagingBuffer);
 
-	Context.GetCommandBufferManager()->SubmitUploadCmdBuffer();
+	if (GVulkanSubmitOnTextureUnlock != 0)
+	{
+		Context.GetCommandBufferManager()->SubmitUploadCmdBuffer();
+	}
 }
 
 struct FRHICommandLockWriteTexture final : public FRHICommand<FRHICommandLockWriteTexture>
@@ -411,6 +425,40 @@ struct FRHICommandInitialClearTexture final : public FRHICommand<FRHICommandInit
 	}
 };
 
+struct FRHICommandRegisterImageLayout final : public FRHICommand<FRHICommandRegisterImageLayout>
+{
+	VkImage Image;
+	VkImageLayout ImageLayout;
+
+	FRHICommandRegisterImageLayout(VkImage InImage, VkImageLayout InImageLayout)
+		: Image(InImage)
+		, ImageLayout(InImageLayout)
+	{
+	}
+
+	void Execute(FRHICommandListBase& RHICmdList)
+	{
+		((FVulkanCommandListContext&)RHICmdList.GetContext()).FindOrAddLayout(Image, ImageLayout);
+	}
+};
+
+struct FRHICommandOnDestroyImage final : public FRHICommand<FRHICommandOnDestroyImage>
+{
+	VkImage Image;
+	FVulkanDevice* Device;
+
+	FRHICommandOnDestroyImage(VkImage InImage, FVulkanDevice* InDevice)
+		: Image(InImage)
+		, Device(InDevice)
+	{
+	}
+
+	void Execute(FRHICommandListBase& RHICmdList)
+	{
+		Device->NotifyDeletedImage(Image);
+	}
+};
+
 
 FVulkanSurface::FVulkanSurface(FVulkanDevice& InDevice, VkImageViewType ResourceType, EPixelFormat InFormat,
 								uint32 SizeX, uint32 SizeY, uint32 SizeZ, bool bArray, uint32 ArraySize, uint32 InNumMips,
@@ -491,7 +539,7 @@ FVulkanSurface::FVulkanSurface(FVulkanDevice& InDevice, VkImageViewType Resource
 		else
 		{
 			check(IsInRenderingThread());
-			new (RHICmdList.AllocCommand<FRHICommandInitialClearTexture>()) FRHICommandInitialClearTexture(this, CreateInfo.ClearValueBinding, bTransitionToPresentable);
+			ALLOC_COMMAND_CL(RHICmdList, FRHICommandInitialClearTexture)(this, CreateInfo.ClearValueBinding, bTransitionToPresentable);
 		}
 	}
 }
@@ -553,7 +601,17 @@ void FVulkanSurface::Destroy()
 	// - Owner of VkImage has "bIsImageOwner" set to "true".
 	if (bIsImageOwner)
 	{
-		Device->NotifyDeletedImage(Image);
+		FRHICommandList& RHICmdList = FRHICommandListExecutor::GetImmediateCommandList();
+		if (!IsInRenderingThread() || (RHICmdList.Bypass() || !IsRunningRHIInSeparateThread()))
+		{
+			Device->NotifyDeletedImage(Image);
+		}
+		else
+		{
+			check(IsInRenderingThread());
+			new (RHICmdList.AllocCommand<FRHICommandOnDestroyImage>()) FRHICommandOnDestroyImage(Image, Device);
+		}
+				
 		bIsImageOwner = false;
 
 		uint64 Size = 0;
@@ -941,6 +999,7 @@ static void DoAsyncReallocateTexture2D(FVulkanCommandListContext& Context, FVulk
 
 		Barrier.Execute(CmdBuffer);
 	}
+	Context.GetTransitionAndLayoutManager().FindOrAddLayoutRW(OldTexture->Surface.Image, VK_IMAGE_LAYOUT_UNDEFINED) = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
 	VulkanRHI::vkCmdCopyImage(StagingCommandBuffer, OldTexture->Surface.Image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, NewTexture->Surface.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, NumSharedMips, Regions);
 
@@ -952,7 +1011,7 @@ static void DoAsyncReallocateTexture2D(FVulkanCommandListContext& Context, FVulk
 		Barrier.SetTransition(BarrierIndex, EImageLayoutBarrier::TransferDest, VulkanRHI::EImageLayoutBarrier::PixelShaderRead);
 		Barrier.Execute(CmdBuffer);
 	}
-	Context.GetTransitionAndLayoutManager().FindOrAddLayoutRW(NewTexture->Surface.Image, VK_IMAGE_LAYOUT_UNDEFINED) = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	Context.GetTransitionAndLayoutManager().FindOrAddLayoutRW(NewTexture->Surface.Image, VK_IMAGE_LAYOUT_UNDEFINED) = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 	// request is now complete
 	RequestStatus->Decrement();
@@ -1002,7 +1061,7 @@ FTexture2DRHIRef FVulkanDynamicRHI::AsyncReallocateTexture2D_RenderThread(class 
 	FRHIResourceCreateInfo CreateInfo;
 	FVulkanTexture2D* NewTexture = new FVulkanTexture2D(*Device, OldTexture->GetFormat(), NewSizeX, NewSizeY, NewMipCount, OldTexture->GetNumSamples(), OldTexture->GetFlags(), CreateInfo);
 
-	new (RHICmdList.AllocCommand<FRHICommandVulkanAsyncReallocateTexture2D>()) FRHICommandVulkanAsyncReallocateTexture2D(Device->GetImmediateContext(), OldTexture, NewTexture, NewMipCount, NewSizeX, NewSizeY, RequestStatus);
+	ALLOC_COMMAND_CL(RHICmdList, FRHICommandVulkanAsyncReallocateTexture2D)(Device->GetImmediateContext(), OldTexture, NewTexture, NewMipCount, NewSizeX, NewSizeY, RequestStatus);
 
 	return NewTexture;
 }
@@ -1105,7 +1164,7 @@ void FVulkanDynamicRHI::InternalUnlockTexture2D(bool bFromRenderingThread, FText
 	else
 	{
 		check(IsInRenderingThread());
-		new (RHICmdList.AllocCommand<FRHICommandLockWriteTexture>()) FRHICommandLockWriteTexture(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
+		ALLOC_COMMAND_CL(RHICmdList, FRHICommandLockWriteTexture)(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
 	}
 }
 
@@ -1181,7 +1240,7 @@ void FVulkanDynamicRHI::RHIUnlockTexture2DArray(FTexture2DArrayRHIParamRef Textu
 	else
 	{
 		check(IsInRenderingThread());
-		new (RHICmdList.AllocCommand<FRHICommandLockWriteTexture>()) FRHICommandLockWriteTexture(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
+		ALLOC_COMMAND_CL(RHICmdList, FRHICommandLockWriteTexture)(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
 	}
 }
 
@@ -1256,7 +1315,7 @@ void FVulkanDynamicRHI::InternalUpdateTexture2D(bool bFromRenderingThread, FText
 	else
 	{
 		check(IsInRenderingThread());
-		new (RHICmdList.AllocCommand<FRHICommandLockWriteTexture>()) FRHICommandLockWriteTexture(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
+		ALLOC_COMMAND_CL(RHICmdList, FRHICommandLockWriteTexture)(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
 	}
 }
 
@@ -1338,7 +1397,7 @@ void FVulkanDynamicRHI::InternalUpdateTexture3D(bool bFromRenderingThread, FText
 	else
 	{
 		check(IsInRenderingThread());
-		new (RHICmdList.AllocCommand<FRHICommandLockWriteTexture>()) FRHICommandLockWriteTexture(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
+		ALLOC_COMMAND_CL(RHICmdList, FRHICommandLockWriteTexture)(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
 	}
 }
 
@@ -1436,10 +1495,15 @@ VkImageView FVulkanTextureView::StaticCreate(FVulkanDevice& Device, VkImage InIm
 	return OutView;
 }
 
-void FVulkanTextureView::Create(FVulkanDevice& Device, VkImage InImage, VkImageViewType ViewType, VkImageAspectFlags AspectFlags, EPixelFormat UEFormat, VkFormat Format, uint32 FirstMip, uint32 NumMips, uint32 ArraySliceIndex, uint32 NumArraySlices)
+void FVulkanTextureView::Create(FVulkanDevice& Device, VkImage InImage, VkImageViewType ViewType, VkImageAspectFlags AspectFlags, EPixelFormat UEFormat, VkFormat Format, uint32 FirstMip, uint32 NumMips, uint32 ArraySliceIndex, uint32 NumArraySlices, bool bUseIdentitySwizzle)
 {
-	View = StaticCreate(Device, InImage, ViewType, AspectFlags, UEFormat, Format, FirstMip, NumMips, ArraySliceIndex, NumArraySlices);
+	View = StaticCreate(Device, InImage, ViewType, AspectFlags, UEFormat, Format, FirstMip, NumMips, ArraySliceIndex, NumArraySlices, bUseIdentitySwizzle, nullptr);
 	Image = InImage;
+	
+	if (UseVulkanDescriptorCache())
+	{
+		ViewId = ++GVulkanImageViewHandleIdCounter;
+	}
 /*
 	switch (AspectFlags)
 	{
@@ -1457,10 +1521,15 @@ void FVulkanTextureView::Create(FVulkanDevice& Device, VkImage InImage, VkImageV
 */
 }
 
-void FVulkanTextureView::Create(FVulkanDevice& Device, VkImage InImage, VkImageViewType ViewType, VkImageAspectFlags AspectFlags, EPixelFormat UEFormat, VkFormat Format, uint32 FirstMip, uint32 NumMips, uint32 ArraySliceIndex, uint32 NumArraySlices, FSamplerYcbcrConversionInitializer& ConversionInitializer)
+void FVulkanTextureView::Create(FVulkanDevice& Device, VkImage InImage, VkImageViewType ViewType, VkImageAspectFlags AspectFlags, EPixelFormat UEFormat, VkFormat Format, uint32 FirstMip, uint32 NumMips, uint32 ArraySliceIndex, uint32 NumArraySlices, FSamplerYcbcrConversionInitializer& ConversionInitializer, bool bUseIdentitySwizzle)
 {
-	View = StaticCreate(Device, InImage, ViewType, AspectFlags, UEFormat, Format, FirstMip, NumMips, ArraySliceIndex, NumArraySlices, false, &ConversionInitializer);
+	View = StaticCreate(Device, InImage, ViewType, AspectFlags, UEFormat, Format, FirstMip, NumMips, ArraySliceIndex, NumArraySlices, bUseIdentitySwizzle, &ConversionInitializer);
 	Image = InImage;
+	
+	if (UseVulkanDescriptorCache())
+	{
+		ViewId = ++GVulkanImageViewHandleIdCounter;
+	}
 }
 
 void FVulkanTextureView::Destroy(FVulkanDevice& Device)
@@ -1471,6 +1540,7 @@ void FVulkanTextureView::Destroy(FVulkanDevice& Device)
 		Device.GetDeferredDeletionQueue().EnqueueResource(VulkanRHI::FDeferredDeletionQueue::EType::ImageView, View);
 		Image = VK_NULL_HANDLE;
 		View = VK_NULL_HANDLE;
+		ViewId = 0;
 	}
 }
 
@@ -1522,7 +1592,16 @@ FVulkanTextureBase::FVulkanTextureBase(FVulkanDevice& Device, VkImageViewType Re
 
 	if (!CreateInfo.BulkData)
 	{
-		Device.GetImmediateContext().FindOrAddLayout(Surface.Image, VK_IMAGE_LAYOUT_UNDEFINED);
+		FRHICommandList& RHICmdList = FRHICommandListExecutor::GetImmediateCommandList();
+		if (!IsInRenderingThread() || (RHICmdList.Bypass() || !IsRunningRHIInSeparateThread()))
+		{
+			Device.GetImmediateContext().FindOrAddLayout(Surface.Image, VK_IMAGE_LAYOUT_UNDEFINED);
+		}
+		else
+		{
+			check(IsInRenderingThread());
+			new (RHICmdList.AllocCommand<FRHICommandRegisterImageLayout>()) FRHICommandRegisterImageLayout(Surface.Image, VK_IMAGE_LAYOUT_UNDEFINED);
+		}
 		return;
 	}
 
@@ -1568,7 +1647,7 @@ FVulkanTextureBase::FVulkanTextureBase(FVulkanDevice& Device, VkImageViewType Re
 	else
 	{
 		check(IsInRenderingThread());
-		new (RHICmdList.AllocCommand<FRHICommandLockWriteTexture>()) FRHICommandLockWriteTexture(&Surface, SubresourceRange, Region, StagingBuffer);
+		ALLOC_COMMAND_CL(RHICmdList, FRHICommandLockWriteTexture)(&Surface, SubresourceRange, Region, StagingBuffer);
 	}
 }
 
@@ -1641,7 +1720,17 @@ FVulkanTextureBase::FVulkanTextureBase(FVulkanDevice& Device, VkImageViewType Re
 		PartialView->Create(Device, Surface.Image, Surface.ViewType, Surface.PartialAspectMask, Surface.PixelFormat, Surface.ViewFormat, 0, FMath::Max(NumMips, 1u), 0, FMath::Max(1u, SizeZ), ConversionInitializer);
 	}
 
-	Device.GetImmediateContext().FindOrAddLayout(InImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	FRHICommandList& RHICmdList = FRHICommandListExecutor::GetImmediateCommandList();
+	if (!IsInRenderingThread() || (RHICmdList.Bypass() || !IsRunningRHIInSeparateThread()))
+	{
+		Device.GetImmediateContext().FindOrAddLayout(InImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
+	else
+	{
+		check(IsInRenderingThread());
+		new (RHICmdList.AllocCommand<FRHICommandRegisterImageLayout>()) FRHICommandRegisterImageLayout(InImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
 }
 
 FVulkanTextureBase::~FVulkanTextureBase()
@@ -1662,11 +1751,6 @@ FVulkanTextureBase::~FVulkanTextureBase()
 #endif
 }
 
-VkImageView FVulkanTextureBase::CreateRenderTargetView(uint32 MipIndex, uint32 NumMips, uint32 ArraySliceIndex, uint32 NumArraySlices)
-{
-	return FVulkanTextureView::StaticCreate(*Surface.Device, Surface.Image, Surface.GetViewType(), Surface.GetFullAspectMask(), Surface.PixelFormat, Surface.ViewFormat, MipIndex, NumMips, ArraySliceIndex, NumArraySlices, true);
-}
-
 void FVulkanTextureBase::AliasTextureResources(const FVulkanTextureBase* SrcTexture)
 {
 	DestroyViews();
@@ -1675,11 +1759,13 @@ void FVulkanTextureBase::AliasTextureResources(const FVulkanTextureBase* SrcText
 	Surface.Image = SrcTexture->Surface.Image;
 	DefaultView.View = SrcTexture->DefaultView.View;
 	DefaultView.Image = SrcTexture->DefaultView.Image;
+	DefaultView.ViewId = SrcTexture->DefaultView.ViewId;
 
 	if (PartialView != &DefaultView)
 	{
 		PartialView->View = SrcTexture->PartialView->View;
 		PartialView->Image = SrcTexture->PartialView->Image;
+		PartialView->ViewId = SrcTexture->PartialView->ViewId;
 	}
 
 #if VULKAN_USE_MSAA_RESOLVE_ATTACHMENTS
@@ -1689,6 +1775,7 @@ void FVulkanTextureBase::AliasTextureResources(const FVulkanTextureBase* SrcText
 		MSAASurface->Image = SrcTexture->MSAASurface->Image;
 		MSAAView.View = SrcTexture->MSAAView.View;
 		MSAAView.Image = SrcTexture->MSAAView.Image;
+		MSAAView.ViewId = SrcTexture->MSAAView.ViewId;
 	}
 #endif
 
@@ -1758,6 +1845,7 @@ FVulkanBackBuffer::~FVulkanBackBuffer()
 		// Clear flags so ~FVulkanTexture2D() doesn't try to re-destroy it
 		Surface.UEFlags = 0;
 		DefaultView.View = VK_NULL_HANDLE;
+		DefaultView.ViewId = 0;
 		Surface.Image = VK_NULL_HANDLE;
 	}
 }
@@ -1906,7 +1994,7 @@ void FVulkanDynamicRHI::RHIUnlockTextureCubeFace(FTextureCubeRHIParamRef Texture
 	else
 	{
 		check(IsInRenderingThread());
-		new (RHICmdList.AllocCommand<FRHICommandLockWriteTexture>()) FRHICommandLockWriteTexture(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
+		ALLOC_COMMAND_CL(RHICmdList, FRHICommandLockWriteTexture)(&Texture->Surface, SubresourceRange, Region, StagingBuffer);
 	}
 }
 

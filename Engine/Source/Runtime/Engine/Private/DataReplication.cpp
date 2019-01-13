@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	DataChannel.cpp: Unreal datachannel implementation.
@@ -15,7 +15,8 @@
 #include "Net/RepLayout.h"
 #include "Engine/ActorChannel.h"
 #include "Engine/DemoNetDriver.h"
-
+#include "ProfilingDebugging/CsvProfiler.h"
+#include "Engine/Engine.h"
 
 DECLARE_CYCLE_STAT(TEXT("Custom Delta Property Rep Time"), STAT_NetReplicateCustomDeltaPropTime, STATGROUP_Game);
 DECLARE_CYCLE_STAT(TEXT("ReceiveRPC"), STAT_NetReceiveRPC, STATGROUP_Game);
@@ -95,6 +96,24 @@ public:
 	UNetDriver * Driver;
 };
 
+FObjectReplicator::FObjectReplicator() :
+	ObjectClass(nullptr),
+	ObjectPtr(nullptr),
+	bLastUpdateEmpty(false),
+	bOpenAckCalled(false),
+	bForceUpdateUnmapped(false),
+	Connection(nullptr),
+	OwningChannel(nullptr),
+	RepState(nullptr),
+	RemoteFunctions(nullptr)
+{
+}
+
+FObjectReplicator::~FObjectReplicator()
+{
+	CleanUp();
+}
+
 bool FObjectReplicator::SerializeCustomDeltaProperty( UNetConnection * Connection, void* Src, UProperty * Property, uint32 ArrayIndex, FNetBitWriter & OutBunch, TSharedPtr<INetDeltaBaseState> &NewFullState, TSharedPtr<INetDeltaBaseState> & OldState )
 {
 	check( NewFullState.IsValid() == false ); // NewState is passed in as NULL and instantiated within this function if necessary
@@ -147,17 +166,21 @@ void FObjectReplicator::InitRecentProperties( uint8* Source )
 	check( Connection != NULL );
 	check( !RepState.IsValid() );
 
-	UClass * InObjectClass = GetObject()->GetClass();
+	const bool bIsServer = Connection->Driver->IsServer();
+	UClass* InObjectClass = GetObject()->GetClass();
 
-	RepState = MakeShareable(new FRepState());
+	RepState = MakeUnique<FRepState>();
 
 	// Initialize the RepState memory
-	TSharedPtr<FRepChangedPropertyTracker> RepChangedPropertyTracker = Connection->Driver->FindOrCreateRepChangedPropertyTracker( GetObject() );
+	// Clients don't need RepChangedPropertyTracker's, as they are mainly
+	// used temporarily disable property replication, or store data
+	// for replays (and the DemoNetDriver will be acts as a server during recording).
+	TSharedPtr<FRepChangedPropertyTracker> RepChangedPropertyTracker = bIsServer ? Connection->Driver->FindOrCreateRepChangedPropertyTracker(GetObject()) : nullptr;
 
 	RepLayout->InitRepState( RepState.Get(), InObjectClass, Source, RepChangedPropertyTracker );
 	RepState->RepLayout = RepLayout;
 
-	if ( !Connection->Driver->IsServer() )
+	if ( !bIsServer)
 	{
 		// Clients don't need to initialize shadow state (and in fact it causes issues in replays)
 		return;
@@ -192,19 +215,35 @@ void FObjectReplicator::InitRecentProperties( uint8* Source )
 /** Takes Data, and compares against shadow state to log differences */
 bool FObjectReplicator::ValidateAgainstState( const UObject* ObjectState )
 {
-	if ( !RepLayout.IsValid() )
+	if (!RepLayout.IsValid())
 	{
 		UE_LOG(LogRep, Warning, TEXT("ValidateAgainstState: RepLayout.IsValid() == false"));
 		return false;
 	}
 
-	if ( !RepState.IsValid() )
+	if (!RepState.IsValid())
 	{
 		UE_LOG(LogRep, Warning, TEXT("ValidateAgainstState: RepState.IsValid() == false"));
 		return false;
 	}
 
-	if ( RepLayout->DiffProperties( &(RepState->RepNotifies), RepState->StaticBuffer.GetData(), ObjectState, EDiffPropertiesFlags::None ) )
+	if (!ChangelistMgr.IsValid())
+	{
+		UE_LOG(LogRep, Warning, TEXT("ValidateAgainstState: ChangelistMgr.IsValid() == false"));
+		return false;
+	}
+
+	FRepChangelistState* ChangelistState = ChangelistMgr->GetRepChangelistState();
+	if (ChangelistState == nullptr)
+	{
+		UE_LOG(LogRep, Warning, TEXT("ValidateAgainstState: ChangelistState == nullptr"));
+		return false;
+	}
+
+	FRepShadowDataBuffer ShadowData(ChangelistState->StaticBuffer.GetData());
+	FConstRepObjectDataBuffer ObjectData(ObjectState);
+
+	if ( RepLayout->DiffProperties( &(RepState->RepNotifies), ShadowData, ObjectData, EDiffPropertiesFlags::None ) )
 	{
 		UE_LOG(LogRep, Warning, TEXT("ValidateAgainstState: Properties changed for %s"), *ObjectState->GetName());
 		return false;
@@ -310,7 +349,8 @@ void FObjectReplicator::CleanUp()
 
 void FObjectReplicator::StartReplicating( class UActorChannel * InActorChannel )
 {
-	check( OwningChannel == nullptr );
+	check(OwningChannel == nullptr);
+	check(InActorChannel != nullptr);
 
 	UObject* const Object = GetObject();
 	if ( Object == nullptr )
@@ -366,15 +406,18 @@ void FObjectReplicator::StartReplicating( class UActorChannel * InActorChannel )
 		}
 	}
 
-	const UWorld* const World = Connection->Driver->GetWorld();
-	// Prefer the changelist manager on the main net driver (so we share across net drivers if possible)
-	if ( World && World->NetDriver )
+	if (Connection->Driver->IsServer())
 	{
-		ChangelistMgr = World->NetDriver->GetReplicationChangeListMgr( Object );
-	}
-	else
-	{
-		ChangelistMgr = Connection->Driver->GetReplicationChangeListMgr( Object );
+		const UWorld* const World = Connection->Driver->GetWorld();
+		// Prefer the changelist manager on the main net driver (so we share across net drivers if possible)
+		if (World && World->NetDriver && World->NetDriver->IsServer())
+		{
+			ChangelistMgr = World->NetDriver->GetReplicationChangeListMgr(Object);
+		}
+		else
+		{
+			ChangelistMgr = Connection->Driver->GetReplicationChangeListMgr(Object);
+		}
 	}
 }
 
@@ -413,7 +456,8 @@ void FReplicationChangelistMgr::Update( const UObject* InObject, const uint32 Re
 
 static FORCEINLINE void ValidateRetirementHistory( const FPropertyRetirement & Retire, const UObject* Object )
 {
-	checkf( Retire.SanityTag == FPropertyRetirement::ExpectedSanityTag, TEXT( "Invalid Retire.SanityTag. Object: %s" ), Object ? *Object->GetFullName() : TEXT( "NULL" ) );
+#if !UE_BUILD_SHIPPING
+	checkf( Retire.SanityTag == FPropertyRetirement::ExpectedSanityTag, TEXT( "Invalid Retire.SanityTag. Object: %s" ), *GetFullNameSafe(Object) );
 
 	FPropertyRetirement * Rec = Retire.Next;	// Note the first element is 'head' that we dont actually use
 
@@ -421,14 +465,15 @@ static FORCEINLINE void ValidateRetirementHistory( const FPropertyRetirement & R
 
 	while ( Rec != NULL )
 	{
-		checkf( Rec->SanityTag == FPropertyRetirement::ExpectedSanityTag, TEXT( "Invalid Rec->SanityTag. Object: %s" ), Object ? *Object->GetFullName() : TEXT( "NULL" ) );
-		checkf( Rec->OutPacketIdRange.Last >= Rec->OutPacketIdRange.First, TEXT( "Invalid packet id range (Last < First). Object: %s" ), Object ? *Object->GetFullName() : TEXT( "NULL" ) );
-		checkf( Rec->OutPacketIdRange.First >= LastRange.Last, TEXT( "Invalid packet id range (First < LastRange.Last). Object: %s" ), Object ? *Object->GetFullName() : TEXT( "NULL" ) );		// Bunch merging and queuing can cause this overlap
+		checkf( Rec->SanityTag == FPropertyRetirement::ExpectedSanityTag, TEXT( "Invalid Rec->SanityTag. Object: %s" ), *GetFullNameSafe(Object) );
+		checkf( Rec->OutPacketIdRange.Last >= Rec->OutPacketIdRange.First, TEXT( "Invalid packet id range (Last < First). Object: %s" ), *GetFullNameSafe(Object) );
+		checkf( Rec->OutPacketIdRange.First >= LastRange.Last, TEXT( "Invalid packet id range (First < LastRange.Last). Object: %s" ), *GetFullNameSafe(Object) );		// Bunch merging and queuing can cause this overlap
 
 		LastRange = Rec->OutPacketIdRange;
 
 		Rec = Rec->Next;
 	}
+#endif
 }
 
 void FObjectReplicator::StopReplicating( class UActorChannel * InActorChannel )
@@ -582,11 +627,21 @@ bool FObjectReplicator::ReceivedBunch( FNetBitReader& Bunch, const FReplicationF
 			PreNetReceive();
 		}
 
-		const bool bShouldReceiveRepNotifies = Connection->Driver->ShouldReceiveRepNotifiesForObject( Object );
+		EReceivePropertiesFlags ReceivePropFlags = EReceivePropertiesFlags::None;
+
+		if (Connection->Driver->ShouldReceiveRepNotifiesForObject(Object))
+		{
+			ReceivePropFlags |= EReceivePropertiesFlags::RepNotifies;
+		}
+
+		if (RepFlags.bSkipRoleSwap)
+		{
+			ReceivePropFlags |= EReceivePropertiesFlags::SkipRoleSwap;
+		}
 
 		bool bLocalHasUnmapped = false;
 
-		if ( !RepLayout->ReceiveProperties( OwningChannel, ObjectClass, RepState.Get(), ( void* )Object, Bunch, bLocalHasUnmapped, bShouldReceiveRepNotifies, bGuidsChanged ) )
+		if ( !RepLayout->ReceiveProperties(OwningChannel, ObjectClass, RepState.Get(), ( void* )Object, Bunch, bLocalHasUnmapped, bGuidsChanged, ReceivePropFlags ) )
 		{
 			UE_LOG( LogRep, Error, TEXT( "RepLayout->ReceiveProperties FAILED: %s" ), *Object->GetFullName() );
 			return false;
@@ -824,6 +879,7 @@ struct FScopedRPCTimingTracker
 
 bool FObjectReplicator::ReceivedRPC(FNetBitReader& Reader, const FReplicationFlags& RepFlags, const FFieldNetCache* FieldCache, const bool bCanDelayRPC, bool& bOutDelayRPC, TSet<FNetworkGUID>& UnmappedGuids)
 {
+	CSV_SCOPED_TIMING_STAT_EXCLUSIVE(HandleRPC);
 	const bool bIsServer = Connection->Driver->IsServer();
 	UObject* Object = GetObject();
 	FName FunctionName = FieldCache->Field->GetFName();
@@ -855,7 +911,7 @@ bool FObjectReplicator::ReceivedRPC(FNetBitReader& Reader, const FReplicationFla
 
 	// validate that the function is callable here
 	// we are client or net owner and shouldn't be ignoring rpcs
-	const bool bCanExecute = ((!bIsServer || RepFlags.bNetOwner) && !RepFlags.bIgnoreRPCs);
+	const bool bCanExecute = Connection->Driver->ShouldCallRemoteFunction(Object, Function, RepFlags);
 
 	if (bCanExecute)
 	{
@@ -892,13 +948,23 @@ bool FObjectReplicator::ReceivedRPC(FNetBitReader& Reader, const FReplicationFla
 		}
 		else
 		{
-			// Forward the RPC to a client recorded replay, if needed.
-			const UWorld* const OwningDriverWorld = Connection->Driver->World;
-			if (OwningDriverWorld && OwningDriverWorld->IsRecordingClientReplay())
+			AActor* OwningActor = OwningChannel->Actor;
+
+			if (Connection->Driver->ShouldForwardFunction(OwningActor, Function, Parms))
 			{
-				// If Object is not the channel actor, assume the target of the RPC is a subobject.
-				UObject* const SubObject = Object != OwningChannel->Actor ? Object : nullptr;
-				OwningDriverWorld->DemoNetDriver->ProcessRemoteFunction(OwningChannel->Actor, Function, Parms, nullptr, nullptr, SubObject);
+				FWorldContext* const Context = GEngine->GetWorldContextFromWorld(Connection->Driver->GetWorld());
+				if (Context != nullptr)
+				{
+					UObject* const SubObject = Object != OwningChannel->Actor ? Object : nullptr;
+
+					for (FNamedNetDriver& Driver : Context->ActiveNetDrivers)
+					{
+						if (Driver.NetDriver != nullptr && (Driver.NetDriver != Connection->Driver) && Driver.NetDriver->ShouldReplicateFunction(OwningActor, Function))
+						{
+							Driver.NetDriver->ProcessRemoteFunction(OwningActor, Function, Parms, nullptr, nullptr, SubObject);
+						}
+					}
+				}
 			}
 
 			// Reset errors from replay driver
@@ -1147,7 +1213,7 @@ void FObjectReplicator::ReplicateCustomDeltaProperties( FNetBitWriter & Bunch, F
 
 	// Initialize a map of which conditions are valid
 
-	bool ConditionMap[COND_Max];
+	TStaticBitArray<COND_Max> ConditionMap;
 	const bool bIsInitial = RepFlags.bNetInitial ? true : false;
 	const bool bIsOwner = RepFlags.bNetOwner ? true : false;
 	const bool bIsSimulated = RepFlags.bNetSimulated ? true : false;
@@ -1172,7 +1238,7 @@ void FObjectReplicator::ReplicateCustomDeltaProperties( FNetBitWriter & Bunch, F
 	// Make sure net field export group is registered
 	FNetFieldExportGroup* NetFieldExportGroup = OwningChannel->GetOrCreateNetFieldExportGroupForClassNetCache( Object );
 
-	FNetBitWriter TempBitWriter( OwningChannel->Connection->PackageMap, 0 );
+	FNetBitWriter TempBitWriter( OwningChannel->Connection->PackageMap, 1024 );
 
 	// Replicate those properties.
 	for ( int32 i = 0; i < LifetimeCustomDeltaProperties.Num(); i++ )
@@ -1267,24 +1333,27 @@ bool FObjectReplicator::ReplicateProperties( FOutBunch & Bunch, FReplicationFlag
 	// some games ship checks() in Shipping so we cannot rely on DO_CHECK here, and these checks are in an extremely hot path
 	if (!UE_BUILD_SHIPPING && !UE_BUILD_TEST)
 	{
-		check( OwningChannel );
-		check( RepLayout.IsValid() );
-		check( RepState.IsValid() )
-		check( RepState->StaticBuffer.Num() );
+		check(OwningChannel);
+		check(RepLayout.IsValid());
+		check(RepState.IsValid())
+		check(RepLayout->GetRepLayoutState() != ERepLayoutState::Uninitialized);
+		check(ChangelistMgr.IsValid());
+		check(ChangelistMgr->GetRepChangelistState() != nullptr);
+		check((ChangelistMgr->GetRepChangelistState()->StaticBuffer.Num() == 0) == (RepLayout->GetRepLayoutState() == ERepLayoutState::Empty));
 	}
 
 	UNetConnection* OwningChannelConnection = OwningChannel->Connection;
 
-	FNetBitWriter Writer( Bunch.PackageMap, 0 );
+	FNetBitWriter Writer( Bunch.PackageMap, 8192 );
 
 	// Update change list (this will re-use work done by previous connections)
-	ChangelistMgr->Update( Object, Connection->Driver->ReplicationFrame, RepState->LastCompareIndex, RepFlags, OwningChannel->bForceCompareProperties );
+	ChangelistMgr->Update(Object, Connection->Driver->ReplicationFrame, RepState->LastCompareIndex, RepFlags, OwningChannel->bForceCompareProperties);
 
 	// Replicate properties in the layout
-	const bool bHasRepLayout = RepLayout->ReplicateProperties( RepState.Get(), ChangelistMgr->GetRepChangelistState(), ( uint8* )Object, ObjectClass, OwningChannel, Writer, RepFlags );
+	const bool bHasRepLayout = RepLayout->ReplicateProperties(RepState.Get(), ChangelistMgr->GetRepChangelistState(), (uint8*)Object, ObjectClass, OwningChannel, Writer, RepFlags);
 
 	// Replicate all the custom delta properties (fast arrays, etc)
-	ReplicateCustomDeltaProperties( Writer, RepFlags );
+	ReplicateCustomDeltaProperties(Writer, RepFlags);
 
 	if ( OwningChannelConnection->bResendAllDataSinceOpen )
 	{
@@ -1408,11 +1477,79 @@ void FObjectReplicator::PostSendBunch( FPacketIdRange & PacketRange, uint8 bReli
 	}
 }
 
+void FReplicationChangelistMgr::CountBytes(FArchive& Ar) const
+{
+	if (FRepChangelistState const * const ChangelistStateLocal = GetRepChangelistState())
+	{
+		Ar.CountBytes(sizeof(FRepChangelistState), sizeof(FRepChangelistState));
+		ChangelistStateLocal->CountBytes(Ar);
+	}
+}
+
+void FObjectReplicator::FRPCPendingLocalCall::CountBytes(FArchive& Ar) const
+{
+	Buffer.CountBytes(Ar);
+	UnmappedGuids.CountBytes(Ar);
+}
+
+
 void FObjectReplicator::Serialize(FArchive& Ar)
-{		
+{
 	if (Ar.IsCountingMemory())
 	{
 		Retirement.CountBytes(Ar);
+		RecentCustomDeltaState.CountBytes(Ar);
+		for (const auto& RecentCustomDeltaStatePair : RecentCustomDeltaState)
+		{
+			if (INetDeltaBaseState const * const BaseState = RecentCustomDeltaStatePair.Value.Get())
+			{
+				BaseState->CountBytes(Ar);
+			}
+		}
+
+		CDOCustomDeltaState.CountBytes(Ar);
+		for (const auto& CDOCustomDeltaStatePair : CDOCustomDeltaState)
+		{
+			if (INetDeltaBaseState const * const BaseState = CDOCustomDeltaStatePair.Value.Get())
+			{
+				BaseState->CountBytes(Ar);
+			}
+		}
+
+		LifetimeCustomDeltaProperties.CountBytes(Ar);
+		LifetimeCustomDeltaPropertyConditions.CountBytes(Ar);
+		UnmappedCustomProperties.CountBytes(Ar);
+		RepNotifies.CountBytes(Ar);
+		RepNotifyMetaData.CountBytes(Ar);
+		for (const auto& MetaDataPair : RepNotifyMetaData)
+		{
+			MetaDataPair.Value.CountBytes(Ar);
+		}
+
+		// FObjectReplicator has a shared pointer to an FRepLayout, but since it's shared with
+		// the UNetDriver, the memory isn't tracked here.
+
+		if (RepState.IsValid())
+		{
+			RepState->CountBytes(Ar);
+		}
+
+		ReferencedGuids.CountBytes(Ar);
+
+		// ChangelistMgr points to a ReplicationChangelistMgr managed by the UNetDriver, so it's not tracked here
+
+		RemoteFuncInfo.CountBytes(Ar);
+		if (RemoteFunctions)
+		{
+			RemoteFunctions->CountMemory(Ar);
+		}
+
+		PendingLocalRPCs.CountBytes(Ar);
+		for (const FRPCPendingLocalCall& PendingRPC : PendingLocalRPCs)
+		{
+			PendingRPC.Buffer.CountBytes(Ar);
+			PendingRPC.UnmappedGuids.CountBytes(Ar);
+		}
 	}
 }
 
@@ -1530,6 +1667,7 @@ void FObjectReplicator::StartBecomingDormant()
 
 void FObjectReplicator::CallRepNotifies(bool bSkipIfChannelHasQueuedBunches)
 {
+	CSV_SCOPED_TIMING_STAT_EXCLUSIVE(RepNotifies);
 	UObject* Object = GetObject();
 
 	if ( Object == NULL || Object->IsPendingKill() )
@@ -1849,3 +1987,28 @@ void FObjectReplicator::WritePropertyHeaderAndPayload(
 
 	NETWORK_PROFILER( GNetworkProfiler.TrackWritePropertyHeader( Property, HeaderBits, nullptr ) );
 }
+
+FScopedActorRoleSwap::FScopedActorRoleSwap(AActor* InActor)
+	: Actor(InActor)
+{
+	const bool bShouldSwapRoles = Actor != nullptr && Actor->GetRemoteRole() == ROLE_Authority;
+
+	if (bShouldSwapRoles)
+	{
+		Actor->SwapRoles();
+	}
+	else
+	{
+		Actor = nullptr;
+	}
+}
+
+FScopedActorRoleSwap::~FScopedActorRoleSwap()
+{
+	if (Actor != nullptr)
+	{
+		Actor->SwapRoles();
+	}
+}
+
+

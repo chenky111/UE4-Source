@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 
 #include "SourceCodeNavigation.h"
@@ -498,7 +498,7 @@ void FSourceCodeNavigationImpl::NavigateToFunctionSource( const FString& Functio
 				SourceLineNumber = FileAndLineInfo.LineNumber;
 			}
 
-			UE_LOG(LogSelectionDetails, Warning, TEXT( "NavigateToFunctionSource:  Found symbols for [%s] - File [%s], Line [%i], Column [%i]" ),
+			UE_LOG(LogSelectionDetails, Verbose, TEXT( "NavigateToFunctionSource:  Found symbols for [%s] - File [%s], Line [%i], Column [%i]" ),
 				*FunctionSymbolName,
 				*SourceFileName,
 				(uint32)FileAndLineInfo.LineNumber,

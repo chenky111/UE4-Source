@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -188,6 +188,16 @@ namespace UnrealBuildTool
 		public bool bBuildLargeAddressAwareBinary = true;
 
 		/// <summary>
+		/// Create an image that can be hot patched (/FUNCTIONPADMIN)
+		/// </summary>
+		public bool bCreateHotPatchableImage = false;
+
+		/// <summary>
+		/// Whether to put global symbols in their own sections (/Gw), allowing the linker to discard any that are unused.
+		/// </summary>
+		public bool bOptimizeGlobalData = true;
+
+		/// <summary>
 		/// The Visual C++ environment to use for this target. Only initialized after all the target settings are finalized, in ValidateTarget().
 		/// </summary>
 		internal VCEnvironment Environment;
@@ -348,6 +358,16 @@ namespace UnrealBuildTool
 			get { return Inner.bBuildLargeAddressAwareBinary; }
 		}
 
+		public bool bCreateHotpatchableImage
+		{
+			get { return Inner.bCreateHotPatchableImage; }
+		}
+
+		public bool bOptimizeGlobalData
+		{
+			get { return Inner.bOptimizeGlobalData; }
+		}
+
 		public string GetVisualStudioCompilerVersionName()
 		{
 			return Inner.GetVisualStudioCompilerVersionName();
@@ -384,7 +404,12 @@ namespace UnrealBuildTool
 		/// <summary>
 		/// The default compiler version to be used, if installed. 
 		/// </summary>
-		static readonly VersionNumber DefaultToolChainVersion = VersionNumber.Parse("14.13.26128");
+		static readonly VersionNumber DefaultClangToolChainVersion = VersionNumber.Parse("6.0.0");
+
+		/// <summary>
+		/// The default compiler version to be used, if installed. 
+		/// </summary>
+		static readonly VersionNumber DefaultVisualStudioToolChainVersion = VersionNumber.Parse("14.13.26128");
 
 		/// <summary>
 		/// The default Windows SDK version to be used, if installed.
@@ -440,6 +465,20 @@ namespace UnrealBuildTool
 		public override SDKStatus HasRequiredSDKsInstalled()
 		{
 			return SDK.HasRequiredSDKsInstalled();
+		}
+
+		/// <summary>
+		/// Reset a target's settings to the default
+		/// </summary>
+		/// <param name="Target"></param>
+		public override void ResetTarget(TargetRules Target)
+		{
+			base.ResetTarget(Target);
+
+			if(Target.Configuration != UnrealTargetConfiguration.Shipping)
+			{
+				Target.WindowsPlatform.bCreateHotPatchableImage = true;
+			}
 		}
 
 		/// <summary>
@@ -514,6 +553,7 @@ namespace UnrealBuildTool
 			Target.WindowsPlatform.Compiler = Environment.Compiler;
 			Target.WindowsPlatform.CompilerVersion = Environment.CompilerVersion.ToString();
 			Target.WindowsPlatform.WindowsSdkVersion = Environment.WindowsSdkVersion.ToString();
+
 
 //			@Todo: Still getting reports of frequent OOM issues with this enabled as of 15.7.
 //			// Enable fast PDB linking if we're on VS2017 15.7 or later. Previous versions have OOM issues with large projects.
@@ -911,6 +951,16 @@ namespace UnrealBuildTool
 			}
 			else
 			{
+				VersionNumber DefaultToolChainVersion;
+				if(Compiler == WindowsCompiler.Clang)
+				{
+					DefaultToolChainVersion = DefaultClangToolChainVersion;
+				}
+				else
+				{
+					DefaultToolChainVersion = DefaultVisualStudioToolChainVersion;
+				}
+
 				if(ToolChainVersionToDir.ContainsKey(DefaultToolChainVersion))
 				{
 					ToolChainVersion = DefaultToolChainVersion;

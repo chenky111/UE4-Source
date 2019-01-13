@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Engine/UserDefinedStruct.h"
 #include "UObject/UObjectHash.h"
@@ -40,9 +40,9 @@ void FUserStructOnScopeIgnoreDefaults::Recreate(const UUserDefinedStruct* InUser
 
 void FUserStructOnScopeIgnoreDefaults::Initialize()
 {
-	if (ScriptStruct.IsValid())
+	if (const UStruct* ScriptStructPtr = ScriptStruct.Get())
 	{
-		SampleStructMemory = (uint8*)FMemory::Malloc(ScriptStruct->GetStructureSize() ? ScriptStruct->GetStructureSize() : 1);
+		SampleStructMemory = (uint8*)FMemory::Malloc(ScriptStructPtr->GetStructureSize() ? ScriptStructPtr->GetStructureSize() : 1);
 		((UUserDefinedStruct*)ScriptStruct.Get())->InitializeStructIgnoreDefaults(SampleStructMemory);
 		OwnsMemory = true;
 	}
@@ -76,7 +76,7 @@ namespace
 				if (StructVariableDesc.Category == TextCategory)
 				{
 					FText StructVariableValue;
-					if (FTextStringHelper::ReadFromString(*StructVariableDesc.DefaultValue, StructVariableValue))
+					if (FTextStringHelper::ReadFromBuffer(*StructVariableDesc.DefaultValue, StructVariableValue))
 					{
 						Ar << StructVariableValue;
 					}

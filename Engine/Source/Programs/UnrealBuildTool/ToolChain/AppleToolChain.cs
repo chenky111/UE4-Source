@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections;
@@ -164,6 +164,23 @@ namespace UnrealBuildTool
 			StartInfo.UseShellExecute = false;
 			StartInfo.CreateNoWindow = true;
 			Utils.RunLocalProcessAndLogOutput(StartInfo);
+		}
+		
+		protected string GetDsymutilPath()
+		{
+			FileReference DsymutilLocation = new FileReference("/usr/bin/dsymutil");
+
+			DirectoryReference AutoSdkDir;
+			if (UEBuildPlatformSDK.TryGetHostPlatformAutoSDKDir(out AutoSdkDir))
+			{
+				FileReference AutoSdkDsymutilLocation = FileReference.Combine(AutoSdkDir, "Mac", "LLVM", "bin", "dsymutil");
+				if (FileReference.Exists(AutoSdkDsymutilLocation))
+				{
+					DsymutilLocation = AutoSdkDsymutilLocation;
+				}
+			}
+
+			return DsymutilLocation.FullName;
 		}
 	};
 }

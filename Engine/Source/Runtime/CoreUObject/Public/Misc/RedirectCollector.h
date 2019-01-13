@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	RedirectCollector:  Editor-only global object that handles resolving redirectors and handling string asset cooking rules
@@ -112,13 +112,13 @@ public:
 		return SoftObjectPathMap.Num() > 0;
 	}
 
-	DEPRECATED(4.17, "OnStringAssetReferenceSaved is deprecated, call GetAssetPathRedirection")
+	UE_DEPRECATED(4.17, "OnStringAssetReferenceSaved is deprecated, call GetAssetPathRedirection")
 	FString OnStringAssetReferenceSaved(const FString& InString);
 
-	DEPRECATED(4.18, "OnStringAssetReferenceLoaded is deprecated, call OnSoftObjectPathLoaded")
+	UE_DEPRECATED(4.18, "OnStringAssetReferenceLoaded is deprecated, call OnSoftObjectPathLoaded")
 	void OnStringAssetReferenceLoaded(const FString& InString);
 
-	DEPRECATED(4.18, "ResolveStringAssetReference is deprecated, call ResolveAllSoftObjectPaths")
+	UE_DEPRECATED(4.18, "ResolveStringAssetReference is deprecated, call ResolveAllSoftObjectPaths")
 	void ResolveStringAssetReference(FName FilterPackage = NAME_None, bool bProcessAlreadyResolvedPackages = true)
 	{
 		ResolveAllSoftObjectPaths(FilterPackage);

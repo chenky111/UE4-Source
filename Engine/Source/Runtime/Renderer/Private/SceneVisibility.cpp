@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	SceneVisibility.cpp: Scene visibility determination.
@@ -186,6 +186,14 @@ static FAutoConsoleVariableRef CVarNeverOcclusionTestDistance(
 	GNeverOcclusionTestDistance,
 	TEXT("When the distance between the viewpoint and the bounding sphere center is less than this, never occlusion cull."),
 	ECVF_RenderThreadSafe | ECVF_Scalability
+);
+
+static int32 GForceSceneHasDecals = 0;
+static FAutoConsoleVariableRef CVarForceSceneHasDecals(
+	TEXT("r.ForceSceneHasDecals"),
+	GForceSceneHasDecals,
+	TEXT("Whether to always assume that scene has decals, so we don't switch depth state conditionally. This can significantly reduce total number of PSOs at a minor GPU cost."),
+	ECVF_RenderThreadSafe
 );
 
 /** Distance fade cvars */
@@ -1817,7 +1825,7 @@ struct FRelevancePacket
 				continue;
 			}
 
-			if (ViewRelevance.bDecal)
+			if (ViewRelevance.bDecal && ViewRelevance.bRenderInMainPass)
 			{
 				MeshDecalPrimSet.AddPrim(FMeshDecalPrimSet::GenerateKey(PrimitiveSceneInfo, PrimitiveSceneInfo->Proxy->GetTranslucencySortPriority()));
 			}
@@ -3090,7 +3098,7 @@ void FSceneRenderer::ComputeViewVisibility(FRHICommandListImmediate& RHICmdList)
 
 		// TODO: right now decals visibility computed right before rendering them, ideally it should be done in InitViews and this flag should be replaced with list of visible decals  
 	    // Currently used to disable stencil operations in forward base pass when scene has no any decals
-		View.bSceneHasDecals = (Scene->Decals.Num() > 0);
+		View.bSceneHasDecals = (Scene->Decals.Num() > 0) || (GForceSceneHasDecals != 0);
 	}
 
 	if (Views.Num() > 1 && Views[0].IsInstancedStereoPass())
@@ -3369,6 +3377,7 @@ bool FDeferredShadingSceneRenderer::InitViews(FRHICommandListImmediate& RHICmdLi
 {
 	SCOPED_NAMED_EVENT(FDeferredShadingSceneRenderer_InitViews, FColor::Emerald);
 	SCOPE_CYCLE_COUNTER(STAT_InitViewsTime);
+	check(RHICmdList.IsOutsideRenderPass());
 
 	PreVisibilityFrameSetup(RHICmdList);
 	RHICmdList.ImmediateFlush(EImmediateFlushType::DispatchToRHIThread);

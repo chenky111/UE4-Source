@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "SAssetView.h"
 #include "HAL/FileManager.h"
@@ -49,8 +49,12 @@
 #include "HAL/PlatformApplicationMisc.h"
 #include "DesktopPlatformModule.h"
 #include "Misc/FileHelper.h"
+#include "Misc/TextFilterUtils.h"
+#include "AssetRegistryState.h"
+#include "Materials/Material.h"
 
 #define LOCTEXT_NAMESPACE "ContentBrowser"
+#define MAX_THUMBNAIL_SIZE 4096
 
 namespace
 {
@@ -61,7 +65,227 @@ namespace
 	const double JumpDelaySeconds = 2.0;
 }
 
-#define MAX_THUMBNAIL_SIZE 4096
+namespace AssetViewUtils
+{
+	/** Higher performance version of FAssetData::IsUAsset()
+	 * Returns true if this is the primary asset in a package, true for maps and assets but false for secondary objects like class redirectors
+	 */
+	bool IsUAsset(const FAssetData& Item)
+	{
+		TextFilterUtils::FNameBufferWithNumber AssetNameBuffer(Item.AssetName);
+		TextFilterUtils::FNameBufferWithNumber PackageNameBuffer(Item.PackageName);
+
+		if (PackageNameBuffer.IsWide())
+		{
+			// Skip to final slash
+			const WIDECHAR* LongPackageAssetNameWide = PackageNameBuffer.GetWideNamePtr();
+			for (const WIDECHAR* CharPtr = PackageNameBuffer.GetWideNamePtr(); *CharPtr; ++CharPtr)
+			{
+				if (*CharPtr == '/')
+				{
+					LongPackageAssetNameWide = CharPtr + 1;
+				}
+			}
+
+			if (AssetNameBuffer.IsWide())
+			{
+				return !FCStringWide::Stricmp(LongPackageAssetNameWide, AssetNameBuffer.GetWideNamePtr());
+			}
+			else if (FCString::IsPureAnsi(LongPackageAssetNameWide))
+			{
+				// Convert PackageName to ANSI for comparison
+				ANSICHAR LongPackageAssetNameAnsi[NAME_WITH_NUMBER_SIZE];
+				FPlatformString::Convert(LongPackageAssetNameAnsi, NAME_WITH_NUMBER_SIZE, LongPackageAssetNameWide, FCStringWide::Strlen(LongPackageAssetNameWide) + 1);
+				return !FCStringAnsi::Stricmp(LongPackageAssetNameAnsi, AssetNameBuffer.GetAnsiNamePtr());
+			}
+		}
+		else if (!AssetNameBuffer.IsWide())
+		{
+			// Skip to final slash
+			const ANSICHAR* LongPackageAssetNameAnsi = PackageNameBuffer.GetAnsiNamePtr();
+			for (const ANSICHAR* CharPtr = PackageNameBuffer.GetAnsiNamePtr(); *CharPtr; ++CharPtr)
+			{
+				if (*CharPtr == '/')
+				{
+					LongPackageAssetNameAnsi = CharPtr + 1;
+				}
+			}
+
+			return !FCStringAnsi::Stricmp(LongPackageAssetNameAnsi, AssetNameBuffer.GetAnsiNamePtr());
+		}
+
+		return false;
+	}
+
+	class FInitialAssetFilter
+	{
+	public:
+		FInitialAssetFilter(bool InDisplayL10N, bool InDisplayEngine, bool InDisplayPlugins) :
+			bDisplayL10N(InDisplayL10N),
+			bDisplayEngine(InDisplayEngine),
+			bDisplayPlugins(InDisplayPlugins)
+		{
+			Init(InDisplayL10N, InDisplayEngine, InDisplayPlugins);
+		}
+
+		void Init(bool InDisplayL10N, bool InDisplayEngine, bool InDisplayPlugins)
+		{
+			ObjectRedirectorClassName = UObjectRedirector::StaticClass()->GetFName();
+
+			bDisplayL10N = InDisplayL10N;
+			bDisplayEngine = InDisplayEngine;
+			bDisplayPlugins = InDisplayPlugins;
+
+			Plugins = IPluginManager::Get().GetEnabledPluginsWithContent();
+			PluginNamesUpperWide.Reset(Plugins.Num());
+			PluginNamesUpperAnsi.Reset(Plugins.Num());
+			PluginLoadedFromEngine.Reset(Plugins.Num());
+			for (const TSharedRef<IPlugin>& PluginRef : Plugins)
+			{
+				FString& PluginNameUpperWide = PluginNamesUpperWide.Add_GetRef(PluginRef->GetName().ToUpper());
+				TextFilterUtils::TryConvertWideToAnsi(PluginNameUpperWide, PluginNamesUpperAnsi.AddDefaulted_GetRef());
+				PluginLoadedFromEngine.Add(PluginRef->GetLoadedFrom() == EPluginLoadedFrom::Engine);
+			}
+		}
+
+		FORCEINLINE bool PassesFilter(const FAssetData& Item) const
+		{
+			if (!PassesRedirectorMainAssetFilter(Item))
+			{
+				return false;
+			}
+
+			return PassesPackagePathFilter(Item.PackagePath);
+		}
+
+		FORCEINLINE bool PassesRedirectorMainAssetFilter(const FAssetData& Item) const
+		{
+			// Do not show redirectors if they are not the main asset in the uasset file.
+			if (Item.AssetClass == ObjectRedirectorClassName && !AssetViewUtils::IsUAsset(Item))
+			{
+				return false;
+			}
+
+			return true;
+		}
+
+		FORCEINLINE bool PassesPackagePathFilter(const FName& PackagePath) const
+		{
+			TextFilterUtils::FNameBufferWithNumber ObjectPathBuffer(PackagePath);
+			if (ObjectPathBuffer.IsWide())
+			{
+				return PassesPackagePathFilter(ObjectPathBuffer.GetWideNamePtr());
+			}
+			else
+			{
+				return PassesPackagePathFilter(ObjectPathBuffer.GetAnsiNamePtr());
+			}
+		}
+
+		template <typename CharType>
+		FORCEINLINE bool PassesPackagePathFilter(CharType* PackagePath) const
+		{
+			CharType* PathCh = PackagePath;
+			if (*PathCh++ != '/')
+			{
+				return true;
+			}
+
+			for (; *PathCh && *PathCh != '/'; ++PathCh)
+			{
+				*PathCh = TChar<CharType>::ToUpper(*PathCh);
+			}
+
+			if (*PathCh)
+			{
+				if (!bDisplayL10N)
+				{
+					if ((PathCh[1] == 'L' || PathCh[1] == 'l') &&
+						PathCh[2] == '1' &&
+						PathCh[3] == '0' &&
+						(PathCh[4] == 'N' || PathCh[4] == 'n') &&
+						(PathCh[5] == '/' || PathCh[5] == 0))
+					{
+						return false;
+					}
+				}
+				*PathCh = 0;
+			}
+
+			CharType* PackageRootFolderName = PackagePath + 1;
+			int32 PackageRootFolderNameLength = PathCh - PackageRootFolderName;
+			if (PackageRootFolderNameLength == 4 && TCString<CharType>::Strncmp(PackageRootFolderName, LITERAL(CharType, "GAME"), 4) == 0)
+			{
+				return true;
+			}
+			else if (PackageRootFolderNameLength == 6 && TCString<CharType>::Strncmp(PackageRootFolderName, LITERAL(CharType, "ENGINE"), 4) == 0)
+			{
+				return bDisplayEngine;
+			}
+			else
+			{
+				if (!bDisplayPlugins || !bDisplayEngine)
+				{
+					int32 PluginIndex = FindPluginNameUpper(PackageRootFolderName, PackageRootFolderNameLength);
+					if (PluginIndex != INDEX_NONE)
+					{
+						if (!bDisplayPlugins)
+						{
+							return false;
+						}
+						else if (!bDisplayEngine && PluginLoadedFromEngine[PluginIndex])
+						{
+							return false;
+						}
+					}
+				}
+			}
+
+			return true;
+		}
+
+	private:
+		FName ObjectRedirectorClassName;
+		bool bDisplayL10N;
+		bool bDisplayEngine;
+		bool bDisplayPlugins;
+		TArray<TArray<ANSICHAR>> PluginNamesUpperAnsi;
+		TArray<FString> PluginNamesUpperWide;
+		TArray<bool> PluginLoadedFromEngine;
+		TArray<TSharedRef<IPlugin>> Plugins;
+
+		FORCEINLINE int32 FindPluginNameUpper(const WIDECHAR* PluginNameUpper, int32 Length) const
+		{
+			int32 i = 0;
+			for (const FString& OtherPluginNameUpper : PluginNamesUpperWide)
+			{
+				if (OtherPluginNameUpper.Len() == Length && TCString<WIDECHAR>::Strcmp(PluginNameUpper, *OtherPluginNameUpper) == 0)
+				{
+					return i;
+				}
+				++i;
+			}
+
+			return INDEX_NONE;
+		}
+
+		FORCEINLINE int32 FindPluginNameUpper(const ANSICHAR* PluginNameUpper, int32 Length) const
+		{
+			const int32 LengthWithNull = Length + 1;
+			int32 i = 0;
+			for (const TArray<ANSICHAR>& OtherPluginNameUpper : PluginNamesUpperAnsi)
+			{
+				if (OtherPluginNameUpper.Num() == LengthWithNull && TCString<ANSICHAR>::Strcmp(PluginNameUpper, OtherPluginNameUpper.GetData()) == 0)
+				{
+					return i;
+				}
+				++i;
+			}
+
+			return INDEX_NONE;
+		}
+	};
+} // namespace AssetViewUtils
 
 SAssetView::~SAssetView()
 {
@@ -72,6 +296,7 @@ SAssetView::~SAssetView()
 		AssetRegistryModule.Get().OnAssetAdded().RemoveAll( this );
 		AssetRegistryModule.Get().OnAssetRemoved().RemoveAll( this );
 		AssetRegistryModule.Get().OnAssetRenamed().RemoveAll( this );
+		AssetRegistryModule.Get().OnAssetUpdated().RemoveAll( this );
 		AssetRegistryModule.Get().OnPathAdded().RemoveAll( this );
 		AssetRegistryModule.Get().OnPathRemoved().RemoveAll( this );
 	}
@@ -125,6 +350,7 @@ void SAssetView::Construct( const FArguments& InArgs )
 	AssetRegistryModule.Get().OnAssetAdded().AddSP( this, &SAssetView::OnAssetAdded );
 	AssetRegistryModule.Get().OnAssetRemoved().AddSP( this, &SAssetView::OnAssetRemoved );
 	AssetRegistryModule.Get().OnAssetRenamed().AddSP( this, &SAssetView::OnAssetRenamed );
+	AssetRegistryModule.Get().OnAssetUpdated().AddSP( this, &SAssetView::OnAssetUpdated );
 	AssetRegistryModule.Get().OnPathAdded().AddSP( this, &SAssetView::OnAssetRegistryPathAdded );
 	AssetRegistryModule.Get().OnPathRemoved().AddSP( this, &SAssetView::OnAssetRegistryPathRemoved );
 
@@ -542,6 +768,13 @@ void SAssetView::CreateNewAsset(const FString& DefaultAssetName, const FString& 
 	// we should only be creating one deferred asset per tick
 	check(!DeferredAssetToCreate.IsValid());
 
+	// Asset creation requires focus to give object a name, otherwise object will not be created
+	TSharedPtr<SWindow> OwnerWindow = FSlateApplication::Get().FindWidgetWindow(AsShared());
+	if (OwnerWindow.IsValid() && !OwnerWindow->HasAnyUserFocusOrFocusedDescendants())
+	{
+		FSlateApplication::Get().SetUserFocus(FSlateApplication::Get().GetUserIndexForKeyboard(), AsShared(), EFocusCause::SetDirectly);
+	}
+
 	// Make sure we are showing the location of the new asset (we may have created it in a folder)
 	OnPathSelected.Execute(PackagePath);
 
@@ -863,72 +1096,62 @@ void SAssetView::AdjustActiveSelection(int32 SelectionDelta)
 
 void SAssetView::ProcessRecentlyLoadedOrChangedAssets()
 {
-	if ( RecentlyLoadedOrChangedAssets.Num() > 0 )
+	for (int32 AssetIdx = FilteredAssetItems.Num() - 1; AssetIdx >= 0 && RecentlyLoadedOrChangedAssets.Num() > 0; --AssetIdx)
 	{
-		TMap< FName, TWeakObjectPtr<UObject> > NextRecentlyLoadedOrChangedMap = RecentlyLoadedOrChangedAssets;
-
-		for (int32 AssetIdx = FilteredAssetItems.Num() - 1; AssetIdx >= 0; --AssetIdx)
+		if (FilteredAssetItems[AssetIdx]->GetType() != EAssetItemType::Folder)
 		{
-			if(FilteredAssetItems[AssetIdx]->GetType() != EAssetItemType::Folder)
+			const TSharedPtr<FAssetViewAsset>& ItemAsAsset = StaticCastSharedPtr<FAssetViewAsset>(FilteredAssetItems[AssetIdx]);
+				
+			// Find the updated version of the asset data from the set
+			// This is the version of the data we should use to update our view
+			FAssetData RecentlyLoadedOrChangedAsset;
+			if (const FAssetData* RecentlyLoadedOrChangedAssetPtr = RecentlyLoadedOrChangedAssets.Find(ItemAsAsset->Data))
 			{
-				const TSharedPtr<FAssetViewAsset>& ItemAsAsset = StaticCastSharedPtr<FAssetViewAsset>(FilteredAssetItems[AssetIdx]);
-				const FName ObjectPath = ItemAsAsset->Data.ObjectPath;
-				const TWeakObjectPtr<UObject>* WeakAssetPtr = RecentlyLoadedOrChangedAssets.Find( ObjectPath );
-				if ( WeakAssetPtr && (*WeakAssetPtr).IsValid() )
+				RecentlyLoadedOrChangedAsset = *RecentlyLoadedOrChangedAssetPtr;
+				RecentlyLoadedOrChangedAssets.Remove(ItemAsAsset->Data);
+			}
+
+			if (RecentlyLoadedOrChangedAsset.IsValid())
+			{
+				bool bShouldRemoveAsset = false;
+
+				if (!PassesCurrentBackendFilter(RecentlyLoadedOrChangedAsset))
 				{
-					NextRecentlyLoadedOrChangedMap.Remove(ObjectPath);
-
-					// Found the asset in the filtered items list, update it
-					const UObject* Asset = (*WeakAssetPtr).Get();
-					FAssetData AssetData(Asset);
-
-					bool bShouldRemoveAsset = false;
-					TArray<FAssetData> AssetDataThatPassesFilter;
-					AssetDataThatPassesFilter.Add(AssetData);
-					RunAssetsThroughBackendFilter(AssetDataThatPassesFilter);
-					if ( AssetDataThatPassesFilter.Num() == 0 )
-					{
-						bShouldRemoveAsset = true;
-					}
-
-					if ( !bShouldRemoveAsset && OnShouldFilterAsset.IsBound() && OnShouldFilterAsset.Execute(AssetData) )
-					{
-						bShouldRemoveAsset = true;
-					}
-
-					if ( !bShouldRemoveAsset && (IsFrontendFilterActive() && !PassesCurrentFrontendFilter(AssetData)) )
-					{
-						bShouldRemoveAsset = true;
-					}
-
-					if ( bShouldRemoveAsset )
-					{
-						FilteredAssetItems.RemoveAt(AssetIdx);
-					}
-					else
-					{
-						// Update the asset data on the item
-						ItemAsAsset->SetAssetData(AssetData);
-
-						// Update the custom column data
-						ItemAsAsset->CacheCustomColumns(CustomColumns, true, true, true);
-					}
-
-					RefreshList();
+					bShouldRemoveAsset = true;
 				}
+
+				if (!bShouldRemoveAsset && OnShouldFilterAsset.IsBound() && OnShouldFilterAsset.Execute(RecentlyLoadedOrChangedAsset))
+				{
+					bShouldRemoveAsset = true;
+				}
+
+				if (!bShouldRemoveAsset && (IsFrontendFilterActive() && !PassesCurrentFrontendFilter(RecentlyLoadedOrChangedAsset)))
+				{
+					bShouldRemoveAsset = true;
+				}
+
+				if (bShouldRemoveAsset)
+				{
+					FilteredAssetItems.RemoveAt(AssetIdx);
+				}
+				else
+				{
+					// Update the asset data on the item
+					ItemAsAsset->SetAssetData(RecentlyLoadedOrChangedAsset);
+
+					// Update the custom column data
+					ItemAsAsset->CacheCustomColumns(CustomColumns, true, true, true);
+				}
+
+				RefreshList();
 			}
 		}
+	}
 
-		if( FilteredRecentlyAddedAssets.Num() > 0 || RecentlyAddedAssets.Num() > 0 )
-		{
-			//Keep unprocessed items as we are still processing assets
-			RecentlyLoadedOrChangedAssets = NextRecentlyLoadedOrChangedMap;
-		}
-		else
-		{
-			//No more assets coming in so if we haven't found them now we aren't going to
-			RecentlyLoadedOrChangedAssets.Empty();
-		}
+	if (FilteredRecentlyAddedAssets.Num() == 0 && RecentlyAddedAssets.Num() == 0)
+	{
+		//No more assets coming in so if we haven't found them now we aren't going to
+		RecentlyLoadedOrChangedAssets.Reset();
 	}
 }
 
@@ -1221,7 +1444,7 @@ void SAssetView::ProcessQueriedItems( const double TickStartTime )
 	}
 	else
 	{
-		QueriedAssetItems.Empty();
+		QueriedAssetItems.Reset();
 	}
 
 	if ( ListNeedsRefresh )
@@ -1709,15 +1932,15 @@ void SAssetView::RefreshSourceItems()
 	static const FName AssetRegistryName(TEXT("AssetRegistry"));
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryName);
 
-	RecentlyLoadedOrChangedAssets.Empty();
-	RecentlyAddedAssets.Empty();
-	FilteredRecentlyAddedAssets.Empty();
-	QueriedAssetItems.Empty();
-	AssetItems.Empty();
-	FilteredAssetItems.Empty();
-	VisibleItems.Empty();
-	RelevantThumbnails.Empty();
-	Folders.Empty();
+	RecentlyLoadedOrChangedAssets.Reset();
+	RecentlyAddedAssets.Reset();
+	FilteredRecentlyAddedAssets.Reset();
+	QueriedAssetItems.Reset();
+	AssetItems.Reset();
+	FilteredAssetItems.Reset();
+	VisibleItems.Reset();
+	RelevantThumbnails.Reset();
+	Folders.Reset();
 
 	TArray<FAssetData>& Items = OnShouldFilterAsset.IsBound() ? QueriedAssetItems : AssetItems;
 
@@ -1725,10 +1948,57 @@ void SAssetView::RefreshSourceItems()
 
 	bool bShowClasses = false;
 	TArray<FName> ClassPathsToShow;
+	AssetViewUtils::FInitialAssetFilter InitialAssetFilter(IsShowingLocalizedContent(), IsShowingEngineContent(), IsShowingPluginContent());
 
 	if ( bShowAll )
 	{
-		AssetRegistryModule.Get().GetAllAssets(Items);
+		// Include assets in memory
+		TSet<FName> PackageNamesToSkip = AssetRegistryModule.Get().GetCachedEmptyPackages();
+		for (FObjectIterator ObjIt; ObjIt; ++ObjIt)
+		{
+			if (ObjIt->IsAsset())
+			{
+				if (!InitialAssetFilter.PassesPackagePathFilter(ObjIt->GetOutermost()->GetFName()))
+				{
+					continue;
+				}
+
+				int32 Index = Items.Emplace(*ObjIt);
+				const FAssetData& AssetData = Items[Index];
+				if (!InitialAssetFilter.PassesRedirectorMainAssetFilter(AssetData))
+				{
+					Items.RemoveAtSwap(Index, 1, false);
+					continue;
+				}
+
+				PackageNamesToSkip.Add(AssetData.PackageName);
+			}
+		}
+
+		// Include assets on disk
+		const TMap<FName, const FAssetData*>& AssetDataMap = AssetRegistryModule.Get().GetAssetRegistryState()->GetObjectPathToAssetDataMap();
+		for (const TPair<FName, const FAssetData*>& AssetDataPair : AssetDataMap)
+		{
+			const FAssetData* AssetData = AssetDataPair.Value;
+			if (AssetData == nullptr)
+			{
+				continue;
+			}
+
+			// Make sure the asset's package was not loaded then the object was deleted/renamed
+			if (PackageNamesToSkip.Contains(AssetData->PackageName))
+			{
+				continue;
+			}
+
+			if (!InitialAssetFilter.PassesFilter(*AssetData))
+			{
+				continue;
+			}
+
+			Items.Emplace(*AssetData);
+		}
+
 		bShowClasses = IsShowingCppContent();
 		bWereItemsRecursivelyFiltered = true;
 	}
@@ -1804,6 +2074,14 @@ void SAssetView::RefreshSourceItems()
 		{
 			OnGetCustomSourceAssets.Execute(Filter, Items);
 		}
+
+		for (int32 AssetIdx = Items.Num() - 1; AssetIdx >= 0; --AssetIdx)
+		{
+			if (!InitialAssetFilter.PassesFilter(Items[AssetIdx]))
+			{
+				Items.RemoveAtSwap(AssetIdx);
+			}
+		}
 	}
 
 	// If we are showing classes in the asset list...
@@ -1822,37 +2100,6 @@ void SAssetView::RefreshSourceItems()
 		for(UClass* CurrentClass : MatchingClasses)
 		{
 			Items.Add(FAssetData(CurrentClass));
-		}
-	}
-
-	// Remove any assets that should be filtered out any redirectors and non-assets
-	const bool bDisplayEngine = IsShowingEngineContent();
-	const bool bDisplayPlugins = IsShowingPluginContent();
-	const bool bDisplayL10N = IsShowingLocalizedContent();
-	const TArray<TSharedRef<IPlugin>> Plugins = IPluginManager::Get().GetEnabledPluginsWithContent();
-	for (int32 AssetIdx = Items.Num() - 1; AssetIdx >= 0; --AssetIdx)
-	{
-		const FAssetData& Item = Items[AssetIdx];
-		const FString PackagePath = Item.PackagePath.ToString();
-		// Do not show redirectors if they are not the main asset in the uasset file.
-		const bool IsMainlyARedirector = Item.AssetClass == UObjectRedirector::StaticClass()->GetFName() && !Item.IsUAsset();
-		// If this is an engine folder, and we don't want to show them, remove
-		const bool IsHiddenEngineFolder = !bDisplayEngine && ContentBrowserUtils::IsEngineFolder(PackagePath);
-		// If this is a plugin folder (engine or project), and we don't want to show them, remove
-		bool IsHiddenPluginFolder = false;
-		if (!bDisplayPlugins || !bDisplayEngine)
-		{
-			EPluginLoadedFrom PluginSource;
-			const bool bIsPluginFolder = ContentBrowserUtils::IsPluginFolder(PackagePath, Plugins, &PluginSource);
-			IsHiddenPluginFolder = bIsPluginFolder && (!bDisplayPlugins || (!bDisplayEngine && PluginSource == EPluginLoadedFrom::Engine));
-		}
-		// Do not show localized content folders.
-		const bool IsTheHiddenLocalizedContentFolder = !bDisplayL10N && ContentBrowserUtils::IsLocalizationFolder(PackagePath);
-
-		const bool ShouldFilterOut = IsMainlyARedirector || IsHiddenEngineFolder || IsHiddenPluginFolder || IsTheHiddenLocalizedContentFolder;
-		if (ShouldFilterOut)
-		{
-			Items.RemoveAtSwap(AssetIdx);
 		}
 	}
 }
@@ -1911,10 +2158,10 @@ void SAssetView::RefreshFilteredItems()
 	}
 
 	// Empty all the filtered lists
-	FilteredAssetItems.Empty();
-	VisibleItems.Empty();
-	RelevantThumbnails.Empty();
-	Folders.Empty();
+	FilteredAssetItems.Reset();
+	VisibleItems.Reset();
+	RelevantThumbnails.Reset();
+	Folders.Reset();
 
 	// true if the results from the asset registry query are filtered further by the content browser
 	const bool bIsFrontendFilterActive = IsFrontendFilterActive();
@@ -2417,7 +2664,7 @@ void SAssetView::ProcessRecentlyAddedAssets()
 	{
 		RunAssetsThroughBackendFilter(RecentlyAddedAssets);
 		FilteredRecentlyAddedAssets.Append(RecentlyAddedAssets);
-		RecentlyAddedAssets.Empty();
+		RecentlyAddedAssets.Reset();
 		LastProcessAddsTime = FPlatformTime::Seconds();
 	}
 
@@ -2647,19 +2894,58 @@ void SAssetView::OnAssetRenamed(const FAssetData& AssetData, const FString& OldO
 	RequestAddNewAssetsNextFrame();
 }
 
+void SAssetView::OnAssetUpdated(const FAssetData& AssetData)
+{
+	RecentlyLoadedOrChangedAssets.Add(AssetData);
+}
+
 void SAssetView::OnAssetLoaded(UObject* Asset)
 {
-	if ( Asset != NULL )
+	if (Asset == nullptr)
 	{
-		RecentlyLoadedOrChangedAssets.Add( FName(*Asset->GetPathName()), Asset );
+		return;
 	}
+
+	FName AssetPathName = FName(*Asset->GetPathName());
+	RecentlyLoadedOrChangedAssets.Add( FAssetData(Asset) );
+
+	UTexture2D* Texture2D = Cast<UTexture2D>(Asset);
+	UMaterial* Material = Texture2D ? nullptr : Cast<UMaterial>(Asset);
+	if ((Texture2D && !Texture2D->bForceMiplevelsToBeResident) || Material)
+	{
+		bool bHasWidgetForAsset = false;
+		switch (GetCurrentViewType())
+		{
+		case EAssetViewType::List:
+			bHasWidgetForAsset = ListView->HasWidgetForAsset(AssetPathName);
+			break;
+		case EAssetViewType::Tile:
+			bHasWidgetForAsset = TileView->HasWidgetForAsset(AssetPathName);
+			break;
+		default:
+			bHasWidgetForAsset = false;
+			break;
+		}
+
+		if (bHasWidgetForAsset)
+		{
+			if (Texture2D)
+			{
+				Texture2D->bForceMiplevelsToBeResident = true;
+			}
+			else if (Material)
+			{
+				Material->SetForceMipLevelsToBeResident(true, true, -1.0f);
+			}
+		}
+	};
 }
 
 void SAssetView::OnObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent)
 {
 	if (Object != nullptr && Object->IsAsset())
 	{
-		RecentlyLoadedOrChangedAssets.Add( FName(*Object->GetPathName()), Object);
+		RecentlyLoadedOrChangedAssets.Add(FAssetData(Object));
 	}
 }
 
@@ -2697,6 +2983,14 @@ bool SAssetView::PassesCurrentFrontendFilter(const FAssetData& Item) const
 	return true;
 }
 
+bool SAssetView::PassesCurrentBackendFilter(const FAssetData& Item) const
+{
+	TArray<FAssetData> AssetDataList;
+	AssetDataList.Add(Item);
+	RunAssetsThroughBackendFilter(AssetDataList);
+	return AssetDataList.Num() == 1;
+}
+
 void SAssetView::RunAssetsThroughBackendFilter(TArray<FAssetData>& InOutAssetDataList) const
 {
 	const bool bRecurse = ShouldFilterRecursively();
@@ -2707,7 +3001,7 @@ void SAssetView::RunAssetsThroughBackendFilter(TArray<FAssetData>& InOutAssetDat
 	if ( SourcesData.HasCollections() && Filter.ObjectPaths.Num() == 0 && !bIsDynamicCollection )
 	{
 		// This is an empty collection, no asset will pass the check
-		InOutAssetDataList.Empty();
+		InOutAssetDataList.Reset();
 	}
 	else
 	{
@@ -2807,7 +3101,7 @@ TSharedRef<SWidget> SAssetView::GetViewButtonContent()
 			LOCTEXT("TileViewOptionToolTip", "View assets as tiles in a grid."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateSP( this, &SAssetView::SetCurrentViewType, EAssetViewType::Tile ),
+				FExecuteAction::CreateSP( this, &SAssetView::SetCurrentViewTypeFromMenu, EAssetViewType::Tile ),
 				FCanExecuteAction(),
 				FIsActionChecked::CreateSP( this, &SAssetView::IsCurrentViewType, EAssetViewType::Tile )
 				),
@@ -2820,7 +3114,7 @@ TSharedRef<SWidget> SAssetView::GetViewButtonContent()
 			LOCTEXT("ListViewOptionToolTip", "View assets in a list with thumbnails."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateSP( this, &SAssetView::SetCurrentViewType, EAssetViewType::List ),
+				FExecuteAction::CreateSP( this, &SAssetView::SetCurrentViewTypeFromMenu, EAssetViewType::List ),
 				FCanExecuteAction(),
 				FIsActionChecked::CreateSP( this, &SAssetView::IsCurrentViewType, EAssetViewType::List )
 				),
@@ -2833,7 +3127,7 @@ TSharedRef<SWidget> SAssetView::GetViewButtonContent()
 			LOCTEXT("ColumnViewOptionToolTip", "View assets in a list with columns of details."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateSP( this, &SAssetView::SetCurrentViewType, EAssetViewType::Column ),
+				FExecuteAction::CreateSP( this, &SAssetView::SetCurrentViewTypeFromMenu, EAssetViewType::Column ),
 				FCanExecuteAction(),
 				FIsActionChecked::CreateSP( this, &SAssetView::IsCurrentViewType, EAssetViewType::Column )
 				),
@@ -3354,8 +3648,8 @@ void SAssetView::SetCurrentViewType(EAssetViewType::Type NewType)
 		SyncToSelection();
 
 		// Clear relevant thumbnails to render fresh ones in the new view if needed
-		RelevantThumbnails.Empty();
-		VisibleItems.Empty();
+		RelevantThumbnails.Reset();
+		VisibleItems.Reset();
 
 		if ( NewType == EAssetViewType::Tile )
 		{
@@ -3375,7 +3669,14 @@ void SAssetView::SetCurrentViewType(EAssetViewType::Type NewType)
 			RefreshFolders();
 			SortList();
 		}
+	}
+}
 
+void SAssetView::SetCurrentViewTypeFromMenu(EAssetViewType::Type NewType)
+{
+	if (NewType != CurrentViewType)
+	{
+		SetCurrentViewType(NewType);
 		FSlateApplication::Get().DismissAllMenus();
 	}
 }
@@ -4534,7 +4835,7 @@ void SAssetView::OnSortColumnHeader(const EColumnSortPriority::Type SortPriority
 
 EVisibility SAssetView::IsAssetShowWarningTextVisible() const
 {
-	return FilteredAssetItems.Num() > 0 ? EVisibility::Collapsed : EVisibility::HitTestInvisible;
+	return (FilteredAssetItems.Num() > 0 || bQuickFrontendListRefreshRequested) ? EVisibility::Collapsed : EVisibility::HitTestInvisible;
 }
 
 FText SAssetView::GetAssetShowWarningText() const
@@ -4576,7 +4877,8 @@ void SAssetView::OnAssetsOrPathsDragDropped(const TArray<FAssetData>& AssetList,
 		DestinationPath, 
 		FText::FromString(FPaths::GetCleanFilename(DestinationPath)), 
 		DragDropHandler::FExecuteCopyOrMove::CreateSP(this, &SAssetView::ExecuteDropCopy),
-		DragDropHandler::FExecuteCopyOrMove::CreateSP(this, &SAssetView::ExecuteDropMove)
+		DragDropHandler::FExecuteCopyOrMove::CreateSP(this, &SAssetView::ExecuteDropMove),
+		DragDropHandler::FExecuteCopyOrMove::CreateSP(this, &SAssetView::ExecuteDropAdvancedCopy)
 		);
 }
 
@@ -4644,6 +4946,23 @@ void SAssetView::ExecuteDropMove(TArray<FAssetData> AssetList, TArray<FString> A
 	}
 
 	OnFolderPathChanged.ExecuteIfBound(MovedFolders);
+}
+
+
+void SAssetView::ExecuteDropAdvancedCopy(TArray<FAssetData> AssetList, TArray<FString> AssetPaths, FString DestinationPath)
+{
+	int32 NumItemsCopied = 0;
+	// Get a list of package names for input into Advanced Copy 
+	TArray<FName> PackageNames;
+	PackageNames.Reserve(AssetList.Num());
+
+	for (int32 AssetIdx = 0; AssetIdx < AssetList.Num(); ++AssetIdx)
+	{
+		PackageNames.Add(AssetList[AssetIdx].PackageName);
+	}
+
+	FAssetToolsModule& AssetToolsModule = FModuleManager::Get().LoadModuleChecked<FAssetToolsModule>("AssetTools");
+	AssetToolsModule.Get().BeginAdvancedCopyPackages(PackageNames, DestinationPath);
 }
 
 void SAssetView::SetUserSearching(bool bInSearching)

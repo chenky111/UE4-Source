@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -22,6 +22,9 @@ class UAssetUserData;
 class ULevel;
 
 #if WITH_EDITOR
+class SWidget;
+struct FMinimalViewInfo;
+
 /** Annotation for component selection.  This must be in engine isntead of editor for ::IsSelected to work */
 extern ENGINE_API FUObjectAnnotationSparseBool GSelectedComponentAnnotation;
 #endif
@@ -120,6 +123,11 @@ protected:
 	UPROPERTY(EditAnywhere, AdvancedDisplay, Instanced, Category = AssetUserData)
 	TArray<UAssetUserData*> AssetUserData;
 
+private:
+	/** Used for fast removal of end of frame update */
+	int32 MarkedForEndOfFrameUpdateArrayIndex;
+
+protected:
 	/** 
 	 *  Indicates if this ActorComponent is currently registered with a scene. 
 	 */
@@ -207,7 +215,7 @@ public:
 	uint8 bWantsInitializeComponent:1;
 
 	/** If true, we call the virtual BeginPlay */
-	DEPRECATED(4.14, "bWantsBeginPlay was inconsistently enforced and is now unused. BeginPlay will now always be called for Actor Components.")
+	UE_DEPRECATED(4.14, "bWantsBeginPlay was inconsistently enforced and is now unused. BeginPlay will now always be called for Actor Components.")
 	uint8 bWantsBeginPlay:1;
 
 	/** If true, the component will be excluded from non-editor builds */
@@ -620,7 +628,7 @@ public:
 	 * Returns whether this component has tick enabled or not
 	 */
 	UFUNCTION(BlueprintCallable, Category="Utilities")
-	bool IsComponentTickEnabled() const;
+	virtual bool IsComponentTickEnabled() const;
 
 	/** 
 	* Sets the tick interval for this component's primary tick function. Does not enable the tick interval. Takes effect on next tick.
@@ -676,7 +684,22 @@ public:
 	 * @note Derived class implementations should call up to their parents.
 	 */
 	virtual void CheckForErrors();
-#endif
+
+	/** 
+	 * Supplies the editor with a view specific to this component (think a view 
+	 * from a camera components POV, a render, etc.). Used for PIP preview windows.
+	 * @return True if the component overrides this, and fills out the view info output.
+	 */
+	virtual bool GetEditorPreviewInfo(float DeltaTime, FMinimalViewInfo& ViewOut) { return false; }
+
+	/**
+	 * If this component is set up to provide a preview window in editor (see GetEditorPreviewInfo), 
+	 * you can use this to customize the preview (to be something other than a world viewport).
+	 * If this returns an empty pointer, then the preview will default to a viewport using the FMinimalViewInfo
+	 * data from GetEditorPreviewInfo().
+	 */
+	virtual TSharedPtr<SWidget> GetCustomEditorPreviewWidget() { return TSharedPtr<SWidget>(); }
+#endif // WITH_EDITOR
 
 	/**
 	 * Uses the bRenderStateDirty/bRenderTransformDirty to perform any necessary work on this component.

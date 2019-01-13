@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -158,7 +158,7 @@ public:
 };
 
 
-class DEPRECATED(4.21, "This class is no longer needed as the base class can handle the proper construction now.") FResolveInfoCachedBSDIPv6 : public FResolveInfoCached
+class UE_DEPRECATED(4.21, "This class is no longer needed as the base class can handle the proper construction now.") FResolveInfoCachedBSDIPv6 : public FResolveInfoCached
 {
 	FResolveInfoCachedBSDIPv6();
 

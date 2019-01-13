@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "UserInterface/PropertyEditor/SPropertyEditorClass.h"
 #include "Engine/Blueprint.h"
@@ -217,7 +217,7 @@ TSharedRef<SWidget> SPropertyEditorClass::GenerateClassPicker()
 	ClassFilter->bAllowAbstract = bAllowAbstract;
 	Options.bIsBlueprintBaseOnly = bIsBlueprintBaseOnly;
 	Options.bIsPlaceableOnly = bAllowOnlyPlaceable;
-	Options.bShowDisplayNames = bShowDisplayNames;
+	Options.NameTypeToDisplay = (bShowDisplayNames ? EClassViewerNameTypeToDisplay::DisplayName : EClassViewerNameTypeToDisplay::ClassName);
 	Options.DisplayMode = bShowTree ? EClassViewerDisplayMode::TreeView : EClassViewerDisplayMode::ListView;
 	Options.bAllowViewOptions = bShowViewOptions;
 

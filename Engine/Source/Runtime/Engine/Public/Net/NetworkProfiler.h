@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	NetworkProfiler.h: network profiling support.
@@ -100,19 +100,19 @@ private:
 	struct FSendBunchInfo
 	{
 		uint16 ChannelIndex;
-		uint8 ChannelType;
+		uint32 ChannelTypeNameIndex;
 		uint16 NumHeaderBits;
 		uint16 NumPayloadBits;
 
 		FSendBunchInfo()
 			: ChannelIndex(0)
-			, ChannelType(0)
+			, ChannelTypeNameIndex(0)
 			, NumHeaderBits(0)
 			, NumPayloadBits(0) {}
 
-		FSendBunchInfo( uint16 InChannelIndex, uint8 InChannelType, uint16 InNumHeaderBits, uint16 InNumPayloadBits )
+		FSendBunchInfo( uint16 InChannelIndex, uint32 InChannelTypeNameIndex, uint16 InNumHeaderBits, uint16 InNumPayloadBits )
 			: ChannelIndex(InChannelIndex)
-			, ChannelType(InChannelType)
+			, ChannelTypeNameIndex(InChannelTypeNameIndex)
 			, NumHeaderBits(InNumHeaderBits)
 			, NumPayloadBits(InNumPayloadBits) {}
 	};

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	UnObjGC.cpp: Unreal object garbage collection code.
@@ -43,6 +43,8 @@ int32		GPurgedObjectCountSinceLastMarkPhase	= 0;
 bool GObjIncrementalPurgeIsInProgress = false;
 /** Whether GC is currently routing BeginDestroy to objects										*/
 bool GObjUnhashUnreachableIsInProgress = false;
+/** Time the GC started, needs to be reset on return from being in the background on some OSs */
+double GCStartTime = 0.;
 /** Whether FinishDestroy has already been routed to all unreachable objects. */
 static bool GObjFinishDestroyHasBeenRoutedToAllObjects	= false;
 /** 
@@ -1017,7 +1019,8 @@ struct FConditionalGCLock
 void IncrementalPurgeGarbage( bool bUseTimeLimit, float TimeLimit )
 {
 	SCOPED_NAMED_EVENT(IncrementalPurgeGarbage, FColor::Red);
-	DECLARE_SCOPE_CYCLE_COUNTER( TEXT( "IncrementalPurgeGarbage" ), STAT_IncrementalPurgeGarbage, STATGROUP_GC );
+	DECLARE_SCOPE_CYCLE_COUNTER(TEXT("IncrementalPurgeGarbage"), STAT_IncrementalPurgeGarbage, STATGROUP_GC);
+	CSV_SCOPED_TIMING_STAT_EXCLUSIVE(GarbageCollection);
 
 	if (GExitPurge)
 	{
@@ -1056,7 +1059,7 @@ void IncrementalPurgeGarbage( bool bUseTimeLimit, float TimeLimit )
 	} ResetPurgeProgress(bCompleted);
 
 	// Keep track of start time to enforce time limit unless bForceFullPurge is true;
-	const double		StartTime							= FPlatformTime::Seconds();
+	GCStartTime							= FPlatformTime::Seconds();
 	bool		bTimeLimitReached							= false;
 	// Depending on platform FPlatformTime::Seconds might take a noticeable amount of time if called thousands of times so we avoid
 	// enforcing the time limit too often, especially as neither Destroy nor actual deletion should take significant
@@ -1142,7 +1145,7 @@ void IncrementalPurgeGarbage( bool bUseTimeLimit, float TimeLimit )
 
 			// Only check time limit every so often to avoid calling FPlatformTime::Seconds too often.
 			const bool bPollTimeLimit = ((TimeLimitTimePollCounter++) % TimeLimitEnforcementGranularityForDestroy == 0);
-			if( bUseTimeLimit && bPollTimeLimit && ((FPlatformTime::Seconds() - StartTime) > TimeLimit) )
+			if( bUseTimeLimit && bPollTimeLimit && ((FPlatformTime::Seconds() - GCStartTime) > TimeLimit) )
 			{
 				bTimeLimitReached = true;
 				break;
@@ -1199,7 +1202,7 @@ void IncrementalPurgeGarbage( bool bUseTimeLimit, float TimeLimit )
 
 					// Only check time limit every so often to avoid calling FPlatformTime::Seconds too often.
 					const bool bPollTimeLimit = ((TimeLimitTimePollCounter++) % TimeLimitEnforcementGranularityForDestroy == 0);
-					if( bUseTimeLimit && bPollTimeLimit && ((FPlatformTime::Seconds() - StartTime) > TimeLimit) )
+					if( bUseTimeLimit && bPollTimeLimit && ((FPlatformTime::Seconds() - GCStartTime) > TimeLimit) )
 					{
 						bTimeLimitReached = true;
 						break;
@@ -1218,10 +1221,14 @@ void IncrementalPurgeGarbage( bool bUseTimeLimit, float TimeLimit )
 					if (FPlatformProperties::RequiresCookedData())
 					{
 						const bool bPollTimeLimit = ((FinishDestroyTimePollCounter++) % TimeLimitEnforcementGranularityForDestroy == 0);
+#if PLATFORM_IOS
+                        const double MaxTimeForFinishDestroy = 30.0;
+#else
 						const double MaxTimeForFinishDestroy = 10.0;
+#endif
 						// Check if we spent too much time on waiting for FinishDestroy without making any progress
 						if (LastLoopObjectsPendingDestructionCount == GGCObjectsPendingDestructionCount && bPollTimeLimit &&
-							((FPlatformTime::Seconds() - StartTime) > MaxTimeForFinishDestroy))
+							((FPlatformTime::Seconds() - GCStartTime) > MaxTimeForFinishDestroy))
 						{
 							UE_LOG(LogGarbage, Warning, TEXT("Spent more than %.2fs on routing FinishDestroy to objects (objects in queue: %d)"), MaxTimeForFinishDestroy, GGCObjectsPendingDestructionCount);
 							UObject* LastObjectNotReadyForFinishDestroy = nullptr;
@@ -1322,7 +1329,7 @@ void IncrementalPurgeGarbage( bool bUseTimeLimit, float TimeLimit )
 			// Only check time limit every so often to avoid calling FPlatformTime::Seconds too often.
 			if( bUseTimeLimit && (ProcessCount == TimeLimitEnforcementGranularityForDeletion))
 			{
-				if ((FPlatformTime::Seconds() - StartTime) > TimeLimit)
+				if ((FPlatformTime::Seconds() - GCStartTime) > TimeLimit)
 				{
 					bTimeLimitReached = true;
 					break;
@@ -1342,7 +1349,6 @@ void IncrementalPurgeGarbage( bool bUseTimeLimit, float TimeLimit )
 
 			// Log status information.
 			UE_LOG(LogGarbage, Log, TEXT("GC purged %i objects (%i -> %i)"), GPurgedObjectCountSinceLastMarkPhase, GObjectCountDuringLastMarkPhase.GetValue(), GObjectCountDuringLastMarkPhase.GetValue() - GPurgedObjectCountSinceLastMarkPhase );
-
 #if PERF_DETAILED_PER_CLASS_GC_STATS
 			LogClassCountInfo( TEXT("objects of"), GClassToPurgeCountMap, 10, GPurgedObjectCountSinceLastMarkPhase );
 #endif
@@ -1483,6 +1489,7 @@ void CollectGarbageInternal(EObjectFlags KeepFlags, bool bPerformFullPurge)
 	SCOPE_TIME_GUARD(TEXT("Collect Garbage"));
 	SCOPED_NAMED_EVENT(CollectGarbageInternal, FColor::Red);
 	CSV_EVENT_GLOBAL(TEXT("GC"));
+	CSV_SCOPED_TIMING_STAT_EXCLUSIVE(GarbageCollection);
 
 	FGCCSyncObject::Get().ResetGCIsWaiting();
 
@@ -1597,6 +1604,11 @@ void CollectGarbageInternal(EObjectFlags KeepFlags, bool bPerformFullPurge)
 		if (bPerformFullPurge || GIsEditor)
 		{
 			IncrementalPurgeGarbage(false);
+		}
+
+		if (bPerformFullPurge)
+		{
+			ShrinkUObjectHashTables();
 		}
 
 		// Destroy all pending delete linkers

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -40,7 +40,7 @@ namespace ESplitScreenType
 	};
 
 	// Deprecated old FourPlayer grid enum value
-	DEPRECATED(4.21, "FourPlayer is now FourPlayer_Grid")
+	UE_DEPRECATED(4.21, "FourPlayer is now FourPlayer_Grid")
 	const Type FourPlayer = FourPlayer_Grid;
 }
 

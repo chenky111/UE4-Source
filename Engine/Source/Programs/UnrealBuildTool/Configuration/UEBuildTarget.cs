@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -460,6 +460,11 @@ namespace UnrealBuildTool
 			if (!RulesObject.bAllowNonUFSIniWhenCooked)
 			{
 				RulesObject.GlobalDefinitions.Add("DISABLE_NONUFS_INI_WHEN_COOKED=1");
+			}
+
+			if (RulesObject.bDisableUnverifiedCertificates)
+			{
+				RulesObject.GlobalDefinitions.Add("DISABLE_UNVERIFIED_CERTIFICATE_LOADING=1");
 			}
 
 			// Allow the platform to finalize the settings
@@ -2083,8 +2088,7 @@ namespace UnrealBuildTool
 					IsCurrentPlatform = Platform == UnrealTargetPlatform.Win64 || Platform == UnrealTargetPlatform.Win32;
 				}
 
-				if ((TargetType == TargetType.Game || TargetType == TargetType.Client || TargetType == TargetType.Server)
-					&& IsCurrentPlatform)
+				if (IsCurrentPlatform)
 				{
 					// The hardcoded engine directory needs to be a relative path to match the normal EngineDir format. Not doing so breaks the network file system (TTP#315861).
 					string OutputFilePath = ExecutableBinary.OutputFilePath.FullName;
@@ -3622,6 +3626,9 @@ namespace UnrealBuildTool
             {
                 GlobalCompileEnvironment.Definitions.Add("ENABLE_PGO_PROFILE=0");
             }
+
+			// Toggle to enable vorbis for audio streaming where available
+			GlobalCompileEnvironment.Definitions.Add("USE_VORBIS_FOR_STREAMING=1");
 
 			// Add the 'Engine/Source' path as a global include path for all modules
 			GlobalCompileEnvironment.IncludePaths.UserIncludePaths.Add(UnrealBuildTool.EngineSourceDirectory);

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -91,12 +91,12 @@ public:
 	@return True if the command to set the tracking mode was successfully sent to the controller, false otherwise.
 	*/
 	UFUNCTION(BlueprintCallable, Category = "MotionController|MagicLeap")
-		static bool SetControllerTrackingMode(EMLControllerTrackingMode TrackingMode);
+	static bool SetControllerTrackingMode(EMLControllerTrackingMode TrackingMode);
 
 	/**
 	Get controller tracking mode.
 	@return Controller tracking mode.
 	*/
 	UFUNCTION(BlueprintCallable, Category = "MotionController|MagicLeap")
-		static EMLControllerTrackingMode GetControllerTrackingMode();
+	static EMLControllerTrackingMode GetControllerTrackingMode();
 };

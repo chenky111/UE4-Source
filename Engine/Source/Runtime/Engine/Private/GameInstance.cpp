@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Engine/GameInstance.h"
 #include "Misc/MessageDialog.h"
@@ -35,9 +35,10 @@
 #endif
 
 UGameInstance::UGameInstance(const FObjectInitializer& ObjectInitializer)
-: Super(ObjectInitializer)
-, TimerManager(new FTimerManager())
-, LatentActionManager(new FLatentActionManager())
+	: Super(ObjectInitializer)
+	, TimerManager(new FTimerManager())
+	, LatentActionManager(new FLatentActionManager())
+	, SubsystemCollection(this)
 {
 	TimerManager->SetGameInstance(this);
 }
@@ -95,6 +96,8 @@ void UGameInstance::Init()
 		FNetDelegates::OnReceivedNetworkEncryptionToken.BindUObject(this, &ThisClass::ReceivedNetworkEncryptionToken);
 		FNetDelegates::OnReceivedNetworkEncryptionAck.BindUObject(this, &ThisClass::ReceivedNetworkEncryptionAck);
 	}
+
+	SubsystemCollection.Initialize();
 }
 
 void UGameInstance::OnConsoleInput(const FString& Command)
@@ -131,6 +134,8 @@ void UGameInstance::Shutdown()
 			RemoveLocalPlayer(Player);
 		}
 	}
+
+	SubsystemCollection.Deinitialize();
 
 	FNetDelegates::OnReceivedNetworkEncryptionToken.Unbind();
 	FNetDelegates::OnReceivedNetworkEncryptionAck.Unbind();

@@ -83,7 +83,9 @@ void MaterialSetupCS(
 	 
 	float3 WorldPosition = ComputeCellWorldPosition(GridCoordinate, VoxelOffset);
 
-	float GlobalDensity = FogStruct.ExponentialFogParameters3.x * exp2(-FogStruct.ExponentialFogParameters.y * (WorldPosition.z - FogStruct.ExponentialFogParameters3.y));
+	float GlobalDensityFirst = FogStruct.ExponentialFogParameters3.x * exp2(-FogStruct.ExponentialFogParameters.y * (WorldPosition.z - FogStruct.ExponentialFogParameters3.y));
+	float GlobalDensitySecond = FogStruct.ExponentialFogParameters2.z * exp2(-FogStruct.ExponentialFogParameters2.y * (WorldPosition.z - FogStruct.ExponentialFogParameters2.w));
+	float GlobalDensity = GlobalDensityFirst + GlobalDensitySecond;
 
 	float3 Albedo = GlobalAlbedo;
 
@@ -636,7 +638,7 @@ void LightScatteringCS(
 
 	if (all(GridCoordinate < VolumetricFog.GridSizeInt))
 	{
-		ScatteringAndExtinction = isnan(ScatteringAndExtinction) || isinf(ScatteringAndExtinction) ? 0 : ScatteringAndExtinction;
+		ScatteringAndExtinction = -min(-ScatteringAndExtinction, float4(0.f, 0.f, 0.f, 0.f));	// vector isnan/isinf are miscompiled by hlslcc (see UE-66179)
 		RWLightScattering[GridCoordinate] = ScatteringAndExtinction;
 	}
 }

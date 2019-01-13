@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	SceneRendering.cpp: Scene rendering.
@@ -44,6 +44,7 @@
 #include "PostProcess/PostProcessing.h"
 #include "SceneSoftwareOcclusion.h"
 #include "VirtualTexturing.h"
+#include "VisualizeTexturePresent.h"
 
 /*-----------------------------------------------------------------------------
 	Globals
@@ -590,6 +591,11 @@ void FParallelCommandListSet::Dispatch(bool bHighPriority)
 	check(CommandLists.Num() == Events.Num());
 	check(CommandLists.Num() == NumAlloc);
 
+	// We should not be submitting work off a parent command list if it's still in the middle of a renderpass.
+	// This is a bit weird since we will (likely) end up opening one in the parallel translate case but until we have
+	// a cleaner way for the RHI to specify parallel passes this is what we've got.
+	check(ParentCmdList.IsOutsideRenderPass());
+
 	// We don't support the mask changing while the parallel commandlists are being processed.
 	ensure(GPUMask == ParentCmdList.GetGPUMask());
 
@@ -636,7 +642,9 @@ void FParallelCommandListSet::Dispatch(bool bHighPriority)
 		check(GRHISupportsParallelRHIExecute);
 		NumAlloc -= CommandLists.Num();
 		ParentCmdList.QueueParallelAsyncCommandListSubmit(&Events[0], bHighPriority, &CommandLists[0], &NumDrawsIfKnown[0], CommandLists.Num(), (MinDrawsPerCommandList * 4) / 3, bSpewBalance);
+		// #todo-renderpasses PS4 breaks if this isn't here. Why?
 		SetStateOnCommandList(ParentCmdList);
+		ParentCmdList.EndRenderPass();
 	}
 	else
 	{
@@ -775,8 +783,10 @@ void FViewInfo::Init()
 	bUsesLightingChannels = false;
 	bTranslucentSurfaceLighting = false;
 	bUsesSceneDepth = false;
+	bFogOnlyOnRenderedOpaque = false;
 
 	ExponentialFogParameters = FVector4(0,1,1,0);
+	ExponentialFogParameters2 = FVector4(0, 1, 0, 0);
 	ExponentialFogColor = FVector::ZeroVector;
 	FogMaxOpacity = 1;
 	ExponentialFogParameters3 = FVector4(0, 0, 0, 0);
@@ -1217,11 +1227,13 @@ void FViewInfo::SetupUniformBufferParameters(
 		PrimaryView->CalcTranslucencyLightingVolumeBounds(OutTranslucentCascadeBoundsArray, NumTranslucentCascades);
 	}
 
+	const int32 TranslucencyLightingVolumeDim = GetTranslucencyLightingVolumeDim();
+
 	for (int32 CascadeIndex = 0; CascadeIndex < NumTranslucentCascades; CascadeIndex++)
 	{
-		const float VolumeVoxelSize = (OutTranslucentCascadeBoundsArray[CascadeIndex].Max.X - OutTranslucentCascadeBoundsArray[CascadeIndex].Min.X) / GTranslucencyLightingVolumeDim;
+		const float VolumeVoxelSize = (OutTranslucentCascadeBoundsArray[CascadeIndex].Max.X - OutTranslucentCascadeBoundsArray[CascadeIndex].Min.X) / TranslucencyLightingVolumeDim;
 		const FVector VolumeSize = OutTranslucentCascadeBoundsArray[CascadeIndex].Max - OutTranslucentCascadeBoundsArray[CascadeIndex].Min;
-		ViewUniformShaderParameters.TranslucencyLightingVolumeMin[CascadeIndex] = FVector4(OutTranslucentCascadeBoundsArray[CascadeIndex].Min, 1.0f / GTranslucencyLightingVolumeDim);
+		ViewUniformShaderParameters.TranslucencyLightingVolumeMin[CascadeIndex] = FVector4(OutTranslucentCascadeBoundsArray[CascadeIndex].Min, 1.0f / TranslucencyLightingVolumeDim);
 		ViewUniformShaderParameters.TranslucencyLightingVolumeInvSize[CascadeIndex] = FVector4(FVector(1.0f) / VolumeSize, VolumeVoxelSize);
 	}
 	
@@ -1387,10 +1399,12 @@ void FViewInfo::InitRHIResources()
 
 	ViewUniformBuffer = TUniformBufferRef<FViewUniformShaderParameters>::CreateUniformBufferImmediate(*CachedViewUniformShaderParameters, UniformBuffer_SingleFrame);
 
+	const int32 TranslucencyLightingVolumeDim = GetTranslucencyLightingVolumeDim();
+
 	for (int32 CascadeIndex = 0; CascadeIndex < TVC_MAX; CascadeIndex++)
 	{
 		TranslucencyLightingVolumeMin[CascadeIndex] = VolumeBounds[CascadeIndex].Min;
-		TranslucencyVolumeVoxelSize[CascadeIndex] = (VolumeBounds[CascadeIndex].Max.X - VolumeBounds[CascadeIndex].Min.X) / GTranslucencyLightingVolumeDim;
+		TranslucencyVolumeVoxelSize[CascadeIndex] = (VolumeBounds[CascadeIndex].Max.X - VolumeBounds[CascadeIndex].Min.X) / TranslucencyLightingVolumeDim;
 		TranslucencyLightingVolumeSize[CascadeIndex] = VolumeBounds[CascadeIndex].Max - VolumeBounds[CascadeIndex].Min;
 	}
 
@@ -1433,10 +1447,11 @@ FViewInfo* FViewInfo::CreateSnapshot() const
 	for (size_t i = 0; i < ARRAY_COUNT(Result->MobileDirectionalLightUniformBuffers); i++)
 	{
 		// This memcpy is necessary to clear the reference from the memcpy of the whole of this -> Result without releasing the pointer
-		FMemory::Memcpy(Result->MobileDirectionalLightUniformBuffers[i], NullMobileDirectionalLightUniformBuffer);
-		
 		// But what we really want is the null buffer.
-		Result->MobileDirectionalLightUniformBuffers[i] = GetNullMobileDirectionalLightShaderParameters();
+		FMemory::Memcpy(
+			&Result->MobileDirectionalLightUniformBuffers[i],
+			&GetNullMobileDirectionalLightShaderParameters(),
+			sizeof(TUniformBufferRef<FMobileDirectionalLightShaderParameters>));
 	}
 
 	TUniquePtr<FViewUniformShaderParameters> NullViewParameters;
@@ -1953,6 +1968,8 @@ void FSceneRenderer::PrepareViewRectsForRendering()
 		
 		check(FSceneViewScreenPercentageConfig::IsValidResolutionFraction(PrimaryResolutionFraction));
 
+		check(FSceneViewScreenPercentageConfig::IsValidResolutionFraction(PrimaryResolutionFraction));
+		
 		// Compute final resolution fraction.
 		float ResolutionFraction = PrimaryResolutionFraction * ViewFamily.SecondaryViewFraction;
 
@@ -2513,7 +2530,7 @@ void FSceneRenderer::RenderFinish(FRHICommandListImmediate& RHICmdList)
 				continue;
 			}
 
-			GRenderTargetPool.PresentContent(RHICmdList, View);
+			FVisualizeTexturePresent::PresentContent(RHICmdList, View);
 		}
 	}
 #endif
@@ -2686,7 +2703,7 @@ void FSceneRenderer::OnStartFrame(FRHICommandListImmediate& RHICmdList)
 {
 	FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
 
-	GRenderTargetPool.VisualizeTexture.OnStartFrame(Views[0]);
+	FVisualizeTexturePresent::OnStartRender(Views[0]);
 	CompositionGraph_OnStartFrame();
 	SceneContext.bScreenSpaceAOIsValid = false;
 	SceneContext.bCustomDepthIsValid = false;
@@ -3054,7 +3071,6 @@ void OnChangeCVarRequiringRecreateRenderState(IConsoleVariable* Var)
 }
 
 FRendererModule::FRendererModule()
-	: CustomCullingImpl(nullptr)
 {
 	CVarSimpleForwardShading_PreviousValue = CVarSimpleForwardShading.AsVariable()->GetInt();
 	CVarSimpleForwardShading.AsVariable()->SetOnChangedCallback(FConsoleVariableDelegate::CreateStatic(&OnChangeSimpleForwardShading));
@@ -3215,12 +3231,6 @@ void FRendererModule::DrawRectangle(
 		)
 {
 	::DrawRectangle( RHICmdList, X, Y, SizeX, SizeY, U, V, SizeU, SizeV, TargetSize, TextureSize, VertexShader, Flags );
-}
-
-
-TGlobalResource<FFilterVertexDeclaration>& FRendererModule::GetFilterVertexDeclaration()
-{
-	return GFilterVertexDeclaration;
 }
 
 void FRendererModule::RegisterPostOpaqueComputeDispatcher(FComputeDispatcher *Dispatcher)
@@ -3509,8 +3519,9 @@ void FSceneRenderer::ResolveSceneColor(FRHICommandList& RHICmdList)
 		FTexture2DRHIRef FMaskTexture = GDynamicRHI->RHIGetFMaskTexture(SceneContext.GetSceneColorSurface());
 
 		// Custom shader based color resolve for HDR color to emulate mobile.
-		SetRenderTarget(RHICmdList, SceneContext.GetSceneColorTexture(), FTextureRHIParamRef());
-		
+		FRHIRenderPassInfo RPInfo(SceneContext.GetSceneColorTexture(), ERenderTargetActions::Load_Store);
+		RHICmdList.BeginRenderPass(RPInfo, TEXT("ResolveColor"));
+		{
 		for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
 		{
 			const FViewInfo& View = Views[ViewIndex];
@@ -3613,11 +3624,14 @@ void FSceneRenderer::ResolveSceneColor(FRHICommandList& RHICmdList)
 				}
 			}
 
-				RHICmdList.DrawPrimitive(PT_TriangleList, 0, 1, 1);
+				RHICmdList.DrawPrimitive(0, 1, 1);
 			}
 		}
 
 		RHICmdList.SetScissorRect(false, 0, 0, 0, 0);
+	}
+
+		RHICmdList.EndRenderPass();
 	}
 }
 

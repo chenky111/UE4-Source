@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -413,11 +413,13 @@ public:
 	{
 		static FName NAME_OGG(TEXT("OGG"));
 		static FName NAME_OPUS(TEXT("OPUS"));
-
+		
+#if !USE_VORBIS_FOR_STREAMING
 		if (Wave->IsStreaming())
 		{
 			return NAME_OPUS;
 		}
+#endif
 
 		return NAME_OGG;
 	}

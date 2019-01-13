@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	UnObj.cpp: Unreal object manager.
@@ -1485,7 +1485,7 @@ public:
 		// Only care about unique default subobjects that are outside of the referencing object's outer chain.
 		// Also ignore references to subobjects if they share the same Outer.
 		// Ignore references from the subobject Outer's class (ComponentNameToDefaultObjectMap).
-		if (InObject != NULL && InObject->IsDefaultSubobject() && ObjectArray.Contains(InObject) == false && InObject->IsIn(ReferencingObject) == false &&
+		if (InObject != NULL && InObject->HasAnyFlags(RF_DefaultSubObject) && ObjectArray.Contains(InObject) == false && InObject->IsIn(ReferencingObject) == false &&
 			 (ReferencingObject->GetOuter() != InObject->GetOuter() && InObject != ReferencingObject->GetOuter()) &&
 			 (InReferencingObject == NULL || (InReferencingObject != InObject->GetOuter()->GetClass() && ReferencingObject != InObject->GetOuter()->GetClass())))
 		{
@@ -1554,7 +1554,7 @@ bool UObject::CheckDefaultSubobjectsInternal() const
 	CompCheck(this);
 	UClass* ObjClass = GetClass();
 
-	if (ObjClass != UFunction::StaticClass() && ObjClass->GetName() != TEXT("EdGraphPin"))
+	if (ObjClass != UFunction::StaticClass())
 	{
 		// Check for references to default subobjects of other objects.
 		// There should never be a pointer to a subobject from outside of the outer (chain) it belongs to.
@@ -1798,7 +1798,7 @@ void UObject::GetResourceSizeEx(FResourceSizeEx& CumulativeResourceSize)
 	if (CumulativeResourceSize.GetResourceSizeMode() == EResourceSizeMode::EstimatedTotal)
 	{
 		// Include this object's serialize size, and recursively call on direct subobjects
-		FArchiveCountMem MemoryCount(this);
+		FArchiveCountMem MemoryCount(this, true);
 		CumulativeResourceSize.AddDedicatedSystemMemoryBytes(MemoryCount.GetMax());
 
 		TArray<UObject*> SubObjects;
@@ -1806,7 +1806,12 @@ void UObject::GetResourceSizeEx(FResourceSizeEx& CumulativeResourceSize)
 
 		for (UObject* SubObject : SubObjects)
 		{
-			SubObject->GetResourceSizeEx(CumulativeResourceSize);
+#if WITH_EDITOR
+			if (!SubObject->IsEditorOnly() && (SubObject->NeedsLoadForClient() || SubObject->NeedsLoadForServer()))
+#endif // WITH_EDITOR
+			{
+				SubObject->GetResourceSizeEx(CumulativeResourceSize);
+			}
 		}
 	}
 }

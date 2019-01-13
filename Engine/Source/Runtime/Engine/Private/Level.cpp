@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 Level.cpp: Level-related functions
@@ -474,14 +474,15 @@ void ULevel::SortActorList()
 	NewActors.Reserve(Actors.Num());
 	NewNetActors.Reserve(Actors.Num());
 
-	check(WorldSettings);
-
-	// The WorldSettings tries to stay at index 0
-	NewActors.Add(WorldSettings);
-
-	if (OwningWorld != nullptr)
+	if (WorldSettings)
 	{
-		OwningWorld->AddNetworkActor(WorldSettings);
+		// The WorldSettings tries to stay at index 0
+		NewActors.Add(WorldSettings);
+
+		if (OwningWorld != nullptr)
+		{
+			OwningWorld->AddNetworkActor(WorldSettings);
+		}
 	}
 
 	// Add non-net actors to the NewActors immediately, cache off the net actors to Append after
@@ -1481,6 +1482,14 @@ void ULevel::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 		ReleaseRenderingResources();
 		InitializeRenderingResources();
 	}
+
+	for (UAssetUserData* Datum : AssetUserData)
+	{
+		if (Datum != nullptr)
+		{
+			Datum->PostEditChangeOwner();
+		}
+	}
 } 
 
 #endif // WITH_EDITOR
@@ -1752,6 +1761,22 @@ void ULevel::InitializeNetworkActors()
 			Actor->bActorSeamlessTraveled = false;
 		}
 	}
+
+	bAlreadyClearedActorsSeamlessTravelFlag = true;
+	bAlreadyInitializedNetworkActors = true;
+}
+
+void ULevel::ClearActorsSeamlessTraveledFlag()
+{
+	for (AActor* Actor : Actors)
+	{
+		if (Actor)
+		{
+			Actor->bActorSeamlessTraveled = false;
+		}
+	}
+
+	bAlreadyClearedActorsSeamlessTravelFlag = true;
 }
 
 void ULevel::InitializeRenderingResources()

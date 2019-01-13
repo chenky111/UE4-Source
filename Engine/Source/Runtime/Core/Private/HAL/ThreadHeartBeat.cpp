@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 #include "HAL/ThreadHeartBeat.h"
 #include "HAL/PlatformStackWalk.h"
 #include "HAL/PlatformTime.h"
@@ -233,8 +233,6 @@ void FORCENOINLINE FThreadHeartBeat::OnHang(double HangDuration, uint32 ThreadTh
 
 #if PLATFORM_DESKTOP
 		GLog->PanicFlushThreadedLogs();
-		// GErrorMessage here is very unfortunate but it's used internally by the crash context code.
-		FCString::Strcpy(GErrorMessage, ARRAY_COUNT(GErrorMessage), *ErrorMessage);
 
 		// Skip macros and FDebug, we always want this to fire
 		TArray<FProgramCounterSymbolInfo> Stack;
@@ -242,9 +240,7 @@ void FORCENOINLINE FThreadHeartBeat::OnHang(double HangDuration, uint32 ThreadTh
 		{
 			FPlatformStackWalk::ProgramCounterToSymbolInfo(StackFrames[Idx], Stack.AddDefaulted_GetRef());
 		}
-		ReportHang(*ErrorMessage, Stack);
-
-		GErrorMessage[0] = '\0';
+		ReportHang(*ErrorMessage, Stack, ThreadThatHung);
 #endif // PLATFORM_DESKTOP
 
 #endif // UE_ASSERT_ON_HANG == 0
@@ -465,6 +461,7 @@ void FThreadHeartBeat::ResumeHeartBeat()
 
 	// Resume the frame-present based detection at the same time.
 	PresentHeartBeat.SuspendedCount--;
+	PresentHeartBeat.LastHeartBeatTime = Clock.Seconds();
 #endif
 }
 
@@ -518,13 +515,12 @@ void FThreadHeartBeat::SetDurationMultiplier(double NewMultiplier)
 #endif
 }
 
-FGameThreadHitchHeartBeat::FGameThreadHitchHeartBeat()
+FGameThreadHitchHeartBeatThreaded::FGameThreadHitchHeartBeatThreaded()
 	: Thread(nullptr)
 	, HangDuration(-1.f)
 	, bWalkStackOnHitch(false)
 	, FirstStartTime(0.0)
 	, FrameStartTime(0.0)
-	, LastReportTime(0.0)
 	, SuspendedCount(0)
 	, Clock(HitchDetectorClock_MaxTimeStep_MS / 1000.0)
 {
@@ -534,7 +530,7 @@ FGameThreadHitchHeartBeat::FGameThreadHitchHeartBeat()
 #endif
 }
 
-FGameThreadHitchHeartBeat::~FGameThreadHitchHeartBeat()
+FGameThreadHitchHeartBeatThreaded::~FGameThreadHitchHeartBeatThreaded()
 {
 	if (Thread)
 	{
@@ -543,18 +539,18 @@ FGameThreadHitchHeartBeat::~FGameThreadHitchHeartBeat()
 	}
 }
 
-FGameThreadHitchHeartBeat* FGameThreadHitchHeartBeat::Singleton = nullptr;
+FGameThreadHitchHeartBeatThreaded* FGameThreadHitchHeartBeatThreaded::Singleton = nullptr;
 
-FGameThreadHitchHeartBeat& FGameThreadHitchHeartBeat::Get()
+FGameThreadHitchHeartBeatThreaded& FGameThreadHitchHeartBeatThreaded::Get()
 {
 	struct FInitHelper
 	{
-		FGameThreadHitchHeartBeat* Instance;
+		FGameThreadHitchHeartBeatThreaded* Instance;
 
 		FInitHelper()
 		{
 			check(!Singleton);
-			Instance = new FGameThreadHitchHeartBeat();
+			Instance = new FGameThreadHitchHeartBeatThreaded();
 			Singleton = Instance;
 		}
 
@@ -568,23 +564,23 @@ FGameThreadHitchHeartBeat& FGameThreadHitchHeartBeat::Get()
 	};
 
 	// Use a function static helper to ensure creation
-	// of the FGameThreadHitchHeartBeat instance is thread safe.
+	// of the FGameThreadHitchHeartBeatThreaded instance is thread safe.
 	static FInitHelper Helper;
 	return *Helper.Instance;
 }
 
-FGameThreadHitchHeartBeat* FGameThreadHitchHeartBeat::GetNoInit()
+FGameThreadHitchHeartBeatThreaded* FGameThreadHitchHeartBeatThreaded::GetNoInit()
 {
 	return Singleton;
 }
 
 //~ Begin FRunnable Interface.
-bool FGameThreadHitchHeartBeat::Init()
+bool FGameThreadHitchHeartBeatThreaded::Init()
 {
 	return true;
 }
 
-void FGameThreadHitchHeartBeat::InitSettings()
+void FGameThreadHitchHeartBeatThreaded::InitSettings()
 {
 #if USE_HITCH_DETECTION
 	static bool bFirst = true;
@@ -634,12 +630,12 @@ void FGameThreadHitchHeartBeat::InitSettings()
 	// Start the heart beat thread if it hasn't already been started.
 	if (Thread == nullptr && FPlatformProcess::SupportsMultithreading() && HangDuration > 0)
 	{
-		Thread = FRunnableThread::Create(this, TEXT("FGameThreadHitchHeartBeat"), 0, TPri_AboveNormal);
+		Thread = FRunnableThread::Create(this, TEXT("FGameThreadHitchHeartBeatThreaded"), 0, TPri_AboveNormal);
 	}
 #endif
 }
 
-uint32 FGameThreadHitchHeartBeat::Run()
+uint32 FGameThreadHitchHeartBeatThreaded::Run()
 {
 #if USE_HITCH_DETECTION
 #if WALK_STACK_ON_HITCH_DETECTED
@@ -669,7 +665,7 @@ uint32 FGameThreadHitchHeartBeat::Run()
 			if (LocalFrameStartTime > 0.0 && LocalHangDuration > 0.0f && SuspendedCount == 0)
 			{
 				const double CurrentTime = Clock.Seconds();
-				if (CurrentTime - LastReportTime > 60.0 && float(CurrentTime - LocalFrameStartTime) > LocalHangDuration)
+				if (float(CurrentTime - LocalFrameStartTime) > LocalHangDuration)
 				{
 					if (StopTaskCounter.GetValue() == 0)
 					{
@@ -735,12 +731,12 @@ uint32 FGameThreadHitchHeartBeat::Run()
 	return 0;
 }
 
-void FGameThreadHitchHeartBeat::Stop()
+void FGameThreadHitchHeartBeatThreaded::Stop()
 {
 	StopTaskCounter.Increment();
 }
 
-void FGameThreadHitchHeartBeat::FrameStart(bool bSkipThisFrame)
+void FGameThreadHitchHeartBeatThreaded::FrameStart(bool bSkipThisFrame)
 {
 #if USE_HITCH_DETECTION
 	check(IsInGameThread());
@@ -759,32 +755,25 @@ void FGameThreadHitchHeartBeat::FrameStart(bool bSkipThisFrame)
 	{
 		FrameStartTime = bSkipThisFrame ? 0.0 : Now;
 	}
-#if !STATS && !UE_BUILD_DEBUG && defined(USE_LIGHTWEIGHT_STATS_FOR_HITCH_DETECTION) && USE_LIGHTWEIGHT_STATS_FOR_HITCH_DETECTION && USE_HITCH_DETECTION
-	if (GHitchDetected)
-	{
-		TFunction<void(ENamedThreads::Type CurrentThread)> Broadcast =
-			[this](ENamedThreads::Type MyThread)
-		{
-			FString ThreadString(FPlatformTLS::GetCurrentThreadId() == GGameThreadId ? TEXT("GameThread") : FThreadManager::Get().GetThreadName(FPlatformTLS::GetCurrentThreadId()));
-			UE_LOG(LogCore, Error, TEXT("FGameThreadHitchHeartBeat Flushed Thread [%s]"), *ThreadString);
-		};
-		// Skip task threads we will catch the wait for them
-		FTaskGraphInterface::BroadcastSlow_OnlyUseForSpecialPurposes(false, false, Broadcast);
-	}
-#endif
 	GHitchDetected = false;
 #endif
 }
 
-void FGameThreadHitchHeartBeat::SuspendHeartBeat()
+void FGameThreadHitchHeartBeatThreaded::SuspendHeartBeat()
 {
 #if USE_HITCH_DETECTION
+	if (!IsInGameThread())
+		return;
+
 	FPlatformAtomics::InterlockedIncrement(&SuspendedCount);
 #endif
 }
-void FGameThreadHitchHeartBeat::ResumeHeartBeat()
+void FGameThreadHitchHeartBeatThreaded::ResumeHeartBeat()
 {
 #if USE_HITCH_DETECTION
+	if (!IsInGameThread())
+		return;
+
 	check(SuspendedCount > 0);
 	if (FPlatformAtomics::InterlockedDecrement(&SuspendedCount) == 0)
 	{
@@ -793,12 +782,12 @@ void FGameThreadHitchHeartBeat::ResumeHeartBeat()
 #endif
 }
 
-double FGameThreadHitchHeartBeat::GetFrameStartTime()
+double FGameThreadHitchHeartBeatThreaded::GetFrameStartTime()
 {
 	return FrameStartTime;
 }
 
-double FGameThreadHitchHeartBeat::GetCurrentTime()
+double FGameThreadHitchHeartBeatThreaded::GetCurrentTime()
 {
 	return Clock.Seconds();
 }

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "CoreMinimal.h"
 #include "Misc/MessageDialog.h"
@@ -100,6 +100,8 @@
 #include "Kismet2/DebuggerCommands.h"
 #include "Misc/ScopeExit.h"
 #include "IVREditorModule.h"
+#include "EditorModeRegistry.h"
+#include "PhysicsManipulationMode.h"
 
 
 DEFINE_LOG_CATEGORY_STATIC(LogPlayLevel, Log, All);
@@ -278,23 +280,6 @@ void UEditorEngine::EndPlayMap()
 	}
 	CleanupGameViewport();
 
-	// find objects like Textures in the playworld levels that won't get garbage collected as they are marked RF_Standalone
-	for( FObjectIterator It; It; ++It )
-	{
-		UObject* Object = *It;
-
-		if (Object->GetOutermost()->HasAnyPackageFlags(PKG_PlayInEditor))
-		{
-			if (Object->HasAnyFlags(RF_Standalone))
-			{
-				// Clear RF_Standalone flag from objects in the levels used for PIE so they get cleaned up.
-				Object->ClearFlags(RF_Standalone);
-			}
-			// Close any asset editors that are currently editing this object
-			FAssetEditorManager::Get().CloseAllEditorsForAsset(Object);
-		}
-	}
-
 	// Clean up each world individually
 	TArray<FName> OnlineIdentifiers;
 	TArray<UWorld*> WorldsBeingCleanedUp;
@@ -398,6 +383,23 @@ void UEditorEngine::EndPlayMap()
 					UE_LOG(LogBlueprintUserMessages, Log, TEXT("Late EndPlayMap Detection: Level '%s' has LevelScriptBlueprint '%s'"), *Level->GetPathName(), *LevelScriptBlueprint->GetPathName());
 				}
 			}
+		}
+	}
+
+	// find objects like Textures in the playworld levels that won't get garbage collected as they are marked RF_Standalone
+	for (FObjectIterator It; It; ++It)
+	{
+		UObject* Object = *It;
+
+		if (Object->GetOutermost()->HasAnyPackageFlags(PKG_PlayInEditor))
+		{
+			if (Object->HasAnyFlags(RF_Standalone))
+			{
+				// Clear RF_Standalone flag from objects in the levels used for PIE so they get cleaned up.
+				Object->ClearFlags(RF_Standalone);
+			}
+			// Close any asset editors that are currently editing this object
+			FAssetEditorManager::Get().CloseAllEditorsForAsset(Object);
 		}
 	}
 
@@ -611,6 +613,10 @@ void UEditorEngine::TeardownPlaySession(FWorldContext& PieWorldContext)
 
 				// No longer simulating in the viewport
 				Viewport->GetLevelViewportClient().SetIsSimulateInEditorViewport( false );
+
+				
+				FEditorModeRegistry::Get().UnregisterMode(FBuiltinEditorModes::EM_Physics);
+				
 
 				// Clear out the hit proxies before GC'ing
 				Viewport->GetLevelViewportClient().Viewport->InvalidateHitProxy();
@@ -2946,8 +2952,8 @@ UGameInstance* UEditorEngine::CreatePIEGameInstance(int32 InPIEInstance, bool bI
 	GameInstanceParams.bSimulateInEditor = bInSimulateInEditor;
 	GameInstanceParams.bStartInSpectatorMode = bStartInSpectatorMode;
 	GameInstanceParams.bRunAsDedicated = bRunAsDedicated;
-	GameInstanceParams.WorldFeatureLevel = DefaultWorldFeatureLevel;
-	
+	GameInstanceParams.WorldFeatureLevel = PreviewFeatureLevel;
+
 	const FGameInstancePIEResult InitializeResult = GameInstance->InitializeForPlayInEditor(InPIEInstance, GameInstanceParams);
 	if (!InitializeResult.IsSuccess())
 	{
@@ -3493,6 +3499,9 @@ void UEditorEngine::ToggleBetweenPIEandSIE( bool bNewSession )
 			// No longer simulating
 			GameViewport->SetIsSimulateInEditorViewport(false);
 			EditorViewportClient.SetIsSimulateInEditorViewport(false);
+
+			FEditorModeRegistry::Get().UnregisterMode(FBuiltinEditorModes::EM_Physics);
+			
 			bIsSimulatingInEditor = false;
 		}
 		else
@@ -3503,6 +3512,11 @@ void UEditorEngine::ToggleBetweenPIEandSIE( bool bNewSession )
 			GameViewport->SetIsSimulateInEditorViewport(true);
 			GameViewport->GetGameViewport()->SetPlayInEditorIsSimulate(true);
 			EditorViewportClient.SetIsSimulateInEditorViewport(true);
+
+		
+			TSharedRef<FPhysicsManipulationEdModeFactory> Factory = MakeShareable(new FPhysicsManipulationEdModeFactory);
+			FEditorModeRegistry::Get().RegisterMode(FBuiltinEditorModes::EM_Physics, Factory);
+			
 			bIsSimulatingInEditor = true;
 
 			// Make sure the viewport is in real-time mode

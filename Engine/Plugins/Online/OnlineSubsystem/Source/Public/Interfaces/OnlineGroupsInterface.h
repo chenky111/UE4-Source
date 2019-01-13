@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -337,7 +337,7 @@ struct FFindGroupsResult
 	FPagedQuery Paging;
 	FString ErrorContent;
 
-	inline bool DidSucceed() const { return (HttpStatus / 100) == 2; }
+	inline bool DidSucceed() const { return EHttpResponseCodes::IsOk(HttpStatus); }
 
 	FFindGroupsResult()
 		: HttpStatus(0)

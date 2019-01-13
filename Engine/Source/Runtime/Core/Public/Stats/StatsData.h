@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -510,6 +510,12 @@ public:
 
 	/** Toggles tracking the most memory expensive stats. */
 	void ToggleFindMemoryExtensiveStats();
+
+	/** Enables tracking the most memory expensive stats. */
+	void EnableFindMemoryExtensiveStats();
+
+	/** Disables tracking the most memory expensive stats. */
+	void DisableFindMemoryExtensiveStats();
 
 	/** Resets stats for raw stats. */
 	void ResetStatsForRawStats()

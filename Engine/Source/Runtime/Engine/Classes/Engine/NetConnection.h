@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 //
 // A network connection.
@@ -40,7 +40,7 @@ typedef TMap<TWeakObjectPtr<AActor>, UActorChannel*, FDefaultSetAllocator, TWeak
 enum { RELIABLE_BUFFER = 256 }; // Power of 2 >= 1.
 enum { MAX_PACKETID = 16384 };  // Power of 2 >= 1, covering guaranteed loss/misorder time.
 enum { MAX_CHSEQUENCE = 1024 }; // Power of 2 >RELIABLE_BUFFER, covering loss/misorder time.
-enum { MAX_BUNCH_HEADER_BITS = 64 };
+enum { MAX_BUNCH_HEADER_BITS = 256 };
 enum { MAX_PACKET_HEADER_BITS = 15 }; // = FMath::CeilLogTwo(MAX_PACKETID) + 1 (IsAck)
 enum { MAX_PACKET_TRAILER_BITS = 1 };
 
@@ -173,6 +173,17 @@ struct DelayedPacket
 	double SendTime;
 
 public:
+	UE_DEPRECATED(4.21, "Use the constructor that takes PacketTraits for allowing for analytics and flags")
+	FORCEINLINE DelayedPacket(uint8* InData, int32 InSizeBytes, int32 InSizeBits)
+		: Data()
+		, SizeBits(InSizeBits)
+		, Traits()
+		, SendTime(0.0)
+	{
+		Data.AddUninitialized(InSizeBytes);
+		FMemory::Memcpy(Data.GetData(), InData, InSizeBytes);
+	}
+
 	FORCEINLINE DelayedPacket(uint8* InData, int32 InSizeBits, FOutPacketTraits& InTraits)
 		: Data()
 		, SizeBits(InSizeBits)
@@ -183,6 +194,11 @@ public:
 
 		Data.AddUninitialized(SizeBytes);
 		FMemory::Memcpy(Data.GetData(), InData, SizeBytes);
+	}
+
+	void CountBytes(FArchive& Ar) const
+	{
+		Data.CountBytes(Ar);
 	}
 };
 #endif
@@ -358,6 +374,8 @@ public:
 	int32 InPacketsLost, OutPacketsLost;
 	/** total packets lost on this connection */
 	int32 InTotalPacketsLost, OutTotalPacketsLost;
+	/** total acks sent on this connection */
+	int32 OutTotalAcks;
 
 	/** Net Analytics */
 
@@ -534,7 +552,7 @@ public:
 	TMap<FNetworkGUID, TArray<class UActorChannel*>> KeepProcessingActorChannelBunchesMap;
 
 	/** A list of replicators that belong to recently dormant actors/objects */
-	TMap< TWeakObjectPtr< UObject >, TSharedRef< FObjectReplicator > > DormantReplicatorMap;
+	TMap< UObject*, TSharedRef< FObjectReplicator > > DormantReplicatorMap;
 
 	
 
@@ -550,7 +568,7 @@ public:
 	TSet<FName> ClientVisibleLevelNames;
 
 	/** Called by PlayerController to tell connection about client level visiblity change */
-	void UpdateLevelVisibility(const FName& PackageName, bool bIsVisible);
+	ENGINE_API void UpdateLevelVisibility(const FName& PackageName, bool bIsVisible);
 
 #if DO_ENABLE_NET_TEST
 	// For development.
@@ -646,6 +664,13 @@ public:
 
 	/** Describe the connection. */
 	ENGINE_API virtual FString Describe();
+
+	UE_DEPRECATED(4.21, "Use the method that allows for packet traits for analytics and modification")
+	ENGINE_API virtual void LowLevelSend(void* Data, int32 CountBytes, int32 CountBits)
+	{
+		FOutPacketTraits EmptyTraits;
+		LowLevelSend(Data, CountBits, EmptyTraits);
+	}
 
 	/**
 	 * Sends a byte stream to the remote endpoint using the underlying socket
@@ -764,6 +789,11 @@ public:
 	 */
 	ENGINE_API virtual void InitConnection(UNetDriver* InDriver, EConnectionState InState, const FURL& InURL, int32 InConnectionSpeed=0, int32 InMaxPacket=0);
 
+	UE_DEPRECATED(4.21, "Analytics providers are now handled in the NetDriver")
+	ENGINE_API virtual void InitHandler(TSharedPtr<IAnalyticsProvider> InProvider)
+	{
+		InitHandler();
+	}
 
 	/**
 	 * Initializes the PacketHandler
@@ -884,7 +914,11 @@ public:
 	class UControlChannel* GetControlChannel();
 
 	/** Create a channel. */
+	UE_DEPRECATED(4.22, "Use CreateChannelByName")
 	ENGINE_API UChannel* CreateChannel( EChannelType Type, bool bOpenedLocally, int32 ChannelIndex=INDEX_NONE );
+
+	/** Create a channel. */
+	ENGINE_API UChannel* CreateChannelByName( const FName& ChName, EChannelCreateFlags CreateFlags, int32 ChannelIndex=INDEX_NONE );
 
 	/** Handle a packet we just received. */
 	void ReceivedPacket( FBitReader& Reader );
@@ -1018,7 +1052,7 @@ private:
 	void UpdateAllCachedLevelVisibility() const;
 
 	/** Returns true if an outgoing packet should be dropped due to packet simulation settings, including loss burst simulation. */
-	bool ShouldDropOutgoingPacketForLossSimulation() const;
+	bool ShouldDropOutgoingPacketForLossSimulation(int64 NumBits) const;
 
 	/**
 	 * on the server, the world the client has told us it has loaded
@@ -1035,6 +1069,9 @@ private:
 
 	/** This is only used in UChannel::SendBunch. It's a member so that we can preserve the allocation between calls, as an optimization, and in a thread-safe way to be compatible with demo.ClientRecordAsyncEndOfFrame */
 	TArray<FOutBunch*> OutgoingBunches;
+
+	/** Bookkeeping for connections using internal ack to avoid acking all open channels */
+	TArray<int32> ChannelsWaitingForInternalAck;
 };
 
 
@@ -1106,5 +1143,8 @@ public:
 	void HandleClientPlayer( APlayerController* PC, UNetConnection* NetConnection ) override;
 	virtual FString LowLevelGetRemoteAddress(bool bAppendPort=false) override { return FString(); }
 	virtual bool ClientHasInitializedLevelFor(const AActor* TestActor) const { return true; }
+
+
+	virtual TSharedPtr<FInternetAddr> GetInternetAddr() override { return TSharedPtr<FInternetAddr>(); }
 };
 

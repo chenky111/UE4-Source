@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	ParticleModules.cpp: Particle module implementation.
@@ -981,6 +981,11 @@ void UParticleModuleSourceMovement::FinalUpdate(FParticleEmitterInstance* Owner,
 		}
 		END_UPDATE_LOOP;
 	}
+}
+
+bool UParticleModuleSourceMovement::CanTickInAnyThread()
+{
+	return SourceMovementScale.OkForParallel();
 }
 
 /*-----------------------------------------------------------------------------

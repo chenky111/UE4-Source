@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -1298,11 +1298,6 @@ namespace UnrealBuildTool
 						PCHArguments += string.Format(" -include \"{0}\"", BasePCHName);
 					}
 
-					foreach (FileItem ForceIncludeFile in CompileEnvironment.ForceIncludeFiles)
-					{
-						PCHArguments += string.Format(" -include \"{0}\"", ForceIncludeFile.Location);
-					}
-
 					// Add include paths to the argument list (filtered by architecture)
 					foreach (DirectoryReference IncludePath in CompileEnvironment.IncludePaths.SystemIncludePaths)
 					{
@@ -1359,6 +1354,11 @@ namespace UnrealBuildTool
 
 							// only use PCH for .cpp files
 							FileArguments += PCHArguments;
+						}
+
+						foreach (FileItem ForceIncludeFile in CompileEnvironment.ForceIncludeFiles)
+						{
+							FileArguments += string.Format(" -include \"{0}\"", ForceIncludeFile.Location);
 						}
 
 						// Add the C++ source file and its included files to the prerequisite item list.

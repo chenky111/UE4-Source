@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 
 #include "K2Node.h"
@@ -82,6 +82,7 @@ void UK2Node::Serialize(FArchive& Ar)
 			if (!Pin->bDefaultValueIsIgnored && !Pin->DefaultValue.IsEmpty() )
 			{
 				// If looking for references during save, expand any default values on the pins
+				// This is only reliable when saving in the editor, the cook case is handled below
 				if (Ar.IsObjectReferenceCollector() && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Struct && Pin->PinType.PinSubCategoryObject.IsValid())
 				{
 					UScriptStruct* Struct = Cast<UScriptStruct>(Pin->PinType.PinSubCategoryObject.Get());
@@ -159,25 +160,37 @@ void UK2Node::FixupPinDefaultValues()
 		}
 	}
 
-	// Fix asset ptr pins
-	if (LinkerFrameworkVersion < FFrameworkObjectVersion::ChangeAssetPinsToString)
+	// Fix soft object ptr pins
+	if (GIsEditor || LinkerFrameworkVersion < FFrameworkObjectVersion::ChangeAssetPinsToString)
 	{
-		bool bFoundPin = false;
-		for (int32 i = 0; i < Pins.Num() && !bFoundPin; ++i)
+		FSoftObjectPathSerializationScope SetPackage(GetOutermost()->GetFName(), NAME_None, ESoftObjectPathCollectType::AlwaysCollect, ESoftObjectPathSerializeType::SkipSerializeIfArchiveHasSize);
+		for (int32 i = 0; i < Pins.Num(); ++i)
 		{
 			UEdGraphPin* Pin = Pins[i];
-
 			if (Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_SoftObject || Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_SoftClass)
 			{
-				if (Pin->DefaultObject && Pin->DefaultValue.IsEmpty())
+				// Fix old assetptr pins
+				if (LinkerFrameworkVersion < FFrameworkObjectVersion::ChangeAssetPinsToString)
 				{
-					Pin->DefaultValue = Pin->DefaultObject->GetPathName();
-					Pin->DefaultObject = nullptr;
+					if (Pin->DefaultObject && Pin->DefaultValue.IsEmpty())
+					{
+						Pin->DefaultValue = Pin->DefaultObject->GetPathName();
+						Pin->DefaultObject = nullptr;
+					}
+				}
+
+				// In editor, fixup soft object ptrs on load on to handle redirects and finding refs for cooking
+				// We're not handling soft object ptrs inside FStructs because it's a rare edge case and would be a performance hit on load
+				if (GIsEditor && !Pin->DefaultValue.IsEmpty())
+				{
+					FSoftObjectPath TempRef(Pin->DefaultValue);
+					TempRef.PostLoadPath();
+					TempRef.PreSavePath();
+					Pin->DefaultValue = TempRef.ToString();
 				}
 			}
 		}
 	}
-
 }
 
 FText UK2Node::GetToolTipHeading() const
@@ -637,22 +650,31 @@ UK2Node::ERedirectType UK2Node::ShouldRedirectParam(const TArray<FString>& OldPi
 
 void UK2Node::RestoreSplitPins(TArray<UEdGraphPin*>& OldPins)
 {
+	UEdGraph* OuterGraph = GetGraph();
+	if (!OuterGraph || !OuterGraph->Schema)
+	{
+		return;
+	}
+
 	// necessary to recreate split pins and keep their wires
+	TArray<UEdGraphPin*> UnmatchedSplitPins;
 	for (UEdGraphPin* OldPin : OldPins)
 	{
 		if (OldPin->ParentPin)
 		{
 			// find the new pin that corresponds to parent, and split it if it isn't already split
+			bool bMatched = false;
 			for (UEdGraphPin* NewPin : Pins)
 			{
-				// The pin we're searching for has the same direction, is not a container, has the same name as our parent pin (TODO: does this handle redirects?), and is either a wildcard or a struct
+				// The pin we're searching for has the same direction, is not a container, has the same name as our parent pin, and is either a wildcard or a struct
 				// We allow sub categories of struct to change because it may be changing to a type that has the same members
-				if ((NewPin->Direction == OldPin->Direction) && !NewPin->PinType.IsContainer() && (NewPin->PinName == OldPin->ParentPin->PinName) 
+				if ((NewPin->Direction == OldPin->Direction) && !NewPin->PinType.IsContainer() && (NewPin->PinName == OldPin->ParentPin->PinName)
 					&& (NewPin->PinType.PinCategory == UEdGraphSchema_K2::PC_Wildcard || NewPin->PinType.PinCategory == UEdGraphSchema_K2::PC_Struct))
 				{
+					bMatched = true;
+
 					// Make sure we're not dealing with a menu node
-					UEdGraph* OuterGraph = GetGraph();
-					if (OuterGraph && OuterGraph->Schema && NewPin->SubPins.Num() == 0)
+					if (NewPin->SubPins.Num() == 0)
 					{
 						if (NewPin->PinType.PinCategory == UEdGraphSchema_K2::PC_Wildcard)
 						{
@@ -662,6 +684,37 @@ void UK2Node::RestoreSplitPins(TArray<UEdGraphPin*>& OldPins)
 						GetSchema()->SplitPin(NewPin, false);
 						break;
 					}
+				}
+			}
+
+			if (!bMatched)
+			{
+				UnmatchedSplitPins.Add(OldPin);
+			}
+		}
+	}
+
+	// try and use redirectors to match remaining pins:
+	for(UEdGraphPin* UnmatchedOldPin : UnmatchedSplitPins)
+	{
+		TArray<FString> OldPinNames;
+		GetRedirectPinNames(*UnmatchedOldPin->ParentPin, OldPinNames);
+
+		for (UEdGraphPin* NewPin : Pins)
+		{
+			FName NewPinName;
+			if (ShouldRedirectParam(OldPinNames, /*out*/ NewPinName, this) == ERedirectType_Name && NewPinName == NewPin->PinName)
+			{
+				// Make sure we're not dealing with a menu node
+				if (NewPin->SubPins.Num() == 0)
+				{
+					if (NewPin->PinType.PinCategory == UEdGraphSchema_K2::PC_Wildcard)
+					{
+						NewPin->PinType = UnmatchedOldPin->ParentPin->PinType;
+					}
+
+					GetSchema()->SplitPin(NewPin, false);
+					break;
 				}
 			}
 		}
@@ -751,7 +804,7 @@ UK2Node::ERedirectType UK2Node::DoPinsMatchForReconstruction(const UEdGraphPin* 
 
 					FName RedirectedPinName = SubCategoryStruct ? UProperty::FindRedirectedPropertyName(SubCategoryStruct, FName(*ParentHierarchy[ParentIndex].PropertyName)) : NAME_None;
 
-					if (RedirectedPinName != NAME_Name)
+					if (RedirectedPinName != NAME_None)
 					{
 						NewPinNameStr += FString(TEXT("_")) + RedirectedPinName.ToString();
 					}

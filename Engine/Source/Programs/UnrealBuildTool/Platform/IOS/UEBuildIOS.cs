@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -220,6 +220,12 @@ namespace UnrealBuildTool
         /// </summary>
         [ConfigFile(ConfigHierarchyType.Engine, "/Script/IOSRuntimeSettings.IOSRuntimeSettings", "bEnableBackgroundFetch")]
         public readonly bool bBackgroundFetchEnabled = false;
+
+		/// <summary>
+		/// true if iTunes file sharing support is enabled
+		/// </summary>
+		[ConfigFile(ConfigHierarchyType.Engine, "/Script/IOSRuntimeSettings.IOSRuntimeSettings", "bSupportsITunesFileSharing")]
+		public readonly bool bFileSharingEnabled = false;
 
 		/// <summary>
 		/// The bundle identifier
@@ -905,7 +911,6 @@ namespace UnrealBuildTool
 
 			CompileEnvironment.Definitions.Add("WITH_TTS=0");
 			CompileEnvironment.Definitions.Add("WITH_SPEECH_RECOGNITION=0");
-			CompileEnvironment.Definitions.Add("WITH_DATABASE_SUPPORT=0");
 			CompileEnvironment.Definitions.Add("WITH_EDITOR=0");
 			CompileEnvironment.Definitions.Add("USE_NULL_RHI=0");
 
@@ -926,6 +931,14 @@ namespace UnrealBuildTool
             {
                 CompileEnvironment.Definitions.Add("BACKGROUNDFETCH_ENABLED=0");
             }
+			if (ProjectSettings.bFileSharingEnabled)
+			{
+				CompileEnvironment.Definitions.Add("FILESHARING_ENABLED=1");
+			}
+			else
+			{
+				CompileEnvironment.Definitions.Add("FILESHARING_ENABLED=0");
+			}
 
 			CompileEnvironment.Definitions.Add("UE_DISABLE_FORCE_INLINE=" + (ProjectSettings.bDisableForceInline ? "1" : "0"));
 

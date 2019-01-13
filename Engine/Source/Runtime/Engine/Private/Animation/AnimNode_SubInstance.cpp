@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Animation/AnimNode_SubInstance.h"
 #include "Animation/AnimClassInterface.h"
@@ -28,7 +28,7 @@ void FAnimNode_SubInstance::CacheBones_AnyThread(const FAnimationCacheBonesConte
 void FAnimNode_SubInstance::Update_AnyThread(const FAnimationUpdateContext& Context)
 {
 	InPose.Update(Context);
-	EvaluateGraphExposedInputs.Execute(Context);
+	GetEvaluateGraphExposedInputs().Execute(Context);
 
 	if(InstanceToRun)
 	{

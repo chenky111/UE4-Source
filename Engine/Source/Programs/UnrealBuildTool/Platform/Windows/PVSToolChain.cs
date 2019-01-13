@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -166,17 +166,20 @@ namespace UnrealBuildTool
 				{
 					ConfigFileContents.AppendFormat("exclude-path={0}\n", IncludePath.FullName);
 				}
-				foreach(string PathMask in ApplicationSettings.PathMasks)
+				if(ApplicationSettings != null && ApplicationSettings.PathMasks != null)
 				{
-					if (PathMask.Contains(":") || PathMask.Contains("\\") || PathMask.Contains("/"))
+					foreach(string PathMask in ApplicationSettings.PathMasks)
 					{
-						if(Path.IsPathRooted(PathMask) && !PathMask.Contains(":"))
+						if (PathMask.Contains(":") || PathMask.Contains("\\") || PathMask.Contains("/"))
 						{
-							ConfigFileContents.AppendFormat("exclude-path=*{0}*\n", PathMask);
-						}
-						else
-						{
-							ConfigFileContents.AppendFormat("exclude-path={0}\n", PathMask);
+							if(Path.IsPathRooted(PathMask) && !PathMask.Contains(":"))
+							{
+								ConfigFileContents.AppendFormat("exclude-path=*{0}*\n", PathMask);
+							}
+							else
+							{
+								ConfigFileContents.AppendFormat("exclude-path={0}\n", PathMask);
+							}
 						}
 					}
 				}

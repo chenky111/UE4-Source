@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 
 using System;
@@ -300,10 +300,6 @@ namespace UnrealBuildTool
 
 			CompileEnvironment.Definitions.Add("WITH_TTS=0");
 			CompileEnvironment.Definitions.Add("WITH_SPEECH_RECOGNITION=0");
-			if (!CompileEnvironment.Definitions.Contains("WITH_DATABASE_SUPPORT=0") && !CompileEnvironment.Definitions.Contains("WITH_DATABASE_SUPPORT=1"))
-			{
-				CompileEnvironment.Definitions.Add("WITH_DATABASE_SUPPORT=0");
-			}
 		}
 
 		/// <summary>

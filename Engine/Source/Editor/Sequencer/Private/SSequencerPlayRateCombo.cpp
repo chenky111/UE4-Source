@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "SSequencerPlayRateCombo.h"
 #include "Sequencer.h"
@@ -11,6 +11,7 @@
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "MovieSceneSequence.h"
 #include "MovieScene.h"
+#include "MovieSceneCommonHelpers.h"
 #include "ScopedTransaction.h"
 #include "Widgets/SFrameRateEntryBox.h"
 #include "EditorFontGlyphs.h"
@@ -265,15 +266,12 @@ void SSequencerPlayRateCombo::PopulateClockSourceMenu(FMenuBuilder& MenuBuilder)
 
 	if (RootSequence)
 	{
-		EUpdateClockSource CurrentDisplay = RootSequence->GetMovieScene()->GetClockSource();
-
 		for (int32 Index = 0; Index < ClockSourceEnum->NumEnums() - 1; Index++)
 		{
 			if (!ClockSourceEnum->HasMetaData(TEXT("Hidden"), Index))
 			{
 				EUpdateClockSource Value = (EUpdateClockSource)ClockSourceEnum->GetValueByIndex(Index);
 
-				bool bIsSet = CurrentDisplay == Value;
 				MenuBuilder.AddMenuEntry(
 					ClockSourceEnum->GetDisplayNameTextByIndex(Index),
 					ClockSourceEnum->GetToolTipTextByIndex(Index),
@@ -281,7 +279,7 @@ void SSequencerPlayRateCombo::PopulateClockSourceMenu(FMenuBuilder& MenuBuilder)
 					FUIAction(
 						FExecuteAction::CreateSP(this, &SSequencerPlayRateCombo::SetClockSource, Value),
 						FCanExecuteAction(),
-						FIsActionChecked::CreateLambda([=]{ return CurrentDisplay == Value; })
+						FIsActionChecked::CreateLambda([=]{ return RootSequence->GetMovieScene()->GetClockSource() == Value; })
 					),
 					NAME_None,
 					EUserInterfaceActionType::RadioButton
@@ -345,6 +343,21 @@ void SSequencerPlayRateCombo::SetDisplayRate(FFrameRate InFrameRate)
 
 		MovieScene->Modify();
 		MovieScene->SetDisplayRate(InFrameRate);
+
+		TArray<UMovieScene*> DescendantMovieScenes;
+		MovieSceneHelpers::GetDescendantMovieScenes(FocusedSequence, DescendantMovieScenes);
+
+		for (UMovieScene* DescendantMovieScene : DescendantMovieScenes)
+		{
+			if (DescendantMovieScene && InFrameRate != DescendantMovieScene->GetDisplayRate())
+			{
+				if (!DescendantMovieScene->IsReadOnly())
+				{
+					DescendantMovieScene->Modify();
+					DescendantMovieScene->SetDisplayRate(InFrameRate);
+				}
+			}
+		}
 	}
 }
 

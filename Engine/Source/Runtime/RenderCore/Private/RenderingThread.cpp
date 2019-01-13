@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	RenderingThread.cpp: Rendering thread implementation.
@@ -933,6 +933,9 @@ void FRenderCommandFence::BeginFence(bool bSyncToRHIAndGPU)
 	}
 	else
 	{
+		// Render thread is a default trigger for the CompletionEvent
+		TriggerThreadIndex = ENamedThreads::ActualRenderingThread;
+				
 		if (BundledCompletionEvent.GetReference() && IsInGameThread())
 		{
 			CompletionEvent = BundledCompletionEvent;
@@ -956,6 +959,12 @@ void FRenderCommandFence::BeginFence(bool bSyncToRHIAndGPU)
 
 		if (bSyncToRHIAndGPU)
 		{
+			if (GRHIThread_InternalUseOnly)
+			{
+				// Change trigger thread to RHI
+				TriggerThreadIndex = ENamedThreads::RHIThread;
+			}
+			
 			// Create a task graph event which we can pass to the render or RHI threads.
 			CompletionEvent = FGraphEvent::CreateGraphEvent();
 
@@ -966,7 +975,7 @@ void FRenderCommandFence::BeginFence(bool bSyncToRHIAndGPU)
 			{
 				if (GRHIThread_InternalUseOnly)
 				{
-					new (RHICmdList.AllocCommand<FRHISyncFrameCommand>()) FRHISyncFrameCommand(CompletionEvent, GTSyncType);
+					ALLOC_COMMAND_CL(RHICmdList, FRHISyncFrameCommand)(CompletionEvent, GTSyncType);
 					RHICmdList.ImmediateFlush(EImmediateFlushType::DispatchToRHIThread);
 				}
 				else
@@ -1028,7 +1037,7 @@ static FAutoConsoleVariableRef CVarTimeoutForBlockOnRenderFence(
 /**
  * Block the game thread waiting for a task to finish on the rendering thread.
  */
-static void GameThreadWaitForTask(const FGraphEventRef& Task, bool bEmptyGameThreadTasks = false)
+static void GameThreadWaitForTask(const FGraphEventRef& Task, ENamedThreads::Type TriggerThreadIndex = ENamedThreads::ActualRenderingThread, bool bEmptyGameThreadTasks = false)
 {
 	SCOPE_TIME_GUARD(TEXT("GameThreadWaitForTask"));
 
@@ -1060,7 +1069,8 @@ static void GameThreadWaitForTask(const FGraphEventRef& Task, bool bEmptyGameThr
 
 			// Grab an event from the pool and fire off a task to trigger it.
 			FEvent* Event = FPlatformProcess::GetSynchEventFromPool();
-			FTaskGraphInterface::Get().TriggerEventWhenTaskCompletes(Event, Task, ENamedThreads::GameThread);
+			check(GIsThreadedRendering);
+			FTaskGraphInterface::Get().TriggerEventWhenTaskCompletes(Event, Task, ENamedThreads::GameThread, ENamedThreads::SetTaskPriority(TriggerThreadIndex, ENamedThreads::HighTaskPriority));
 
 			// Check rendering thread health needs to be called from time to
 			// time in order to pump messages, otherwise the RHI may block
@@ -1110,7 +1120,7 @@ static void GameThreadWaitForTask(const FGraphEventRef& Task, bool bEmptyGameThr
 				bRenderThreadEnsured |= FDebug::IsEnsuring();
 
 #if !WITH_EDITOR
-#if !PLATFORM_IOS // @todo MetalMRT: Timeout isn't long enough...
+#if !PLATFORM_IOS && !PLATFORM_MAC // @todo MetalMRT: Timeout isn't long enough...
 				// editor threads can block for quite a while... 
 				if (!bDone && !bRenderThreadEnsured && !FPlatformMisc::IsDebuggerPresent())
 				{
@@ -1149,7 +1159,7 @@ void FRenderCommandFence::Wait(bool bProcessGameThreadTasks) const
 			FTaskGraphInterface::Get().WaitUntilTaskCompletes(CompletionEvent, ENamedThreads::GameThread);
 		}
 #endif
-		GameThreadWaitForTask(CompletionEvent, bProcessGameThreadTasks);
+		GameThreadWaitForTask(CompletionEvent, TriggerThreadIndex, bProcessGameThreadTasks);
 	}
 }
 

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -88,13 +88,13 @@ struct FPreviewSceneProfile
 	UPROPERTY(config)
 	FString EnvironmentCubeMapPath;
 
-	/** Manual set post processing settings */
-	UPROPERTY(EditAnywhere, config, Category = PostProcessing, AdvancedDisplay)
-	FPostProcessSettings PostProcessingSettings;
-
 	/** Whether or not the Post Processing should influence the scene */
 	UPROPERTY(EditAnywhere, config, Category = PostProcessing, AdvancedDisplay)
 	bool bPostProcessingEnabled;
+
+	/** Manual set post processing settings */
+	UPROPERTY(EditAnywhere, config, Category = PostProcessing, AdvancedDisplay)
+	FPostProcessSettings PostProcessingSettings;
 
 	/** Current rotation value of the sky in degrees (0 - 360) */
 	UPROPERTY(EditAnywhere, config, Category = Lighting, meta = (UIMin = "0", UIMax = "360"), AdvancedDisplay)

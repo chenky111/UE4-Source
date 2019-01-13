@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Rendering/ElementBatcher.h"
 #include "Fonts/SlateFontInfo.h"
@@ -99,13 +99,6 @@ void FSlateElementBatcher::AddElements(FSlateWindowElementList& WindowElementLis
 void FSlateElementBatcher::AddElementsInternal(const TArray<FSlateDrawElement>& DrawElements, const FVector2D& ViewportSize)
 {
 	checkSlow(DrawLayer);
-
-	FName Elements_Boxes(TEXT("Boxes"));
-	FName Elements_Borders(TEXT("Borders"));
-	FName Elements_Text(TEXT("Text"));
-	FName Elements_ShapedText(TEXT("ShapedText"));
-	FName Elements_Lines(TEXT("Lines"));
-	FName Elements_CachedBuffer(TEXT("CachedBuffer"));
 
 	for ( int32 DrawElementIndex = 0; DrawElementIndex < DrawElements.Num(); ++DrawElementIndex )
 	{
@@ -759,7 +752,7 @@ void FSlateElementBatcher::AddTextElement(const FSlateDrawElement& DrawElement)
 					InvTextureSizeY = 1.0f / FontAtlasTexture->GetHeight();
 				}
 
-				const bool bIsWhitespace = !Entry.Valid || FText::IsWhitespace(CurrentChar);
+				const bool bIsWhitespace = !Entry.Valid || FChar::IsWhitespace(CurrentChar);
 
 				if( !bIsWhitespace && PreviousCharEntry.Valid )
 				{

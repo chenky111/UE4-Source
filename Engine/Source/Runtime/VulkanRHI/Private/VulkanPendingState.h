@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved..
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved..
 
 /*=============================================================================
 	VulkanPendingState.h: Private VulkanPendingState definitions.
@@ -181,14 +181,14 @@ public:
 		//FMemory::Memzero(PendingStreams);
 	}
 
-	const FVulkanShader* GetCurrentShader(EShaderFrequency Frequency) const
+	const uint64 GetCurrentShaderKey(EShaderFrequency Frequency) const
 	{
-		return (CurrentPipeline ? CurrentPipeline->GetShader(Frequency) : nullptr);
+		return (CurrentPipeline ? CurrentPipeline->GetShaderKey(Frequency) : 0);
 	}
 
-	const FVulkanShader* GetCurrentShader(ShaderStage::EStage Stage) const
+	const uint64 GetCurrentShaderKey(ShaderStage::EStage Stage) const
 	{
-		return GetCurrentShader(ShaderStage::GetFrequencyForGfxStage(Stage));
+		return GetCurrentShaderKey(ShaderStage::GetFrequencyForGfxStage(Stage));
 	}
 
 	void SetViewport(uint32 MinX, uint32 MinY, float MinZ, uint32 MaxX, uint32 MaxY, float MaxZ)
@@ -339,8 +339,10 @@ public:
 
 	void PrepareForDraw(FVulkanCmdBuffer* CmdBuffer);
 
-	bool SetGfxPipeline(FVulkanRHIGraphicsPipelineState* InGfxPipeline)
+	bool SetGfxPipeline(FVulkanRHIGraphicsPipelineState* InGfxPipeline, bool bForceReset)
 	{
+		bool bChanged = bForceReset;
+
 		if (InGfxPipeline != CurrentPipeline)
 		{
 			CurrentPipeline = InGfxPipeline;
@@ -356,14 +358,16 @@ public:
 				PipelineStates.Add(CurrentPipeline, CurrentState);
 			}
 
-			CurrentState->Reset();
-
 			PrimitiveType = InGfxPipeline->PrimitiveType;
-
-			return true;
+			bChanged = true;
 		}
 
-		return false;
+		if (bChanged || bForceReset)
+		{
+			CurrentState->Reset();
+		}
+
+		return bChanged;
 	}
 
 	inline void UpdateDynamicStates(FVulkanCmdBuffer* Cmd)

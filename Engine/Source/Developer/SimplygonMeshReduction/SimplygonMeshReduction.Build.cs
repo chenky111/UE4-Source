@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System.IO;
 using UnrealBuildTool;
@@ -15,7 +15,8 @@ public class SimplygonMeshReduction : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"RenderCore",
-                "RawMesh",
+                "MeshDescription",
+                "MeshDescriptionOperations",
                 "MaterialUtilities",
                 "MeshBoneReduction",
                 "RHI",

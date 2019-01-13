@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	RHI.h: Render Hardware Interface definitions.
@@ -18,8 +18,13 @@
 class FResourceArrayInterface;
 class FResourceBulkDataInterface;
 
-/** Uniform buffer structs must be aligned to 16-byte boundaries. */
-#define UNIFORM_BUFFER_STRUCT_ALIGNMENT 16
+
+/** Alignment of the shader parameters struct is required to be 16-byte boundaries. */
+#define SHADER_PARAMETER_STRUCT_ALIGNMENT 16
+
+/** The alignment in bytes between elements of array shader parameters. */
+#define SHADER_PARAMETER_ARRAY_ELEMENT_ALIGNMENT 16
+
 
 /** RHI Logging. */
 RHI_API DECLARE_LOG_CATEGORY_EXTERN(LogRHI,Log,VeryVerbose);
@@ -152,6 +157,11 @@ inline bool RHISupportsBufferLoadTypeConversion(EShaderPlatform Platform)
 inline bool RHISupportsVolumeTextures(ERHIFeatureLevel::Type FeatureLevel)
 {
 	return FeatureLevel >= ERHIFeatureLevel::SM4;
+}
+
+inline bool RHISupportsVertexShaderLayer(const EShaderPlatform Platform)
+{
+	return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM4) && IsMetalPlatform(Platform) && (IsPCPlatform(Platform) || (Platform == SP_METAL_MRT && RHIGetShaderLanguageVersion(Platform) >= 4));
 }
 
 inline bool RHISupports4ComponentUAVReadWrite(EShaderPlatform Platform)
@@ -322,6 +332,9 @@ extern RHI_API float GProjectionSignY;
 
 /** Does this RHI need to wait for deletion of resources due to ref counting. */
 extern RHI_API bool GRHINeedsExtraDeletionLatency;
+
+/** Allow opt-out default RHI resource deletion latency for streaming textures */
+extern RHI_API bool GRHIForceNoDeletionLatencyForStreamingTextures;
 
 /** The maximum size allowed for a computeshader dispatch. */
 extern RHI_API TRHIGlobal<int32> GMaxComputeDispatchDimension;
@@ -1522,7 +1535,6 @@ DECLARE_MEMORY_STAT_POOL_EXTERN(TEXT("Index buffer memory"),STAT_IndexBufferMemo
 DECLARE_MEMORY_STAT_POOL_EXTERN(TEXT("Vertex buffer memory"),STAT_VertexBufferMemory,STATGROUP_RHI,FPlatformMemory::MCR_GPU,RHI_API);
 DECLARE_MEMORY_STAT_POOL_EXTERN(TEXT("Structured buffer memory"),STAT_StructuredBufferMemory,STATGROUP_RHI,FPlatformMemory::MCR_GPU,RHI_API);
 DECLARE_MEMORY_STAT_POOL_EXTERN(TEXT("Pixel buffer memory"),STAT_PixelBufferMemory,STATGROUP_RHI,FPlatformMemory::MCR_GPU,RHI_API);
-DECLARE_CYCLE_STAT_EXTERN(TEXT("Get/Create PSO"), STAT_GetOrCreatePSO, STATGROUP_RHI, RHI_API);
 
 
 // RHI base resource types.

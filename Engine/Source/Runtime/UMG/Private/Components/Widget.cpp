@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Components/Widget.h"
 #include "Misc/ConfigCacheIni.h"
@@ -840,6 +840,16 @@ TSharedRef<SWidget> UWidget::CreateDesignerOutline(TSharedRef<SWidget> Content) 
 
 #endif
 
+UGameInstance* UWidget::GetGameInstance() const
+{
+	if (UWorld* World = GetWorld())
+	{
+		return World->GetGameInstance();
+	}
+
+	return nullptr;
+}
+
 APlayerController* UWidget::GetOwningPlayer() const
 {
 	UWidgetTree* WidgetTree = Cast<UWidgetTree>(GetOuter());
@@ -968,6 +978,27 @@ const FSlateBrush* UWidget::GetEditorIcon()
 EVisibility UWidget::GetVisibilityInDesigner() const
 {
 	return bHiddenInDesigner ? EVisibility::Collapsed : EVisibility::Visible;
+}
+
+bool UWidget::IsVisibleInDesigner() const
+{
+	if (bHiddenInDesigner)
+	{
+		return false;
+	}
+
+	UWidget* Parent = GetParent();
+	while (Parent != nullptr)
+	{
+		if (Parent->bHiddenInDesigner)
+		{
+			return false;
+		}
+
+		Parent = Parent->GetParent();
+	}
+
+	return true;
 }
 
 void UWidget::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
@@ -1123,17 +1154,34 @@ void UWidget::SynchronizeProperties()
 		SafeWidget->SetToolTipText(PROPERTY_BINDING(FText, ToolTipText));
 	}
 
+#if !UE_BUILD_SHIPPING
+	SafeWidget->AddMetadata<FReflectionMetaData>(MakeShared<FReflectionMetaData>(GetFName(), GetClass(), this, GetSourceAssetOrClass()));
+#endif
+}
+
+UObject* UWidget::GetSourceAssetOrClass() const
+{
+	UObject* SourceAsset = nullptr;
+
 #if WITH_EDITOR
 	// In editor builds we add metadata to the widget so that once hit with the widget reflector it can report
 	// where it comes from, what blueprint, what the name of the widget was...etc.
-	SafeWidget->AddMetadata<FReflectionMetaData>(MakeShared<FReflectionMetaData>(GetFName(), GetClass(), this, WidgetGeneratedBy.Get()));
+	SourceAsset = WidgetGeneratedBy.Get();
 #else
-
 #if !UE_BUILD_SHIPPING
-	SafeWidget->AddMetadata<FReflectionMetaData>(MakeShared<FReflectionMetaData>(GetFName(), GetClass(), this, WidgetGeneratedByClass.Get()));
+	SourceAsset = WidgetGeneratedByClass.Get();
+#endif
 #endif
 
-#endif
+	if (!SourceAsset)
+	{
+		if (UWidget* WidgetOuter = GetTypedOuter<UWidget>())
+		{
+			return WidgetOuter->GetSourceAssetOrClass();
+		}
+	}
+
+	return SourceAsset;
 }
 
 void UWidget::BuildNavigation()

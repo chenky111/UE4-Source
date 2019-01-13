@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 InstancedFoliage.cpp: Instanced foliage implementation.
@@ -1836,6 +1836,9 @@ void AInstancedFoliageActor::DeleteInstancesForProceduralFoliageComponent(const 
 			MeshInfo.RemoveInstances(this, InstancesToRemove, InRebuildTree);
 		}
 	}
+
+	// Clean up dead cross-level references
+	FFoliageInstanceBaseCache::CompactInstanceBaseCache(this);
 }
 
 bool AInstancedFoliageActor::ContainsInstancesFromProceduralFoliageComponent(const UProceduralFoliageComponent* ProceduralFoliageComponent)

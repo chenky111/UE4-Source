@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "HTML5NetworkingPrivate.h"
 
@@ -167,7 +167,10 @@ void UWebSocketConnection::ReceivedRawPacket(void* Data,int32 Count)
 	
 			TSharedPtr<StatelessConnectHandlerComponent> StatelessConnect = Driver->StatelessConnectComponent.Pin();
 
-			if (!UnProcessedPacket.bError && StatelessConnect->HasPassedChallenge(LowLevelGetRemoteAddress(true)))
+			bool bRestartedHandshake = false;
+
+			if (!UnProcessedPacket.bError && StatelessConnect->HasPassedChallenge(LowLevelGetRemoteAddress(true), bRestartedHandshake) &&
+					!bRestartedHandshake)
 			{
 				UE_LOG(LogNet, Log, TEXT("Server accepting post-challenge connection from: %s"), *LowLevelGetRemoteAddress(true));
 				// Set the initial packet sequence from the handshake data

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "SpriterImporterFactory.h"
 #include "SpriterImporterLog.h"
@@ -343,6 +343,7 @@ UObject* USpriterImporterFactory::FactoryCreateText(UClass* InClass, UObject* In
 			FSkeletalMeshModel* ImportedModel = SkeletalMesh->GetImportedModel();
 			check(ImportedModel->LODModels.Num() == 0);
 			ImportedModel->LODModels.Empty();
+			ImportedModel->EmptyOriginalReductionSourceMeshData();
 			FSkeletalMeshLODModel& LODModel = *new (ImportedModel->LODModels) FSkeletalMeshLODModel();
 
 			SkeletalMesh->ResetLODInfo()

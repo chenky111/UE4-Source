@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	ParticleSystemRender.cpp: Particle system rendering functions.
@@ -38,6 +38,7 @@
 #include "Particles/ParticleLODLevel.h"
 #include "Engine/StaticMesh.h"
 #include "UnrealEngine.h"
+#include "Engine/StaticMesh.h"
 
 DECLARE_CYCLE_STAT(TEXT("ParticleSystemSceneProxy Create GT"), STAT_FParticleSystemSceneProxy_Create, STATGROUP_Particles);
 DECLARE_CYCLE_STAT(TEXT("ParticleSystemSceneProxy GetMeshElements RT"), STAT_FParticleSystemSceneProxy_GetMeshElements, STATGROUP_Particles);
@@ -2028,8 +2029,14 @@ void FDynamicMeshEmitterData::GetParticlePrevTransform(
 		CameraPayloadCameraOffset = GetCameraOffset(MotionBlurPayload->PayloadPrevCameraOffset, CameraPosition - InParticle.OldLocation);
 	}
 
+	FMatrix PreviousLocalToWorld;
+	if (!Proxy->GetScene().GetPreviousLocalToWorld(Proxy->GetPrimitiveSceneInfo(), PreviousLocalToWorld))
+	{
+		PreviousLocalToWorld = Proxy->GetLocalToWorld();
+	}
+
 	CalculateParticleTransform(
-		Proxy->GetLocalToWorld(),
+		PreviousLocalToWorld,
 		InParticle.OldLocation,
 		MotionBlurPayload->BaseParticlePrevRotation,
 		MotionBlurPayload->BaseParticlePrevVelocity,
@@ -5623,9 +5630,12 @@ void FDynamicTrailsEmitterData::GetDynamicMeshElementsEmitter(const FParticleSys
 		Mesh.VisualizeLODIndex = (int8)Proxy->GetVisualizeLODIndex();
 	#endif
 
-		Collector.AddMesh(ViewIndex, Mesh);
-
-		RenderedPrimitiveCount = Mesh.GetNumPrimitives();
+		// attempt to prevent crash seen in FORT-116687
+		if (ensure(Mesh.MaterialRenderProxy != nullptr))
+		{
+			Collector.AddMesh(ViewIndex, Mesh);
+			RenderedPrimitiveCount = Mesh.GetNumPrimitives();
+		}
 	}
 
 	RenderDebug(Proxy, Collector.GetPDI(ViewIndex), View, false);

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -16,7 +16,6 @@ class AActor;
 class APhysicsVolume;
 class USceneComponent;
 struct FLevelCollection;
-struct FMinimalViewInfo;
 
 /** Overlap info consisting of the primitive and the body that is overlapping */
 struct ENGINE_API FOverlapInfo
@@ -203,7 +202,7 @@ public:
 	uint8 bVisible:1;
 
 	/** Whether to hide the primitive in game, if the primitive is Visible. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Rendering, meta=(SequencerTrackClass = "MovieSceneVisibilityTrack"))
+	UPROPERTY(Interp, EditAnywhere, BlueprintReadOnly, Category=Rendering, meta=(SequencerTrackClass = "MovieSceneVisibilityTrack"))
 	uint8 bHiddenInGame:1;
 
 private:
@@ -680,7 +679,7 @@ public:
 	 * @param  bWeldSimulatedBodies Whether to weld together simulated physics bodies.
 	 * @return True if attachment is successful (or already attached to requested parent/socket), false if attachment is rejected and there is no change in AttachParent.
 	 */
-	DEPRECATED(4.12, "This function is deprecated, please use AttachToComponent instead.")
+	UE_DEPRECATED(4.12, "This function is deprecated, please use AttachToComponent instead.")
 	bool AttachTo(USceneComponent* InParent, FName InSocketName = NAME_None, EAttachLocation::Type AttachType = EAttachLocation::KeepRelativeOffset, bool bWeldSimulatedBodies = false);
 
 	/**
@@ -691,7 +690,7 @@ public:
 	 * @param  bWeldSimulatedBodies Whether to weld together simulated physics bodies.
 	 * @return True if attachment is successful (or already attached to requested parent/socket), false if attachment is rejected and there is no change in AttachParent.
 	*/
-	DEPRECATED(4.17, "This function is deprecated, please use AttachToComponent instead.")
+	UE_DEPRECATED(4.17, "This function is deprecated, please use AttachToComponent instead.")
 	UFUNCTION(BlueprintCallable, Category = "Utilities|Transformation", meta = (DisplayName = "AttachTo (Deprecated)", AttachType = "KeepRelativeOffset"))
 	bool K2_AttachTo(USceneComponent* InParent, FName InSocketName = NAME_None, EAttachLocation::Type AttachType = EAttachLocation::KeepRelativeOffset, bool bWeldSimulatedBodies = true);
 
@@ -719,7 +718,7 @@ public:
 	bool K2_AttachToComponent(USceneComponent* Parent, FName SocketName, EAttachmentRule LocationRule, EAttachmentRule RotationRule, EAttachmentRule ScaleRule, bool bWeldSimulatedBodies);
 
 	/** Zeroes out the relative transform of the component, and calls AttachTo(). Useful for attaching directly to a scene component or socket location  */
-	DEPRECATED(4.17, "Use AttachToComponent instead.")
+	UE_DEPRECATED(4.17, "Use AttachToComponent instead.")
 	UFUNCTION(BlueprintCallable, meta=(DeprecatedFunction, DeprecationMessage = "Use AttachToComponent instead."), Category="Utilities|Transformation")
 	bool SnapTo(USceneComponent* InParent, FName InSocketName = NAME_None);
 
@@ -728,7 +727,7 @@ public:
 	 * @param bMaintainWorldPosition	If true, update the relative location of the component to keep its world position the same
 	 * @param bCallModify				If true, call Modify() on the component and the current attach parent component
 	 */
-	DEPRECATED(4.12, "This function is deprecated, please use DetachFromComponent instead.")
+	UE_DEPRECATED(4.12, "This function is deprecated, please use DetachFromComponent instead.")
 	UFUNCTION(BlueprintCallable, Category="Utilities|Transformation", meta = (DisplayName = "DetachFromParent (Deprecated)"))
 	virtual void DetachFromParent(bool bMaintainWorldPosition = false, bool bCallModify = true);
 
@@ -1113,13 +1112,6 @@ public:
 	virtual const int32 GetNumUncachedStaticLightingInteractions() const;
 
 	virtual void PreFeatureLevelChange(ERHIFeatureLevel::Type PendingFeatureLevel) {}
-
-	/** 
-	 * Supplies the editor with a view specific to this component (think a view 
-	 * from a camera components POV, etc.). Used for PIP preview windows.
-	 * @return True if the component overrides this, and fills out the view info output.
-	 */
-	virtual bool GetEditorPreviewInfo(float DeltaTime, FMinimalViewInfo& ViewOut) { return false; }
 #endif // WITH_EDITOR
 
 protected:

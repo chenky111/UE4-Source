@@ -1,4 +1,4 @@
-﻿// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+﻿// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,6 +9,22 @@ namespace Tools.DotNETCommon
 {
 	public static class StringUtils
 	{
+		/// <summary>
+		/// Indents a string by a given indent
+		/// </summary>
+		/// <param name="Text">The text to indent</param>
+		/// <param name="Indent">The indent to add to each line</param>
+		/// <returns>The indented string</returns>
+		public static string Indent(string Text, string Indent)
+		{
+			string Result = "";
+			if(Text.Length > 0)
+			{
+				Result = Indent + Text.Replace("\n", "\n" + Indent);
+			}
+			return Result;
+		}
+
 		/// <summary>
 		/// Extension method to allow formatting a string to a stringbuilder and appending a newline
 		/// </summary>

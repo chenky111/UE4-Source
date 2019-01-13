@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -62,7 +62,7 @@ namespace UnrealBuildTool
 		/// Whether to compile with ASan enabled
 		/// </summary>
 		LinuxToolChainOptions Options;
-		
+
 		public LinuxToolChain(string InArchitecture, LinuxPlatformSDK InSDK, bool InPreservePSYM = false, LinuxToolChainOptions InOptions = LinuxToolChainOptions.None)
 			: this(CppPlatform.Linux, InArchitecture, InSDK, InPreservePSYM, InOptions)
 		{
@@ -569,6 +569,12 @@ namespace UnrealBuildTool
 
 			Result += GetRTTIFlag(CompileEnvironment);	// flag for run-time type info
 
+			if (CompileEnvironment.bHideSymbolsByDefault)
+			{
+				Result += " -fvisibility=hidden";
+				Result += " -fvisibility-inlines-hidden";
+			}
+
 			if (String.IsNullOrEmpty(ClangPath))
 			{
 				// GCC only option
@@ -676,8 +682,11 @@ namespace UnrealBuildTool
 				// Make debug info LLDB friendly
 				Result += " -glldb";
 
-				// Makes debugging .so libraries better
-				Result += " -fstandalone-debug";
+				if (CompileEnvironment.bIsBuildingDLL)
+				{
+					// Makes debugging .so libraries better
+					Result += " -fstandalone-debug";
+				}
 			}
 
 			// optimization level
@@ -1130,11 +1139,6 @@ namespace UnrealBuildTool
 				PCHArguments += string.Format(" -include \"{0}\"", CompileEnvironment.PrecompiledHeaderIncludeFilename.FullName.Replace('\\', '/'));
 			}
 
-			foreach(FileItem ForceIncludeFile in CompileEnvironment.ForceIncludeFiles)
-			{
-				PCHArguments += String.Format(" -include \"{0}\"", ForceIncludeFile.Location.FullName.Replace('\\', '/'));
-			}
-
 			// Add include paths to the argument list.
 			foreach (DirectoryReference IncludePath in CompileEnvironment.IncludePaths.UserIncludePaths)
 			{
@@ -1188,6 +1192,11 @@ namespace UnrealBuildTool
 
 					// only use PCH for .cpp files
 					FileArguments += PCHArguments;
+				}
+
+				foreach (FileItem ForceIncludeFile in CompileEnvironment.ForceIncludeFiles)
+				{
+					FileArguments += String.Format(" -include \"{0}\"", ForceIncludeFile.Location.FullName.Replace('\\', '/'));
 				}
 
 				// Add the C++ source file and its included files to the prerequisite item list.

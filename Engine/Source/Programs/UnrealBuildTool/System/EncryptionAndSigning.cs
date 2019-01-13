@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -145,6 +145,27 @@ namespace UnrealBuildTool
 				InString = InString.Substring(2);
 			}
 			return InString.TrimStart('0');
+		}
+
+		/// <summary>
+		/// Helper function for comparing two AES keys
+		/// </summary>
+		private static bool CompareKey(byte[] KeyA, byte[] KeyB)
+		{
+			if (KeyA.Length != KeyB.Length)
+			{
+				return false;
+			}
+
+			for (int Index = 0; Index < KeyA.Length; ++Index)
+			{
+				if (KeyA[Index] != KeyB[Index])
+				{
+					return false;
+				}
+			}
+
+			return true;
 		}
 
 		/// <summary>
@@ -299,7 +320,12 @@ namespace UnrealBuildTool
 						FileReference ProjectKeyChainFile = FileReference.Combine(InProjectDirectory, "Content", Filename);
 						if (FileReference.Exists(ProjectKeyChainFile))
 						{
-							List<EncryptionKey> EncryptionKeys = new List<EncryptionKey>(Settings.SecondaryEncryptionKeys);
+							List<EncryptionKey> EncryptionKeys = new List<EncryptionKey>();
+
+							if (Settings.SecondaryEncryptionKeys != null)
+							{
+								EncryptionKeys.AddRange(Settings.SecondaryEncryptionKeys);
+							}
 
 							string[] Lines = FileReference.ReadAllLines(ProjectKeyChainFile);
 							foreach (string Line in Lines)
@@ -313,9 +339,10 @@ namespace UnrealBuildTool
 									NewKey.Guid = KeyParts[2];
 									NewKey.Key = System.Convert.FromBase64String(KeyParts[3]);
 
-									if (EncryptionKeys.Find((EncryptionKey OtherKey) => { return OtherKey.Guid == NewKey.Guid; }) != null)
+									EncryptionKey ExistingKey = EncryptionKeys.Find((EncryptionKey OtherKey) => { return OtherKey.Guid == NewKey.Guid; });
+									if (ExistingKey != null && !CompareKey(ExistingKey.Key, NewKey.Key))
 									{
-										throw new Exception("Found a duplicated encryption key guid when merging a project keychain into the secondary key list");
+										throw new Exception("Found multiple encryption keys with the same guid but different AES keys while merging secondary keys from the project key-chain!");
 									}
 
 									EncryptionKeys.Add(NewKey);

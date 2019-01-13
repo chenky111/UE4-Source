@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -282,7 +282,7 @@ public:
 	 * @param Ar The archive to use.
 	 * @see GetAllocatedSize
 	 */
-	FORCEINLINE void CountBytes(FArchive& Ar)
+	FORCEINLINE void CountBytes(FArchive& Ar) const
 	{
 		Pairs.CountBytes(Ar);
 	}

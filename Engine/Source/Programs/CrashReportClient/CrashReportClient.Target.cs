@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using UnrealBuildTool;
 using System.Collections.Generic;
@@ -31,8 +31,6 @@ public class CrashReportClientTarget : TargetRules
 		bCompileAgainstEngine = false;
 		bCompileAgainstCoreUObject = true;
 		bUseLoggingInShipping = true;
-
-		bIncludeADO = false;
 
 		// CrashReportClient.exe has no exports, so no need to verify that a .lib and .exp file was emitted by
 		// the linker.

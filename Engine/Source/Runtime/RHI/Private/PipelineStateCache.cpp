@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 PipelineStateCache.cpp: Pipeline state cache implementation.
@@ -137,6 +137,16 @@ public:
 	virtual bool IsCompute() const = 0;
 
 	FGraphEventRef CompletionEvent;
+	
+	void WaitCompletion()
+	{
+		if(CompletionEvent.IsValid() && !CompletionEvent->IsComplete())
+		{
+			UE_LOG(LogRHI, Log, TEXT("FTaskGraphInterface Waiting on FPipelineState completionEvent"));
+			FTaskGraphInterface::Get().WaitUntilTaskCompletes( CompletionEvent );
+			CompletionEvent = nullptr;
+		}
+	}
 
 	inline void AddUse()
 	{
@@ -463,6 +473,35 @@ public:
 		}
 		return Discarded;
 	}
+	
+	void WaitTasksComplete()
+	{
+		FScopeLock S(&AllThreadsLock);
+		
+		for ( FPipelineStateCacheType* PipelineStateCache : AllThreadsPipelineStateCache )
+		{
+			WaitTasksComplete(PipelineStateCache);
+		}
+		
+		WaitTasksComplete(BackfillMap);
+		WaitTasksComplete(CurrentMap);
+	}
+
+private:
+
+	void WaitTasksComplete(FPipelineStateCacheType* PipelineStateCache)
+	{
+		FScopeLock S(&AllThreadsLock);
+		for (auto PipelineStateCacheIterator = PipelineStateCache->CreateIterator(); PipelineStateCacheIterator; ++PipelineStateCacheIterator)
+		{
+			FGraphicsPipelineState* pGPipelineState = PipelineStateCacheIterator->Value;
+			if(pGPipelineState != nullptr)
+			{
+				pGPipelineState->WaitCompletion();
+			}
+		}
+	}
+	
 private:
 	uint32 TLSSlot;
 	FPipelineStateCacheType *CurrentMap;
@@ -484,13 +523,79 @@ private:
 
 };
 
+class FGraphicsPipelineStateKey
+{
+public:
+	explicit FGraphicsPipelineStateKey(const FGraphicsPipelineStateInitializer& InInitializer)
+	{
+		FMemory::Memcpy(Initializer, InInitializer);
+		
+		if (InInitializer.BoundShaderState.VertexShaderRHI)
+		{
+			VertexShaderHash = InInitializer.BoundShaderState.VertexShaderRHI->GetHash();
+		}
+		if (InInitializer.BoundShaderState.PixelShaderRHI)
+		{
+			PixelShaderHash = InInitializer.BoundShaderState.PixelShaderRHI->GetHash();
+		}
+		if (InInitializer.BoundShaderState.GeometryShaderRHI)
+		{
+			GeometryShaderHash = InInitializer.BoundShaderState.GeometryShaderRHI->GetHash();
+		}
+		if (InInitializer.BoundShaderState.HullShaderRHI)
+		{
+			HullShaderHash = InInitializer.BoundShaderState.HullShaderRHI->GetHash();
+		}
+		if (InInitializer.BoundShaderState.DomainShaderRHI)
+		{
+			DomainShaderHash = InInitializer.BoundShaderState.DomainShaderRHI->GetHash();
+		}
+	}
+	
+	bool operator==(const FGraphicsPipelineStateKey& rhs) const
+	{
+		if (Initializer == rhs.Initializer && 
+			VertexShaderHash == rhs.VertexShaderHash &&
+			PixelShaderHash == rhs.PixelShaderHash &&
+			GeometryShaderHash == rhs.GeometryShaderHash &&
+			HullShaderHash == rhs.HullShaderHash &&
+			DomainShaderHash == rhs.DomainShaderHash)
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	FGraphicsPipelineStateInitializer Initializer;
+	FSHAHash VertexShaderHash;
+	FSHAHash PixelShaderHash;
+	FSHAHash GeometryShaderHash;
+	FSHAHash HullShaderHash;
+	FSHAHash DomainShaderHash;
+};
+
+static inline uint32 GetTypeHash(const FGraphicsPipelineStateKey& PipelineStateKey)
+{
+	return GetTypeHash(PipelineStateKey.Initializer);
+}
+
 // Typed caches for compute and graphics
 typedef TDiscardableKeyValueCache< FRHIComputeShader*, FComputePipelineState*> FComputePipelineCache;
-typedef TSharedPipelineStateCache<FGraphicsPipelineStateInitializer, FGraphicsPipelineState*> FGraphicsPipelineCache;
+typedef TSharedPipelineStateCache<FGraphicsPipelineStateKey, FGraphicsPipelineState*> FGraphicsPipelineCache;
 
 // These are the actual caches for both pipelines
 FComputePipelineCache GComputePipelineCache;
 FGraphicsPipelineCache GGraphicsPipelineCache;
+
+FAutoConsoleTaskPriority CPrio_FCompilePipelineStateTask(
+	TEXT("TaskGraph.TaskPriorities.CompilePipelineStateTask"),
+	TEXT("Task and thread priority for FCompilePipelineStateTask."),
+	ENamedThreads::HighThreadPriority,		// if we have high priority task threads, then use them...
+	ENamedThreads::NormalTaskPriority,		// .. at normal task priority
+	ENamedThreads::HighTaskPriority,		// if we don't have hi pri threads, then use normal priority threads at high task priority instead
+	EPowerSavingEligibility::NotEligible	// Not eligible for downgrade when power saving is requested.
+);
 
 /**
  *  Compile task
@@ -575,7 +680,7 @@ public:
 
 	ENamedThreads::Type GetDesiredThread()
 	{
-		return ENamedThreads::AnyThread;
+		return CPrio_FCompilePipelineStateTask.Get();
 	}
 };
 
@@ -640,9 +745,7 @@ static bool IsAsyncCompilationAllowed(FRHICommandList& RHICmdList)
 }
 
 FComputePipelineState* PipelineStateCache::GetAndOrCreateComputePipelineState(FRHICommandList& RHICmdList, FRHIComputeShader* ComputeShader)
-{
-	SCOPE_CYCLE_COUNTER(STAT_GetOrCreatePSO);
-	
+{	
 	bool DoAsyncCompile = IsAsyncCompilationAllowed(RHICmdList);
 
 	FComputePipelineState* OutCachedState = nullptr;
@@ -752,8 +855,17 @@ FRHIComputePipelineState* ExecuteSetComputePipelineState(FComputePipelineState* 
 FGraphicsPipelineState* PipelineStateCache::GetAndOrCreateGraphicsPipelineState(FRHICommandList& RHICmdList, const FGraphicsPipelineStateInitializer& OriginalInitializer, EApplyRendertargetOption ApplyFlags)
 {
 	LLM_SCOPE(ELLMTag::PSO);
-	SCOPE_CYCLE_COUNTER(STAT_GetOrCreatePSO);
 
+	// Workaround until we have a better way for storing shaders in PSO cache 
+	{
+		FGraphicsPipelineStateInitializer& HashableInitializer = const_cast<FGraphicsPipelineStateInitializer&>(OriginalInitializer);
+		HashableInitializer.VertexShaderHash = HashableInitializer.BoundShaderState.VertexShaderRHI ? HashableInitializer.BoundShaderState.VertexShaderRHI->GetHash() : FSHAHash();
+		HashableInitializer.HullShaderHash = HashableInitializer.BoundShaderState.HullShaderRHI ? HashableInitializer.BoundShaderState.HullShaderRHI->GetHash() : FSHAHash();
+		HashableInitializer.DomainShaderHash = HashableInitializer.BoundShaderState.DomainShaderRHI ? HashableInitializer.BoundShaderState.DomainShaderRHI->GetHash() : FSHAHash();
+		HashableInitializer.PixelShaderHash = HashableInitializer.BoundShaderState.PixelShaderRHI ? HashableInitializer.BoundShaderState.PixelShaderRHI->GetHash() : FSHAHash();
+		HashableInitializer.GeometryShaderHash = HashableInitializer.BoundShaderState.GeometryShaderRHI ? HashableInitializer.BoundShaderState.GeometryShaderRHI->GetHash() : FSHAHash();
+	}
+	
 	FGraphicsPipelineStateInitializer NewInitializer;
 	const FGraphicsPipelineStateInitializer* Initializer = &OriginalInitializer;
 
@@ -812,7 +924,8 @@ FGraphicsPipelineState* PipelineStateCache::GetAndOrCreateGraphicsPipelineState(
 
 	FGraphicsPipelineState* OutCachedState = nullptr;
 
-	bool bWasFound = GGraphicsPipelineCache.Find(*Initializer, OutCachedState);
+	FGraphicsPipelineStateKey PipelineStateKey(*Initializer);
+	bool bWasFound = GGraphicsPipelineCache.Find(PipelineStateKey, OutCachedState);
 
 	if (bWasFound == false)
 	{
@@ -838,7 +951,7 @@ FGraphicsPipelineState* PipelineStateCache::GetAndOrCreateGraphicsPipelineState(
 		}
 
 		// GGraphicsPipelineCache.Add(*Initializer, OutCachedState, LockFlags);
-		GGraphicsPipelineCache.Add(*Initializer, OutCachedState);
+		GGraphicsPipelineCache.Add(PipelineStateKey, OutCachedState);
 	}
 	else
 	{
@@ -943,11 +1056,18 @@ void DumpPipelineCacheStats()
 
 void PipelineStateCache::Shutdown()
 {
+	GGraphicsPipelineCache.WaitTasksComplete();
+
 	// call discard twice to clear both the backing and main caches
 	for (int i = 0; i < 2; i++)
 	{
-		GComputePipelineCache.Discard([](FComputePipelineState* CacheItem) {
-			delete CacheItem;
+		GComputePipelineCache.Discard([](FComputePipelineState* CacheItem)
+		{
+			if(CacheItem != nullptr)
+			{
+				CacheItem->WaitCompletion();
+				delete CacheItem;
+			}
 		});
 		
 		GGraphicsPipelineCache.DiscardAndSwap();

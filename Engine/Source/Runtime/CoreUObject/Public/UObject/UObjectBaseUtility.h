@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	UObjectBaseUtility.h: Unreal UObject functions that only depend on UObjectBase
@@ -448,41 +448,34 @@ public:
 	/**
 	 * @return	true if this object is of the specified type.
 	 */
-	#if !UCLASS_FAST_ISA_COMPARE_WITH_OUTERWALK && UCLASS_FAST_ISA_IMPL != UCLASS_ISA_OUTERWALK
-	private:
-		template <typename ClassType>
-		static FORCEINLINE bool IsAWorkaround(const ClassType* ObjClass, const ClassType* TestCls)
-		{
-			#if UCLASS_FAST_ISA_IMPL == UCLASS_ISA_INDEXTREE
-				return ObjClass->IsAUsingFastTree(*TestCls);
-			#elif UCLASS_FAST_ISA_IMPL == UCLASS_ISA_CLASSARRAY
-				return ObjClass->IsAUsingClassArray(*TestCls);
-			#endif
-		}
 
-	public:
-		template <typename OtherClassType>
-		FORCEINLINE bool IsA( OtherClassType SomeBase ) const
-		{
-			// We have a cyclic dependency between UObjectBaseUtility and UClass,
-			// so we use a template to allow inlining of something we haven't yet seen, because it delays compilation until the function is called.
+private:
+	template <typename ClassType>
+	static FORCEINLINE bool IsChildOfWorkaround(const ClassType* ObjClass, const ClassType* TestCls)
+	{
+		return ObjClass->IsChildOf(TestCls);
+	}
 
-			// 'static_assert' that this thing is actually a UClass pointer or convertible to it.
-			const UClass* SomeBaseClass = SomeBase;
-			(void)SomeBaseClass;
-			checkfSlow(SomeBaseClass, TEXT("IsA(NULL) cannot yield meaningful results"));
+public:
+	template <typename OtherClassType>
+	FORCEINLINE bool IsA( OtherClassType SomeBase ) const
+	{
+		// We have a cyclic dependency between UObjectBaseUtility and UClass,
+		// so we use a template to allow inlining of something we haven't yet seen, because it delays compilation until the function is called.
 
-			const UClass* ThisClass = GetClass();
+		// 'static_assert' that this thing is actually a UClass pointer or convertible to it.
+		const UClass* SomeBaseClass = SomeBase;
+		(void)SomeBaseClass;
+		checkfSlow(SomeBaseClass, TEXT("IsA(NULL) cannot yield meaningful results"));
 
-			// Stop the compiler doing some unnecessary branching for nullptr checks
-			ASSUME(SomeBaseClass);
-			ASSUME(ThisClass);
+		const UClass* ThisClass = GetClass();
 
-			return IsAWorkaround(ThisClass, SomeBaseClass);
-		}
-	#else
-		bool IsA( const UClass* SomeBase ) const;
-	#endif
+		// Stop the compiler doing some unnecessary branching for nullptr checks
+		ASSUME(SomeBaseClass);
+		ASSUME(ThisClass);
+
+		return IsChildOfWorkaround(ThisClass, SomeBaseClass);
+	}
 
 	/**
 	 * @return	true if this object is of the template type.
@@ -670,6 +663,16 @@ FORCEINLINE FString GetFullNameSafe(const UObjectBaseUtility *Object)
 	}
 }
 
+/**
+ *	Returns the native (C++) parent class of the supplied class
+ *	If supplied class is native, it will be returned.
+ */
+COREUOBJECT_API UClass* GetParentNativeClass(UClass* Class);
+
+#if !defined(USE_LIGHTWEIGHT_UOBJECT_STATS_FOR_HITCH_DETECTION)
+#define USE_LIGHTWEIGHT_UOBJECT_STATS_FOR_HITCH_DETECTION (1)
+#endif
+
 #if STATS
 struct FScopeCycleCounterUObject : public FCycleCounter
 {
@@ -763,7 +766,30 @@ struct FScopeCycleCounterUObject
 
 #define SCOPE_CYCLE_UOBJECT(Name, Object) \
 	FScopeCycleCounterUObject ObjCycleCount_##Name(Object);
+#elif USE_LIGHTWEIGHT_STATS_FOR_HITCH_DETECTION && USE_HITCH_DETECTION && USE_LIGHTWEIGHT_UOBJECT_STATS_FOR_HITCH_DETECTION
+extern CORE_API bool GHitchDetected;
 
+class FScopeCycleCounterUObject
+{
+	const UObject* StatObject;
+public:
+	FORCEINLINE  FScopeCycleCounterUObject(const UObject* InStatObject, TStatId OtherStat = TStatId())
+	{
+		StatObject = GHitchDetected ? nullptr : InStatObject;
+	}
+
+	FORCEINLINE ~FScopeCycleCounterUObject()
+	{
+		if (GHitchDetected &&  StatObject)
+		{
+			ReportHitch();
+		}
+	}
+
+	COREUOBJECT_API void ReportHitch();
+};
+#define SCOPE_CYCLE_UOBJECT(Name, Object) \
+	FScopeCycleCounterUObject ObjCycleCount_##Name(Object);
 #else
 struct FScopeCycleCounterUObject
 {

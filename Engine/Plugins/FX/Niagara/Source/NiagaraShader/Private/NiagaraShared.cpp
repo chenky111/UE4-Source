@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	NiagaraShared.cpp: Shared Niagara compute shader implementation.
@@ -451,6 +451,7 @@ bool FNiagaraShaderScript::BeginCompileShaderMap(
 	{
 		INiagaraShaderModule NiagaraShaderModule = FModuleManager::GetModuleChecked<INiagaraShaderModule>(TEXT("NiagaraShader"));
 		NiagaraShaderModule.ProcessShaderCompilationQueue();
+		OutShaderMap = NewShaderMap;
 	}
 	else
 	{

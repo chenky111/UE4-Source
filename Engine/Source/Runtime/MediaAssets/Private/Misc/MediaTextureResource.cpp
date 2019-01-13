@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Misc/MediaTextureResource.h"
 #include "MediaAssetsPrivate.h"
@@ -9,6 +9,7 @@
 #include "IMediaPlayer.h"
 #include "IMediaSamples.h"
 #include "IMediaTextureSample.h"
+#include "IMediaTextureSampleConverter.h"
 #include "MediaPlayerFacade.h"
 #include "MediaSampleSource.h"
 #include "MediaShaders.h"
@@ -28,6 +29,9 @@
 
 /** Time spent in media player facade closing media. */
 DECLARE_CYCLE_STAT(TEXT("MediaAssets MediaTextureResource Render"), STAT_MediaAssets_MediaTextureResourceRender, STATGROUP_Media);
+
+/** Sample time of texture last rendered. */
+DECLARE_FLOAT_COUNTER_STAT(TEXT("MediaAssets MediaTextureResource Sample"), STAT_MediaUtils_TextureSampleTime, STATGROUP_Media);
 
 
 
@@ -67,6 +71,9 @@ namespace MediaTextureResource
 		case EMediaTextureSampleFormat::CharBGR10A2:
 			return PF_A2B10G10R10;
 
+		case EMediaTextureSampleFormat::YUVv210:
+			return PF_R32G32B32A32_UINT;
+
 		default:
 			return PF_Unknown;
 		}
@@ -78,6 +85,7 @@ namespace MediaTextureResource
 		switch (Sample->GetFormat())
 		{
 		case EMediaTextureSampleFormat::CharBGR10A2:
+		case EMediaTextureSampleFormat::YUVv210:
 			return PF_A2B10G10R10;
 
 		default:
@@ -223,6 +231,25 @@ void FMediaTextureResource::Render(const FRenderParams& Params)
 
 				ClearTexture(FLinearColor::Red, Params.SrgbOutput); // mark corrupt sample
 			}
+			else if (Sample->GetMediaTextureSampleConverter())
+			{
+				
+				CreateOutputRenderTarget(Sample, Params);
+#if MEDIATEXTURERESOURCE_TRACE_RENDER
+				const bool bDecoded = Sample->GetMediaTextureSampleConverter()->Convert(RenderTargetTextureRHI);
+				if (bDecoded == false)
+				{
+					UE_LOG(LogMediaAssets, VeryVerbose, TEXT("TextureResource %p: Unable to decode video sample using hardware acceleration with time %s at time %s"),
+						this,
+						*Sample->GetTime().ToString(TEXT("%h:%m:%s.%t")),
+						*Params.Time.ToString(TEXT("%h:%m:%s.%t"))
+					);
+				}
+#else
+				Sample->GetMediaTextureSampleConverter()->Convert(RenderTargetTextureRHI);
+#endif
+
+			}
 			else if (MediaTextureResource::RequiresConversion(Sample, Params.SrgbOutput))
 			{
 #if MEDIATEXTURERESOURCE_TRACE_RENDER
@@ -250,6 +277,8 @@ void FMediaTextureResource::Render(const FRenderParams& Params)
 
 			Rotation = Sample->GetScaleRotation();
 			Offset = Sample->GetOffset();
+
+			SET_FLOAT_STAT(STAT_MediaUtils_TextureSampleTime, Sample->GetTime().GetTotalMilliseconds());
 		}
 #if MEDIATEXTURERESOURCE_TRACE_RENDER
 		else if (Sample.IsValid())
@@ -416,9 +445,9 @@ void FMediaTextureResource::ClearTexture(const FLinearColor& ClearColor, bool Sr
 	// draw the clear color
 	FRHICommandListImmediate& CommandList = FRHICommandListExecutor::GetImmediateCommandList();
 	{
-		FRHIRenderTargetView View = FRHIRenderTargetView(RenderTargetTextureRHI, ERenderTargetLoadAction::EClear);
-		FRHISetRenderTargetsInfo Info(1, &View, FRHIDepthRenderTargetView());
-		CommandList.SetRenderTargetsAndClear(Info);
+		FRHIRenderPassInfo RPInfo(RenderTargetTextureRHI, ERenderTargetActions::Clear_Store);
+		CommandList.BeginRenderPass(RPInfo, TEXT("ClearTexture"));
+		CommandList.EndRenderPass();
 		CommandList.SetViewport(0, 0, 0.0f, RenderTargetTextureRHI->GetSizeX(), RenderTargetTextureRHI->GetSizeY(), 1.0f);
 		CommandList.TransitionResource(EResourceTransitionAccess::EReadable, RenderTargetTextureRHI);
 	}
@@ -526,119 +555,132 @@ void FMediaTextureResource::ConvertSample(const TSharedPtr<IMediaTextureSample, 
 
 		FGraphicsPipelineStateInitializer GraphicsPSOInit;
 		FRHITexture* RenderTarget = RenderTargetTextureRHI.GetReference();
-		SetRenderTargets(CommandList, 1, &RenderTarget, nullptr, ESimpleRenderTargetMode::EExistingColorAndDepth, FExclusiveDepthStencil::DepthNop_StencilNop);
 
-		CommandList.ApplyCachedRenderTargets(GraphicsPSOInit);
-		CommandList.SetViewport(0, 0, 0.0f, OutputDim.X, OutputDim.Y, 1.0f);
-
-		GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
-		GraphicsPSOInit.RasterizerState = TStaticRasterizerState<>::GetRHI();
-		GraphicsPSOInit.BlendState = TStaticBlendStateWriteMask<CW_RGBA, CW_NONE, CW_NONE, CW_NONE, CW_NONE, CW_NONE, CW_NONE, CW_NONE>::GetRHI();
-		GraphicsPSOInit.PrimitiveType = PT_TriangleStrip;
-
-		// configure media shaders
-		auto ShaderMap = GetGlobalShaderMap(GMaxRHIFeatureLevel);
-		TShaderMapRef<FMediaShadersVS> VertexShader(ShaderMap);
-
-		GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI = GMediaVertexDeclaration.VertexDeclarationRHI;
-		GraphicsPSOInit.BoundShaderState.VertexShaderRHI = GETSAFERHISHADER_VERTEX(*VertexShader);
-
-		switch (Sample->GetFormat())
+		FRHIRenderPassInfo RPInfo(RenderTarget, ERenderTargetActions::Load_Store);
+		CommandList.BeginRenderPass(RPInfo, TEXT("ConvertMedia"));
 		{
-		case EMediaTextureSampleFormat::CharAYUV:
-		{
-			TShaderMapRef<FAYUVConvertPS> ConvertShader(ShaderMap);
-			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
-			SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
-			ConvertShader->SetParameters(CommandList, InputTexture, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
+			CommandList.ApplyCachedRenderTargets(GraphicsPSOInit);
+			CommandList.SetViewport(0, 0, 0.0f, OutputDim.X, OutputDim.Y, 1.0f);
+
+			GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+			GraphicsPSOInit.RasterizerState = TStaticRasterizerState<>::GetRHI();
+			GraphicsPSOInit.BlendState = TStaticBlendStateWriteMask<CW_RGBA, CW_NONE, CW_NONE, CW_NONE, CW_NONE, CW_NONE, CW_NONE, CW_NONE>::GetRHI();
+			GraphicsPSOInit.PrimitiveType = PT_TriangleStrip;
+
+			// configure media shaders
+			auto ShaderMap = GetGlobalShaderMap(GMaxRHIFeatureLevel);
+			TShaderMapRef<FMediaShadersVS> VertexShader(ShaderMap);
+
+			GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI = GMediaVertexDeclaration.VertexDeclarationRHI;
+			GraphicsPSOInit.BoundShaderState.VertexShaderRHI = GETSAFERHISHADER_VERTEX(*VertexShader);
+
+			switch (Sample->GetFormat())
+			{
+			case EMediaTextureSampleFormat::CharAYUV:
+			{
+				TShaderMapRef<FAYUVConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
+			}
+			break;
+
+			case EMediaTextureSampleFormat::CharBMP:
+			{
+				TShaderMapRef<FBMPConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, Sample->IsOutputSrgb() && !SrgbOutput);
+			}
+			break;
+
+			case EMediaTextureSampleFormat::CharNV12:
+			{
+				TShaderMapRef<FNV12ConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
+			}
+			break;
+
+			case EMediaTextureSampleFormat::CharNV21:
+			{
+				TShaderMapRef<FNV21ConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
+			}
+			break;
+
+			case EMediaTextureSampleFormat::CharUYVY:
+			{
+				TShaderMapRef<FUYVYConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
+			}
+			break;
+
+			case EMediaTextureSampleFormat::CharYUY2:
+			{
+				TShaderMapRef<FYUY2ConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
+			}
+			break;
+
+			case EMediaTextureSampleFormat::CharYVYU:
+			{
+				TShaderMapRef<FYVYUConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
+			}
+			break;
+
+			case EMediaTextureSampleFormat::YUVv210:
+			{
+				TShaderMapRef<FYUVv210ConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
+			}
+			break;
+
+			case EMediaTextureSampleFormat::CharBGR10A2:
+			{
+				TShaderMapRef<FRGBConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, Sample->IsOutputSrgb());
+			}
+			break;
+
+			case EMediaTextureSampleFormat::CharBGRA:
+			case EMediaTextureSampleFormat::FloatRGB:
+			case EMediaTextureSampleFormat::FloatRGBA:
+			{
+				TShaderMapRef<FRGBConvertPS> ConvertShader(ShaderMap);
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
+				SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
+				ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, false);
+			}
+			break;
+
+			default:
+				return; // unsupported format
+			}
+
+			// draw full size quad into render target
+			FVertexBufferRHIRef VertexBuffer = CreateTempMediaVertexBuffer();
+			CommandList.SetStreamSource(0, VertexBuffer, 0);
+			// set viewport to RT size
+			CommandList.SetViewport(0, 0, 0.0f, OutputDim.X, OutputDim.Y, 1.0f);
+
+			CommandList.DrawPrimitive(0, 2, 1);
 		}
-		break;
-
-		case EMediaTextureSampleFormat::CharBMP:
-		{
-			TShaderMapRef<FBMPConvertPS> ConvertShader(ShaderMap);
-			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
-			SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
-			ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, Sample->IsOutputSrgb() && !SrgbOutput);
-		}
-		break;
-
-		case EMediaTextureSampleFormat::CharNV12:
-		{
-			TShaderMapRef<FNV12ConvertPS> ConvertShader(ShaderMap);
-			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
-			SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
-			ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
-		}
-		break;
-
-		case EMediaTextureSampleFormat::CharNV21:
-		{
-			TShaderMapRef<FNV21ConvertPS> ConvertShader(ShaderMap);
-			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
-			SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
-			ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
-		}
-		break;
-
-		case EMediaTextureSampleFormat::CharUYVY:
-		{
-			TShaderMapRef<FUYVYConvertPS> ConvertShader(ShaderMap);
-			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
-			SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
-			ConvertShader->SetParameters(CommandList, InputTexture, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
-		}
-		break;
-
-		case EMediaTextureSampleFormat::CharYUY2:
-		{
-			TShaderMapRef<FYUY2ConvertPS> ConvertShader(ShaderMap);
-			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
-			SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
-			ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
-		}
-		break;
-
-		case EMediaTextureSampleFormat::CharYVYU:
-		{
-			TShaderMapRef<FYVYUConvertPS> ConvertShader(ShaderMap);
-			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
-			SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
-			ConvertShader->SetParameters(CommandList, InputTexture, MediaShaders::YuvToSrgbDefault, Sample->IsOutputSrgb());
-		}
-		break;
-
-		case EMediaTextureSampleFormat::CharBGR10A2:
-		{
-			TShaderMapRef<FRGBConvertPS> ConvertShader(ShaderMap);
-			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
-			SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
-			ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, Sample->IsOutputSrgb());
-		}
-		break;
-
-		case EMediaTextureSampleFormat::CharBGRA:
-		case EMediaTextureSampleFormat::FloatRGB:
-		case EMediaTextureSampleFormat::FloatRGBA:
-		{
-			TShaderMapRef<FRGBConvertPS> ConvertShader(ShaderMap);
-			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*ConvertShader);
-			SetGraphicsPipelineState(CommandList, GraphicsPSOInit);
-			ConvertShader->SetParameters(CommandList, InputTexture, OutputDim, false);
-		}
-		break;
-
-		default:
-			return; // unsupported format
-		}
-
-		// draw full size quad into render target
-		FVertexBufferRHIRef VertexBuffer = CreateTempMediaVertexBuffer();
-		CommandList.SetStreamSource(0, VertexBuffer, 0);
-		// set viewport to RT size
-		CommandList.SetViewport(0, 0, 0.0f, OutputDim.X, OutputDim.Y, 1.0f);
-
-		CommandList.DrawPrimitive(PT_TriangleStrip, 0, 2, 1);
+		CommandList.EndRenderPass();
 		CommandList.TransitionResource(EResourceTransitionAccess::EReadable, RenderTargetTextureRHI);
 	}
 
@@ -746,3 +788,43 @@ void FMediaTextureResource::UpdateTextureReference(FRHITexture2D* NewTexture)
 		OwnerDim = FIntPoint::ZeroValue;
 	}
 }
+
+void FMediaTextureResource::CreateOutputRenderTarget(const TSharedPtr<IMediaTextureSample, ESPMode::ThreadSafe>& InSample, const FRenderParams& InParams)
+{
+	// create output render target if necessary
+	const uint32 OutputCreateFlags = TexCreate_Dynamic | (InParams.SrgbOutput ? TexCreate_SRGB : 0);
+	const FIntPoint OutputDim = InSample->GetOutputDim();
+	const EPixelFormat OutputPixelFormat = MediaTextureResource::GetConvertedPixelFormat(InSample);
+
+	if ((InParams.ClearColor != CurrentClearColor) || !OutputTarget.IsValid() || (OutputTarget->GetSizeXY() != OutputDim) || (OutputTarget->GetFormat() != OutputPixelFormat) || ((OutputTarget->GetFlags() & OutputCreateFlags) != OutputCreateFlags))
+	{
+		TRefCountPtr<FRHITexture2D> DummyTexture2DRHI;
+
+		FRHIResourceCreateInfo CreateInfo = {
+			FClearValueBinding(InParams.ClearColor)
+		};
+
+		RHICreateTargetableShaderResource2D(
+			OutputDim.X,
+			OutputDim.Y,
+			OutputPixelFormat,
+			1,
+			OutputCreateFlags,
+			TexCreate_RenderTargetable,
+			false,
+			CreateInfo,
+			OutputTarget,
+			DummyTexture2DRHI
+		);
+
+		CurrentClearColor = InParams.ClearColor;
+		UpdateResourceSize();
+	}
+
+	if (RenderTargetTextureRHI != OutputTarget)
+	{
+		UpdateTextureReference(OutputTarget);
+	}
+}
+
+

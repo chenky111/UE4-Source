@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -324,6 +324,11 @@
 // Controls the creation of a thread for detecting hitches (FGameThreadHitchHeartBeat). This is subject to other criteria, USE_HITCH_DETECTION
 #ifndef ALLOW_HITCH_DETECTION
 	#define ALLOW_HITCH_DETECTION 0
+#endif
+
+// Adjust a few things with the slack policy and MallocBinned2 to minimize memory usage (at some performance cost)
+#ifndef AGGRESSIVE_MEMORY_SAVING
+	#define AGGRESSIVE_MEMORY_SAVING 0
 #endif
 
 #define USE_HITCH_DETECTION (ALLOW_HITCH_DETECTION && !WITH_EDITORONLY_DATA && !IS_PROGRAM && !UE_BUILD_DEBUG)

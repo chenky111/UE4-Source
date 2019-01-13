@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Tracks/MovieSceneAudioTrack.h"
 #include "Audio.h"
@@ -36,6 +36,10 @@ bool UMovieSceneAudioTrack::SupportsMultipleRows() const
 	return true;
 }
 
+bool UMovieSceneAudioTrack::SupportsType(TSubclassOf<UMovieSceneSection> SectionClass) const
+{
+	return SectionClass == UMovieSceneAudioSection::StaticClass();
+}
 
 void UMovieSceneAudioTrack::RemoveAllAnimationData()
 {

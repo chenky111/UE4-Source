@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "UObject/CoreNative.h"
 #include "Misc/CoreDelegates.h"
@@ -32,8 +32,11 @@ public:
 
 	virtual void StartupModule() override
 	{
-		// Register all classes that have been loaded so far. This is required for CVars to work.		
-		UClassRegisterAllCompiledInClasses();
+		{
+			SCOPED_BOOT_TIMING("UClassRegisterAllCompiledInClasses");
+			// Register all classes that have been loaded so far. This is required for CVars to work.		
+			UClassRegisterAllCompiledInClasses();
+		}
 
 		void InitUObject();
 		FCoreDelegates::OnInit.AddStatic(InitUObject);
@@ -51,8 +54,11 @@ public:
 		FRuntimeErrors::OnRuntimeIssueLogged.BindStatic(&FCoreUObjectModule::RouteRuntimeMessageToBP);
 #endif
 
-		// Make sure that additional content mount points can be registered after CoreUObject loads
-		FPackageName::EnsureContentPathsAreRegistered();
+		{
+			SCOPED_BOOT_TIMING("FPackageName::EnsureContentPathsAreRegistered");
+			// Make sure that additional content mount points can be registered after CoreUObject loads
+			FPackageName::EnsureContentPathsAreRegistered();
+		}
 
 #if DO_BLUEPRINT_GUARD
 		FFrame::InitPrintScriptCallstack();

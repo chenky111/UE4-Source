@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -1069,7 +1069,7 @@ public:
 	 */
 	virtual void AddWarning( const FString& InWarning, int32 StackOffset = 0);
 
-	DEPRECATED(4.16, "Use AddInfo")
+	UE_DEPRECATED(4.16, "Use AddInfo")
 	FORCEINLINE void AddLogItem(const FString& InLogItem)
 	{
 		AddInfo(InLogItem, 0);

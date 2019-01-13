@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "DSP/BufferVectorOperations.h"
 
@@ -55,6 +55,23 @@ namespace Audio
 #endif
 	}
 
+	void MultiplyBufferByConstantInPlace(AlignedFloatBuffer& InBuffer, float InGain)
+	{
+		MultiplyBufferByConstantInPlace(InBuffer.GetData(), InBuffer.Num(), InGain);
+	}
+
+	void MultiplyBufferByConstantInPlace(float* InBuffer, int32 NumSamples, float InGain)
+	{
+		const VectorRegister Gain = VectorLoadFloat1(&InGain);
+
+		for (int32 i = 0; i < NumSamples; i += 4)
+		{
+			VectorRegister Output = VectorLoadAligned(&InBuffer[i]);
+			Output = VectorMultiply(Output, Gain);
+			VectorStoreAligned(Output, &InBuffer[i]);
+		}
+	}
+
 	void FadeBufferFast(AlignedFloatBuffer& OutFloatBuffer, const float StartValue, const float EndValue)
 	{
 		FadeBufferFast(OutFloatBuffer.GetData(), OutFloatBuffer.Num(), StartValue, EndValue);
@@ -105,9 +122,6 @@ namespace Audio
 			}
 			else
 			{
-				// Only need to do a buffer multiply if start and end values are the same
-				const float DeltaValue = ((EndValue - StartValue) / NumIterations);
-
 				VectorRegister Gain = VectorLoadFloat1(&StartValue);
 
 				for (int32 i = 0; i < NumSamples; i += 4)
@@ -214,6 +228,27 @@ namespace Audio
 			VectorStoreAligned(Output, &OutputBuffer[i]);
 		}
 #endif
+	}
+
+	void MultiplyBuffersInPlace(const AlignedFloatBuffer& InFloatBuffer, AlignedFloatBuffer& BufferToMultiply)
+	{
+		MultiplyBuffersInPlace(InFloatBuffer.GetData(), BufferToMultiply.GetData(), BufferToMultiply.Num());
+	}
+
+	void MultiplyBuffersInPlace(const float* InFloatBuffer, float* BufferToMultiply, int32 NumSamples)
+	{
+		checkf(IsAligned<const float*>(InFloatBuffer, 4), TEXT("Memory must be aligned to use vector operations."));
+		checkf(IsAligned<const float*>(BufferToMultiply, 4), TEXT("Memory must be aligned to use vector operations."));
+		checkf(NumSamples % 4 == 0, TEXT("Please use a buffer size that is a multiple of 4."));
+
+		for (int32 i = 0; i < NumSamples; i += 4)
+		{
+			VectorRegister Input1 = VectorLoadAligned(&InFloatBuffer[i]);
+			VectorRegister Output = VectorLoadAligned(&BufferToMultiply[i]);
+
+			Output = VectorMultiply(Input1, Output);
+			VectorStoreAligned(Output, &BufferToMultiply[i]);
+		}
 	}
 
 	float GetMagnitude(const AlignedFloatBuffer& Buffer)

@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -364,6 +364,10 @@ private:
 
 	/** apply LOD changes if the user modified LOD reduction settings */
 	FReply OnApplyChanges();
+	/** regenerate one specific LOD Index no dependencies*/
+	void RegenerateOneLOD(int32 LODIndex);
+	/** regenerate the specific all LODs dependent of InLODIndex. This is not regenerating the InLODIndex*/
+	void RegenerateDependentLODs(int32 LODIndex);
 	/** Apply specified LOD Index */
 	FReply RegenerateLOD(int32 LODIndex);
 	/** Removes the specified lod from the skeletal mesh */

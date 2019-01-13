@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 
 #include "AssetRenameManager.h"
@@ -260,10 +260,10 @@ bool FAssetRenameManager::FixReferencesAndRename(const TArray<FAssetRenameData>&
 	TArray<FAssetRenameDataWithReferencers> AssetsToRename;
 	AssetsToRename.Reset(AssetsAndNames.Num());
 	// Avoid duplicates when adding MapBuildData to list
-	TMap<UObject*, bool> AssetsToRenameLookup;
+	TSet<UObject*> AssetsToRenameLookup;
 	for (const FAssetRenameData& AssetRenameData : AssetsAndNames)
 	{
-		AssetsToRenameLookup.FindOrAdd(AssetRenameData.Asset.Get());
+		AssetsToRenameLookup.Add(AssetRenameData.Asset.Get());
 	}
 	for (const FAssetRenameData& AssetRenameData : AssetsAndNames)
 	{
@@ -273,11 +273,15 @@ bool FAssetRenameManager::FixReferencesAndRename(const TArray<FAssetRenameData>&
 			UWorld* World = Cast<UWorld>(AssetRenameData.Asset.Get());
 			if (World && World->PersistentLevel && World->PersistentLevel->MapBuildData && !AssetsToRenameLookup.Contains(World->PersistentLevel->MapBuildData))
 			{
-				FString NewMapBuildDataName = AssetRenameData.NewName + TEXT("_BuiltData");
-				// Perform rename of MapBuildData before world otherwise original files left behind
-				AssetsToRename.EmplaceAt(0, FAssetRenameDataWithReferencers(FAssetRenameData(World->PersistentLevel->MapBuildData, AssetRenameData.NewPackagePath, NewMapBuildDataName)));
-				AssetsToRename[0].bOnlyFixSoftReferences = AssetRenameData.bOnlyFixSoftReferences;
-				AssetsToRenameLookup.Add(World->PersistentLevel->MapBuildData);
+				// Leave MapBuildData inside the map's package
+				if (World->PersistentLevel->MapBuildData->GetOutermost() != World->GetOutermost())
+				{
+					FString NewMapBuildDataName = AssetRenameData.NewName + TEXT("_BuiltData");
+					// Perform rename of MapBuildData before world otherwise original files left behind
+					AssetsToRename.EmplaceAt(0, FAssetRenameDataWithReferencers(FAssetRenameData(World->PersistentLevel->MapBuildData, AssetRenameData.NewPackagePath, NewMapBuildDataName)));
+					AssetsToRename[0].bOnlyFixSoftReferences = AssetRenameData.bOnlyFixSoftReferences;
+					AssetsToRenameLookup.Add(World->PersistentLevel->MapBuildData);
+				}
 			}
 		}
 
@@ -561,19 +565,22 @@ void FAssetRenameManager::LoadReferencingPackages(TArray<FAssetRenameDataWithRef
 			if (bCheckStatus)
 			{
 				FSourceControlStatePtr SourceControlState = SourceControlProvider.GetState(Asset->GetOutermost(), EStateCacheUsage::ForceUpdate);
-				const bool bLocalFile = !SourceControlState.IsValid() || SourceControlState->IsAdded() || !SourceControlState->IsSourceControlled() || SourceControlState->IsIgnored();
+				const bool bLocalFile = !SourceControlState.IsValid() || SourceControlState->IsLocal();
 				if (!bLocalFile)
 				{
-					// If this asset is locked or not current, mark it failed to prevent it from being renamed
-					if (SourceControlState->IsCheckedOutOther())
+					if (SourceControlState->IsSourceControlled())
 					{
-						RenameData.bRenameFailed = true;
-						RenameData.FailureReason = LOCTEXT("RenameFailedCheckedOutByOther", "Checked out by another user.");
-					}
-					else if (!SourceControlState->IsCurrent())
-					{
-						RenameData.bRenameFailed = true;
-						RenameData.FailureReason = LOCTEXT("RenameFailedNotCurrent", "Out of date.");
+						// If this asset is locked or not current, mark it failed to prevent it from being renamed
+						if (SourceControlState->IsCheckedOutOther())
+						{
+							RenameData.bRenameFailed = true;
+							RenameData.FailureReason = LOCTEXT("RenameFailedCheckedOutByOther", "Checked out by another user.");
+						}
+						else if (!SourceControlState->IsCurrent())
+						{
+							RenameData.bRenameFailed = true;
+							RenameData.FailureReason = LOCTEXT("RenameFailedNotCurrent", "Out of date.");
+						}
 					}
 
 					// This asset is not local. It is not safe to rename it without leaving a redirector
@@ -860,6 +867,38 @@ struct FSoftObjectPathRenameSerializer : public FArchiveUObject
 	{
 		// Mark it as saving to correctly process all references
 		this->SetIsSaving(true);
+	}
+
+	virtual bool ShouldSkipProperty(const UProperty* InProperty) const override
+	{
+		if (InProperty->HasAnyPropertyFlags(CPF_Transient | CPF_Deprecated | CPF_IsPlainOldData))
+		{
+			return true;
+		}
+
+		const UClass* PropertyClass = InProperty->GetClass();
+		if (PropertyClass->HasAnyCastFlag(CASTCLASS_UBoolProperty | CASTCLASS_UNameProperty | CASTCLASS_UStrProperty | CASTCLASS_UTextProperty | CASTCLASS_UMulticastDelegateProperty))
+		{
+			return true;
+		}
+
+		if (PropertyClass->HasAnyCastFlag(CASTCLASS_UArrayProperty | CASTCLASS_UMapProperty | CASTCLASS_USetProperty))
+		{
+			if (const UArrayProperty* ArrayProperty = ExactCast<UArrayProperty>(InProperty))
+			{
+				return ShouldSkipProperty(ArrayProperty->Inner);
+			}
+			else if (const UMapProperty* MapProperty = ExactCast<UMapProperty>(InProperty))
+			{
+				return ShouldSkipProperty(MapProperty->KeyProp) && ShouldSkipProperty(MapProperty->ValueProp);
+			}
+			else if (const USetProperty* SetProperty = ExactCast<USetProperty>(InProperty))
+			{
+				return ShouldSkipProperty(SetProperty->ElementProp);
+			}
+		}
+
+		return false;
 	}
 
 	FArchive& operator<<(FSoftObjectPath& Value)

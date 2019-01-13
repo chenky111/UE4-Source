@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Android/AndroidMisc.h"
 #include "Android/AndroidJavaEnv.h"
@@ -84,7 +84,7 @@ extern FString GFontPathBase;
 
 void FAndroidMisc::RequestExit( bool Force )
 {
-	UE_LOG(LogWindows, Log, TEXT("FAndroidMisc::RequestExit(%i)"), Force);
+	UE_LOG(LogAndroid, Log, TEXT("FAndroidMisc::RequestExit(%i)"), Force);
 	if (Force)
 	{
 #if USE_ANDROID_JNI
@@ -880,7 +880,7 @@ void PlatformCrashHandler(int32 Signal, siginfo* Info, void* Context)
 	// Restore system handlers so Android could catch this signal after we are done with crashreport
 	RestorePreviousSignalHandlers();
 
-	FAndroidCrashContext CrashContext;
+	FAndroidCrashContext CrashContext(ECrashContextType::Crash, TEXT("Caught signal"));
 	CrashContext.InitFromSignal(Signal, Info, Context);
 
 	if (GCrashHandlerPointer)

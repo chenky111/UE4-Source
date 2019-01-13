@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -345,6 +345,24 @@ namespace UnrealBuildTool
 				return LinkInputFiles;
 			}
 
+			// Store the module compile environment along with the source file.  This is so that we can use it later on when looking for header dependencies
+			foreach (FileItem CFile in SourceFilesFound.CFiles)
+			{
+				CFile.CachedIncludePaths = ModuleCompileEnvironment.IncludePaths;
+			}
+			foreach (FileItem CCFile in SourceFilesFound.CCFiles)
+			{
+				CCFile.CachedIncludePaths = ModuleCompileEnvironment.IncludePaths;
+			}
+			foreach (FileItem CPPFile in SourceFilesFound.CPPFiles)
+			{
+				CPPFile.CachedIncludePaths = ModuleCompileEnvironment.IncludePaths;
+			}
+			foreach (FileItem MMFile in SourceFilesFound.MMFiles)
+			{
+				MMFile.CachedIncludePaths = ModuleCompileEnvironment.IncludePaths;
+			}
+
 			// Process all of the header file dependencies for this module
 			CheckFirstIncludeMatchesEachCppFile(Target, ModuleCompileEnvironment);
 
@@ -465,6 +483,8 @@ namespace UnrealBuildTool
 								Writer.WriteLine("#undef UE_IS_ENGINE_MODULE");
 								Writer.WriteLine("#undef DEPRECATED_FORGAME");
 								Writer.WriteLine("#define DEPRECATED_FORGAME DEPRECATED");
+								Writer.WriteLine("#undef UE_DEPRECATED_FORGAME");
+								Writer.WriteLine("#define UE_DEPRECATED_FORGAME UE_DEPRECATED");
 							}
 
 							WriteDefinitions(CompileEnvironment.Definitions, Writer);
@@ -516,7 +536,7 @@ namespace UnrealBuildTool
 					if(GeneratedCPPCompileEnvironment.PrecompiledHeaderFile == null && Rules.PrivatePCHHeaderFile != null && Rules.PCHUsage != ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs)
 					{
 						GeneratedCPPCompileEnvironment = new CppCompileEnvironment(GeneratedCPPCompileEnvironment);
-						GeneratedCPPCompileEnvironment.ForceIncludeFiles.Add(FileItem.GetExistingItemByFileReference(FileReference.Combine(ModuleDirectory, Rules.PrivatePCHHeaderFile)));
+						GeneratedCPPCompileEnvironment.ForceIncludeFiles.Add(FileItem.GetItemByFileReference(FileReference.Combine(ModuleDirectory, Rules.PrivatePCHHeaderFile)));
 					}
 
 					// Compile all the generated files

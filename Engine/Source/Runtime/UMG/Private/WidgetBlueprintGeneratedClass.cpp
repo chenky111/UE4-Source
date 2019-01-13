@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "Blueprint/WidgetNavigation.h"
@@ -15,8 +15,87 @@
 #include "Engine/StreamableManager.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectHash.h"
+#include "UObject/UObjectIterator.h"
+
+#if WITH_EDITOR
+#include "Engine/Blueprint.h"
+#endif
 
 #define LOCTEXT_NAMESPACE "UMG"
+
+FAutoConsoleCommand GDumpTemplateSizesCommand(
+	TEXT("Widget.DumpTemplateSizes"),
+	TEXT("Dump the sizes of all widget class templates in memory"),
+	FConsoleCommandDelegate::CreateStatic([]()
+	{
+		struct FClassAndSize
+		{
+			FString ClassName;
+			int32 TemplateSize = 0;
+		};
+
+		TArray<FClassAndSize> TemplateSizes;
+
+		for (TObjectIterator<UWidgetBlueprintGeneratedClass> WidgetClassIt; WidgetClassIt; ++WidgetClassIt)
+		{
+			UWidgetBlueprintGeneratedClass* WidgetClass = *WidgetClassIt;
+
+			if (WidgetClass->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
+			{
+				continue;
+			}
+
+#if WITH_EDITOR
+			if (Cast<UBlueprint>(WidgetClass->ClassGeneratedBy)->SkeletonGeneratedClass == WidgetClass)
+			{
+				continue;
+			}
+#endif
+
+			FClassAndSize Entry;
+			Entry.ClassName = WidgetClass->GetName();
+
+#if WITH_EDITOR
+			if (WidgetClass->WillHaveTemplate())
+#else
+			if (WidgetClass->HasTemplate())
+#endif
+			{
+				if (UUserWidget* TemplateWidget = WidgetClass->GetTemplate())
+				{
+					int32 TemplateSize = WidgetClass->GetStructureSize();
+					TemplateWidget->WidgetTree->ForEachWidgetAndDescendants([&TemplateSize](UWidget* Widget) {
+						TemplateSize += Widget->GetClass()->GetStructureSize();
+					});
+
+					Entry.TemplateSize = TemplateSize;
+				}
+			}
+
+			TemplateSizes.Add(Entry);
+		}
+
+		TemplateSizes.StableSort([](const FClassAndSize& A, const FClassAndSize& B) {
+			return A.TemplateSize > B.TemplateSize;
+		});
+
+		uint32 TotalSizeBytes = 0;
+		UE_LOG(LogUMG, Display, TEXT("%-60s %-15s"), TEXT("Template Class"), TEXT("Size (bytes)"));
+		for (const FClassAndSize& Entry : TemplateSizes)
+		{
+			TotalSizeBytes += Entry.TemplateSize;
+			if (Entry.TemplateSize > 0)
+			{
+				UE_LOG(LogUMG, Display, TEXT("%-60s %-15d"), *Entry.ClassName, Entry.TemplateSize);
+			}
+			else
+			{
+				UE_LOG(LogUMG, Display, TEXT("%-60s %-15s"), *Entry.ClassName, TEXT("0 - (No Template)"));
+			}
+		}
+
+		UE_LOG(LogUMG, Display, TEXT("Total size of templates %.3f MB"), TotalSizeBytes/(1024.f*1024.f));
+	}), ECVF_Cheat);
 
 #if WITH_EDITOR
 
@@ -46,6 +125,7 @@ UWidgetBlueprintGeneratedClass::UWidgetBlueprintGeneratedClass(const FObjectInit
 {
 #if WITH_EDITORONLY_DATA
 	{ static const FAutoRegisterTextReferenceCollectorCallback AutomaticRegistrationOfTextReferenceCollector(UWidgetBlueprintGeneratedClass::StaticClass(), &CollectWidgetBlueprintGeneratedClassTextReferences); }
+	bCanCallPreConstruct = true;
 #endif
 }
 
@@ -118,12 +198,10 @@ void UWidgetBlueprintGeneratedClass::InitializeWidgetStatic(UUserWidget* UserWid
 	if ( UserWidget->bCookedWidgetTree )
 	{
 #if WITH_EDITOR
-
 		// TODO This can get called at editor time when PostLoad runs and we attempt to initialize the tree.
 		// Perhaps we shouldn't call init in post load if it's a cooked tree?
 
 		//UE_LOG(LogUMG, Fatal, TEXT("Initializing a cooked widget tree at editor time! %s."), *InClass->GetName());
-
 #else
 		// If we can be templated, we need to go ahead and initialize all the user widgets under us, since we're
 		// an already expanded tree.
@@ -144,6 +222,8 @@ void UWidgetBlueprintGeneratedClass::InitializeWidgetStatic(UUserWidget* UserWid
 				SubUserWidget->Initialize();
 			}
 		});
+
+		BindAnimations(UserWidget, InAnimations);
 
 		InitializeBindingsStatic(UserWidget, InBindings);
 
@@ -179,27 +259,9 @@ void UWidgetBlueprintGeneratedClass::InitializeWidgetStatic(UUserWidget* UserWid
 
 	if (ClonedTree)
 	{
+		BindAnimations(UserWidget, InAnimations);
+
 		UClass* WidgetBlueprintClass = UserWidget->GetClass();
-
-		for (UWidgetAnimation* Animation : InAnimations)
-		{
-			// Find property with the same name as the animation and assign the new widget to it.
-			UObjectPropertyBase* AnimationProperty = Animation->GetMovieScene() ? FindField<UObjectPropertyBase>(WidgetBlueprintClass, Animation->GetMovieScene()->GetFName()) : nullptr;
-			if ( AnimationProperty )
-			{
-				// If there is already an animation assigned to this property, consign it to oblivion to make space for the new one
-				// Duplicated object's name has to match that of the BPGC to ensure that subobject reinstancing works correctly
-				UObject* ExistingPropertyValue = AnimationProperty->GetObjectPropertyValue_InContainer(UserWidget);
-				if (ExistingPropertyValue)
-				{
-					FName UniqueDeadName = MakeUniqueObjectName(GetTransientPackage(), UWidgetAnimation::StaticClass(), *(ExistingPropertyValue->GetName() + TEXT("_DEAD")));
-					ExistingPropertyValue->Rename(*UniqueDeadName.ToString(), GetTransientPackage(), REN_DoNotDirty | REN_ForceNoResetLoaders);
-				}
-
-				UWidgetAnimation* DuplicatedAnimation = DuplicateObject<UWidgetAnimation>(Animation, UserWidget);
-				AnimationProperty->SetObjectPropertyValue_InContainer(UserWidget, DuplicatedAnimation);
-			}
-		}
 
 		ClonedTree->ForEachWidget([&](UWidget* Widget) {
 			// Not fatal if NULL, but shouldn't happen
@@ -243,6 +305,30 @@ void UWidgetBlueprintGeneratedClass::InitializeWidgetStatic(UUserWidget* UserWid
 		UBlueprintGeneratedClass::BindDynamicDelegates(InClass, UserWidget);
 
 		//TODO UMG Add OnWidgetInitialized?
+	}
+}
+
+void UWidgetBlueprintGeneratedClass::BindAnimations(UUserWidget* Instance, const TArray< UWidgetAnimation* >& InAnimations)
+{
+	// Iterate all generated classes in the widget's class hierarchy and initialize each animation property with the animation in the class.
+
+	// @todo: this will not work when nativizing widget blueprints if support for them is ever added - a more complete solution will be needed in that case
+	UClass* CurrentClass = Instance->GetClass();
+	while (UWidgetBlueprintGeneratedClass* WBPGC = Cast<UWidgetBlueprintGeneratedClass>(CurrentClass))
+	{
+		for (UWidgetAnimation* Animation : WBPGC->Animations)
+		{
+			if (Animation->GetMovieScene())
+			{
+				// Find property with the same name as the animation and assign the animation to it.
+				UObjectPropertyBase* Prop = FindField<UObjectPropertyBase>(WBPGC, Animation->GetMovieScene()->GetFName());
+				if (Prop)
+				{
+					Prop->SetObjectPropertyValue_InContainer(Instance, Animation);
+				}
+			}
+		}
+		CurrentClass = CurrentClass->GetSuperClass();
 	}
 }
 
@@ -333,10 +419,12 @@ void UWidgetBlueprintGeneratedClass::SetTemplate(UUserWidget* InTemplate)
 {
 	Template = InTemplate;
 	TemplateAsset = InTemplate;
+	
 	if (Template)
 	{
 		Template->AddToCluster(this, true);
 	}
+
 	bValidTemplate = TemplateAsset.IsNull() ? false : true;
 }
 
@@ -346,7 +434,7 @@ UUserWidget* UWidgetBlueprintGeneratedClass::GetTemplate()
 
 	if ( TemplatePreviewInEditor )
 	{
-		if ( EditorTemplate == nullptr && HasTemplate() )
+		if ( EditorTemplate == nullptr && bAllowTemplate && bAllowDynamicCreation )
 		{
 			EditorTemplate = NewObject<UUserWidget>(this, this, NAME_None, EObjectFlags(RF_ArchetypeObject | RF_Transient));
 			EditorTemplate->TemplateInit();

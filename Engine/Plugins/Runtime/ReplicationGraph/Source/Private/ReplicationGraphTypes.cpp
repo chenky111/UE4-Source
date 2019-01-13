@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "ReplicationGraphTypes.h"
 
@@ -284,6 +284,20 @@ void PreAllocateRepList(int32 ListSize, int32 NumLists)
 // Stats, Logging, Debugging
 // --------------------------------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------------------------------
+
+
+#if WITH_EDITOR
+void ForEachClientPIEWorld(TFunction<void(UWorld*)> Func)
+{
+	for (TObjectIterator<UWorld> It; It; ++It)
+	{
+		if (It->WorldType == EWorldType::PIE && It->GetNetMode() != NM_DedicatedServer)
+		{
+			Func(*It);
+		}
+	}
+}
+#endif
 
 void LogListDetails(FActorRepList& RepList, FOutputDevice& Ar)
 {

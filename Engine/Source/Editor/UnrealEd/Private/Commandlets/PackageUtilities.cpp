@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	PackageUtilities.cpp: Commandlets for viewing information about package files
@@ -1607,6 +1607,7 @@ int32 UPkgInfoCommandlet::Main( const FString& Params )
 			{
 				Reporter->GeneratePackageReport(Linker, *OutputOverride);
 			}
+#if !NO_LOGGING
 			if (bDumpProperties)
 			{
 				check(Reader);
@@ -1635,6 +1636,7 @@ int32 UPkgInfoCommandlet::Main( const FString& Params )
 				}
 				Out.Logf(ELogVerbosity::Display, TEXT("Total number of Serialize calls: %lld"), TotalSerializeCalls);
 			}
+#endif // !NO_LOGGING
 		}
 		CollectGarbage(RF_NoFlags);
 	}
@@ -1790,9 +1792,9 @@ struct CompressAnimationsFunctor
 				continue;
 			}
 
-			if( !bAnalyze && !bForceCompression && bSkipLongAnimations && (AnimSeq->NumFrames > 300) )
+			if( !bAnalyze && !bForceCompression && bSkipLongAnimations && (AnimSeq->GetRawNumberOfFrames() > 300) )
 			{
-				UE_LOG(LogPackageUtilities, Warning, TEXT("Animation (%s) has more than 300 frames (%i frames) and SKIPLONGANIMS switch is set. Skipping."), *AnimSeq->GetName(), AnimSeq->NumFrames);
+				UE_LOG(LogPackageUtilities, Warning, TEXT("Animation (%s) has more than 300 frames (%i frames) and SKIPLONGANIMS switch is set. Skipping."), *AnimSeq->GetName(), AnimSeq->GetRawNumberOfFrames());
 				continue;
 			}
 
@@ -2250,7 +2252,7 @@ struct CompressAnimationsFunctor
 			// Problem is this is going to create a DDC key with 'Automatic Compressor'
 			UAnimCompress* CompressionAlgorithm = NewObject<UAnimCompress_Automatic>();
 			AnimSeq->CompressionScheme = static_cast<UAnimCompress*>(StaticDuplicateObject(CompressionAlgorithm, AnimSeq));
-			AnimSeq->RequestAnimCompression(false, true, false);
+			AnimSeq->RequestAnimCompression(FRequestAnimCompressionParams(false, true, false));
 
 			// Automatic compression should have picked a suitable compressor that is not UAnimCompress_Automatic
 			if (ensure(!AnimSeq->CompressionScheme->IsA(UAnimCompress_Automatic::StaticClass())))
@@ -2258,7 +2260,7 @@ struct CompressAnimationsFunctor
 				// Update CompressCommandletVersion in that case, and create a proper DDC entry
 				// (with actual compressor)
 				AnimSeq->CompressCommandletVersion = CompressCommandletVersion;
-				AnimSeq->RequestAnimCompression(false, false, false);
+				AnimSeq->RequestAnimCompression(FRequestAnimCompressionParams(false, false, false));
 				bDirtyPackage = true;
 			}
 

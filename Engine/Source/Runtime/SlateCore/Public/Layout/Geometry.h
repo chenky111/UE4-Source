@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -444,7 +444,7 @@ public:
 	 *
 	 * @return  Allotted geometry rectangle in absolute coordinates.
 	 */
-	DEPRECATED(4.17, "This no longer represents any sort of clipping rect.  Please use GetLayoutBoundingRect() to get the layout rect of this geometry.")
+	UE_DEPRECATED(4.17, "This no longer represents any sort of clipping rect.  Please use GetLayoutBoundingRect() to get the layout rect of this geometry.")
 	FORCEINLINE_DEBUGGABLE FSlateRect GetClippingRect() const
 	{
 		return TransformRect(GetAccumulatedLayoutTransform(), FSlateRect(FVector2D(0.0f, 0.0f), Size));

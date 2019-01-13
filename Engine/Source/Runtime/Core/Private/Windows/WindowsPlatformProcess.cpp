@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Windows/WindowsPlatformProcess.h"
 #include "HAL/PlatformMisc.h"
@@ -23,6 +23,7 @@
 #include "Windows/WindowsHWrapper.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/CoreDelegates.h"
+#include "ProfilingDebugging/CsvProfiler.h"
 
 #include "Windows/AllowWindowsPlatformTypes.h"
 	#include <shellapi.h>
@@ -1152,6 +1153,7 @@ bool FEventWin::Wait(uint32 WaitTime, const bool bIgnoreThreadIdleStats /*= fals
 	WaitForStats();
 
 	SCOPE_CYCLE_COUNTER( STAT_EventWait );
+	CSV_SCOPED_TIMING_STAT_EXCLUSIVE_CONDITIONAL(EventWait, IsInGameThread());
 	check( Event );
 
 	FThreadIdleStats::FScopeIdle Scope( bIgnoreThreadIdleStats );

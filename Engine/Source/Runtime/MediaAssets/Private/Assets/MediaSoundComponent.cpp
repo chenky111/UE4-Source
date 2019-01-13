@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "MediaSoundComponent.h"
 #include "MediaAssetsPrivate.h"
@@ -29,7 +29,8 @@ FAutoConsoleVariableRef CVarSyncAudioAfterDropouts(
 	TEXT("0: Not Enabled, 1: Enabled"),
 	ECVF_Default);
 
-DECLARE_FLOAT_COUNTER_STAT(TEXT("MediaUtils MediaSoundComponent Sync"), STAT_MediaUtils_MediaSoundComponent, STATGROUP_Media);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("MediaUtils MediaSoundComponent Sync"), STAT_MediaUtils_MediaSoundComponentSync, STATGROUP_Media);
+DECLARE_FLOAT_COUNTER_STAT(TEXT("MediaUtils MediaSoundComponent SampleTime"), STAT_MediaUtils_MediaSoundComponentSampleTime, STATGROUP_Media);
 
 /* Static initialization
  *****************************************************************************/
@@ -52,6 +53,7 @@ UMediaSoundComponent::UMediaSoundComponent(const FObjectInitializer& ObjectIniti
 	, Resampler(new FMediaAudioResampler)
 	, FrameSyncOffset(0)
 	, bSyncAudioAfterDropouts(false)
+	, LastPlaySampleTime(FTimespan::MinValue())
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	bAutoActivate = true;
@@ -120,7 +122,8 @@ void UMediaSoundComponent::SetDefaultMediaPlayer(UMediaPlayer* NewMediaPlayer)
 
 void UMediaSoundComponent::UpdatePlayer()
 {
-	if (!CurrentPlayer.IsValid())
+	UMediaPlayer* CurrentPlayerPtr = CurrentPlayer.Get();
+	if (CurrentPlayerPtr == nullptr)
 	{
 		CachedRate = 0.0f;
 		CachedTime = FTimespan::Zero();
@@ -133,7 +136,7 @@ void UMediaSoundComponent::UpdatePlayer()
 	}
 
 	// create a new sample queue if the player changed
-	TSharedRef<FMediaPlayerFacade, ESPMode::ThreadSafe> PlayerFacade = CurrentPlayer->GetPlayerFacade();
+	TSharedRef<FMediaPlayerFacade, ESPMode::ThreadSafe> PlayerFacade = CurrentPlayerPtr->GetPlayerFacade();
 
 	if (PlayerFacade != CurrentPlayerFacade)
 	{
@@ -151,6 +154,8 @@ void UMediaSoundComponent::UpdatePlayer()
 	// caching play rate and time for audio thread (eventual consistency is sufficient)
 	CachedRate = PlayerFacade->GetRate();
 	CachedTime = PlayerFacade->GetTime();
+
+	PlayerFacade->SetLastAudioRenderedSampleTime(LastPlaySampleTime.Load());
 }
 
 
@@ -291,6 +296,9 @@ bool UMediaSoundComponent::Init(int32& SampleRate)
 {
 	Super::Init(SampleRate);
 
+	// Initialize the settings for the spectrum analyzer
+	SpectrumAnalyzer.Init(SampleRate);
+
 	if (Channels == EMediaSoundChannels::Mono)
 	{
 		NumChannels = 1;
@@ -353,7 +361,7 @@ int32 UMediaSoundComponent::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 
 				if (JumpFrame != MAX_uint32)
 				{
-					UE_LOG(LogMediaAssets, Verbose, TEXT("Audio ( JUMP ) SyncOffset was: %d"), SyncOffset);
+					UE_LOG(LogMediaAssets, Verbose, TEXT("Audio ( JUMP ) SyncOffset was: %d, OutTime: %s"), SyncOffset, *OutTime.ToString());
 					int32 JumpFramesRequested = FramesRequested - JumpFrame;
 					int32 JumpFramesWritten = FramesWritten - JumpFrame;
 					SyncOffset = JumpFramesRequested - JumpFramesWritten;
@@ -404,9 +412,38 @@ int32 UMediaSoundComponent::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 			}
 		}
 
-#if STATS
-		SET_FLOAT_STAT(STAT_MediaUtils_MediaSoundComponent, (Time - OutTime).GetTotalMilliseconds());
-#endif
+		LastPlaySampleTime = OutTime;
+
+		if (bSpectralAnalysisEnabled)
+		{
+			// If we have stereo audio, sum to mono before sending to analyzer
+			if (NumChannels == 2)
+			{
+				int32 NumFrames = NumSamples / 2;
+
+				// Use the scratch buffer to sum the audio to mono
+				AudioScratchBuffer.Reset();
+				AudioScratchBuffer.AddUninitialized(NumFrames);
+				float* AudioScratchBufferPtr = AudioScratchBuffer.GetData();
+				int32 SampleIndex = 0;
+				for (int32 FrameIndex = 0; FrameIndex < NumFrames; ++FrameIndex, SampleIndex += NumChannels)
+				{
+					AudioScratchBufferPtr[FrameIndex] = 0.5f * (OutAudio[SampleIndex] + OutAudio[SampleIndex + 1]);
+				}
+
+				SpectrumAnalyzer.PushAudio(AudioScratchBufferPtr, NumFrames);
+			}
+			else
+			{
+				SpectrumAnalyzer.PushAudio(OutAudio, NumSamples);
+			}
+
+			// Launch an analysis task with this audio
+			(new FAutoDeleteAsyncTask<FMediaSoundComponentSpectrumAnalysisTask>(&SpectrumAnalyzer, &SpectrumAnalysisCounter))->StartBackgroundTask();
+		}
+
+		SET_FLOAT_STAT(STAT_MediaUtils_MediaSoundComponentSync, FMath::Abs((Time - OutTime).GetTotalMilliseconds()));
+		SET_FLOAT_STAT(STAT_MediaUtils_MediaSoundComponentSampleTime, OutTime.GetTotalMilliseconds());
 	}
 	else
 	{
@@ -417,10 +454,68 @@ int32 UMediaSoundComponent::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 			FScopeLock Lock(&CriticalSection);
 			FrameSyncOffset = 0;
 		}
+
+		LastPlaySampleTime = FTimespan::MinValue();
 	}
 	return NumSamples;
 }
 
+void UMediaSoundComponent::SetEnableSpectralAnalysis(bool bInSpectralAnalysisEnabled)
+{
+	bSpectralAnalysisEnabled = bInSpectralAnalysisEnabled;
+}
+
+void UMediaSoundComponent::SetSpectralAnalysisSettings(TArray<float> InFrequenciesToAnalyze, EMediaSoundComponentFFTSize InFFTSize)
+{
+	Audio::SpectrumAnalyzerSettings::EFFTSize SpectrumAnalyzerSize;
+
+	switch (InFFTSize)
+	{
+		case EMediaSoundComponentFFTSize::Min_64: 
+			SpectrumAnalyzerSize = Audio::SpectrumAnalyzerSettings::EFFTSize::Min_64; 
+			break;
+		
+		case EMediaSoundComponentFFTSize::Small_256: 
+			SpectrumAnalyzerSize = Audio::SpectrumAnalyzerSettings::EFFTSize::Small_256; 
+			break;
+		
+		default:
+		case EMediaSoundComponentFFTSize::Medium_512:
+			SpectrumAnalyzerSize = Audio::SpectrumAnalyzerSettings::EFFTSize::Medium_512; 
+			break;
+
+		case EMediaSoundComponentFFTSize::Large_1024: 
+			SpectrumAnalyzerSize = Audio::SpectrumAnalyzerSettings::EFFTSize::Large_1024; 
+			break;
+	}
+
+	SpectrumAnalyzerSettings.FFTSize = SpectrumAnalyzerSize;
+	SpectrumAnalyzer.SetSettings(SpectrumAnalyzerSettings);
+
+	FrequenciesToAnalyze = InFrequenciesToAnalyze;
+}
+
+TArray<FMediaSoundComponentSpectralData> UMediaSoundComponent::GetSpectralData()
+{
+	if (bSpectralAnalysisEnabled)
+	{
+		TArray<FMediaSoundComponentSpectralData> SpectralData;
+		SpectrumAnalyzer.LockOutputBuffer();
+
+		for (float Frequency : FrequenciesToAnalyze)
+		{
+			FMediaSoundComponentSpectralData Data;
+			Data.FrequencyHz = Frequency;
+			Data.Magnitude = SpectrumAnalyzer.GetMagnitudeForFrequency(Frequency);
+			SpectralData.Add(Data);
+		}
+		SpectrumAnalyzer.UnlockOutputBuffer();
+
+		return SpectralData;
+	}
+	// Empty array if spectrum analysis is not implemented
+	return TArray<FMediaSoundComponentSpectralData>();
+}
 
 /* UMediaSoundComponent implementation
  *****************************************************************************/

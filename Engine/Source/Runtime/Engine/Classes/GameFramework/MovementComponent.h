@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /**
  * Movement component updates position of associated PrimitiveComponent during its tick.
@@ -209,7 +209,7 @@ public:
 	virtual float GetMaxSpeed() const;
 
 	/** @return a scalar applied to the maximum velocity that the component can currently move. */
-	DEPRECATED(4.3, "GetMaxSpeedModifier() is deprecated, apply your own modifiers to GetMaxSpeed() if desired.")
+	UE_DEPRECATED(4.3, "GetMaxSpeedModifier() is deprecated, apply your own modifiers to GetMaxSpeed() if desired.")
 	virtual float GetMaxSpeedModifier() const;
 	
 	/** @return a scalar applied to the maximum velocity that the component can currently move. */
@@ -217,7 +217,7 @@ public:
 	virtual float K2_GetMaxSpeedModifier() const;
 
 	/** @return the result of GetMaxSpeed() * GetMaxSpeedModifier(). */
-	DEPRECATED(4.3, "GetModifiedMaxSpeed() is deprecated, use GetMaxSpeed() instead.")
+	UE_DEPRECATED(4.3, "GetModifiedMaxSpeed() is deprecated, use GetMaxSpeed() instead.")
 	virtual float GetModifiedMaxSpeed() const;
 
 	/** @return the result of GetMaxSpeed() * GetMaxSpeedModifier(). */

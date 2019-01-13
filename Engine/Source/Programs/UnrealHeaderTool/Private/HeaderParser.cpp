@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 
 #include "HeaderParser.h"
@@ -1112,6 +1112,7 @@ namespace
 			|| Property->IsA<UObjectProperty>()
 			|| Property->IsA<UFloatProperty>()
 			|| Property->IsA<UIntProperty>()
+			|| Property->IsA<UInt64Property>()
 			|| Property->IsA<UByteProperty>()
 			|| Property->IsA<UNameProperty>()
 			|| Property->IsA<UBoolProperty>()
@@ -7552,10 +7553,7 @@ ECompilationResult::Type FHeaderParser::ParseHeader(FClasses& AllClasses, FUnrea
 			Class->Bind();
 
 			// Finalize functions
-			if (Result == ECompilationResult::Succeeded)
-			{
-				FinalizeScriptExposedFunctions(Class);
-			}
+			FinalizeScriptExposedFunctions(Class);
 
 			bNoExportClassesOnly = bNoExportClassesOnly && Class->HasAnyClassFlags(CLASS_NoExport);
 		}
@@ -8226,7 +8224,6 @@ void FHeaderParser::SimplifiedClassParse(const TCHAR* Filename, const TCHAR* InB
 	// Two passes, preprocessor, then looking for the class stuff
 
 	// The layer of multi-line comment we are in.
-	int32 CommentDim = 0;
 	int32 CurrentLine = 0;
 	const TCHAR* Buffer = InBuffer;
 
@@ -8235,14 +8232,7 @@ void FHeaderParser::SimplifiedClassParse(const TCHAR* Filename, const TCHAR* InB
 	{
 		CurrentLine++;
 		const TCHAR* Str = *StrLine;
-		bool bProcess = CommentDim <= 0;	// for skipping nested multi-line comments
 		int32 BraceCount = 0;
-
-		if( !bProcess )
-		{
-			ClassHeaderTextStrippedOfCppText.Logf( TEXT("%s\r\n"), *StrLine );
-			continue;
-		}
 
 		bool bIf = FParse::Command(&Str,TEXT("#if"));
 		if( bIf || FParse::Command(&Str,TEXT("#ifdef")) || FParse::Command(&Str,TEXT("#ifndef")) )
@@ -8426,7 +8416,7 @@ void FHeaderParser::SimplifiedClassParse(const TCHAR* Filename, const TCHAR* InB
 
 	// now start over go look for the class
 
-	CommentDim  = 0;
+	int32 CommentDim  = 0;
 	CurrentLine = 0;
 	Buffer      = *ClassHeaderTextStrippedOfCppText;
 
@@ -8760,6 +8750,14 @@ bool FHeaderParser::DefaultValueStringCppFormatToInnerFormat(const UProperty* Pr
 				OutForm = FString::FromInt(Value);
 			}
 		}
+		else if (Property->IsA(UInt64Property::StaticClass()))
+		{
+			int64 Value;
+			if (FDefaultValueHelper::ParseInt64(CppForm, Value))
+			{
+				OutForm = FString::Printf(TEXT("%lld"), Value);
+			}
+		}
 		else if( Property->IsA(UByteProperty::StaticClass()) )
 		{
 			const UEnum* Enum = CastChecked<UByteProperty>(Property)->Enum;
@@ -8844,7 +8842,7 @@ bool FHeaderParser::DefaultValueStringCppFormatToInnerFormat(const UProperty* Pr
 			{
 				static const FString UHTDummyNamespace = TEXT("__UHT_DUMMY_NAMESPACE__");
 
-				if (!FTextStringHelper::ReadFromString(*CppForm, ParsedText, *UHTDummyNamespace, nullptr, nullptr, /*bRequiresQuotes*/true, EStringTableLoadingPolicy::Find))
+				if (!FTextStringHelper::ReadFromBuffer(*CppForm, ParsedText, *UHTDummyNamespace, nullptr, /*bRequiresQuotes*/true))
 				{
 					return false;
 				}
@@ -8863,7 +8861,7 @@ bool FHeaderParser::DefaultValueStringCppFormatToInnerFormat(const UProperty* Pr
 			}
 
 			// Normalize the default value from the parsed value
-			FTextStringHelper::WriteToString(OutForm, ParsedText, /*bRequiresQuotes*/false);
+			FTextStringHelper::WriteToBuffer(OutForm, ParsedText, /*bRequiresQuotes*/false);
 			return true;
 		}
 		else if( Property->IsA(UStrProperty::StaticClass()) )
@@ -9195,26 +9193,35 @@ bool FHeaderParser::TryToMatchConstructorParameterList(FToken Token)
 
 void FHeaderParser::SkipDeprecatedMacroIfNecessary()
 {
-	if (!MatchIdentifier(TEXT("DEPRECATED")))
+	FToken MacroToken;
+	if (!GetToken(MacroToken))
 	{
 		return;
 	}
 
+	if (MacroToken.TokenType != TOKEN_Identifier || (FCString::Stricmp(MacroToken.Identifier, TEXT("DEPRECATED")) != 0 && FCString::Stricmp(MacroToken.Identifier, TEXT("UE_DEPRECATED")) != 0))
+	{
+		UngetToken(MacroToken);
+		return;
+	}
+
+	FString ErrorScope = FString::Printf(TEXT("%s macro"), MacroToken.Identifier);
+
+	RequireSymbol(TEXT("("), *ErrorScope);
+
 	FToken Token;
-	// DEPRECATED(Version, "Message")
-	RequireSymbol(TEXT("("), TEXT("DEPRECATED macro"));
 	if (GetToken(Token) && (Token.Type != CPT_Float || Token.TokenType != TOKEN_Const))
 	{
-		FError::Throwf(TEXT("Expected engine version in DEPRECATED macro"));
+		FError::Throwf(TEXT("Expected engine version in %s macro"), MacroToken.Identifier);
 	}
 
-	RequireSymbol(TEXT(","), TEXT("DEPRECATED macro"));
+	RequireSymbol(TEXT(","), *ErrorScope);
 	if (GetToken(Token) && (Token.Type != CPT_String || Token.TokenType != TOKEN_Const))
 	{
-		FError::Throwf(TEXT("Expected deprecation message in DEPRECATED macro"));
+		FError::Throwf(TEXT("Expected deprecation message in %s macro"), MacroToken.Identifier);
 	}
 
-	RequireSymbol(TEXT(")"), TEXT("DEPRECATED macro"));
+	RequireSymbol(TEXT(")"), *ErrorScope);
 }
 
 void FHeaderParser::CompileVersionDeclaration(UStruct* Struct)

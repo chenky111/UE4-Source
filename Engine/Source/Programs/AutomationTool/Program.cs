@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 // This software is provided "as-is," without any express or implied warranty. 
 // In no event shall the author, nor Epic Games, Inc. be held liable for any damages arising from the use of this software.
 // This software will not be supported.
@@ -69,7 +69,9 @@ namespace AutomationTool
 				Environment.CurrentDirectory = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().GetOriginalLocation()), "..", "..", ".."));
 
 				// Ensure we can resolve any external assemblies as necessary.
-				AssemblyUtils.InstallAssemblyResolver(Path.GetDirectoryName(Assembly.GetEntryAssembly().GetOriginalLocation()));
+				string PathToBinariesDotNET = Path.GetDirectoryName(Assembly.GetEntryAssembly().GetOriginalLocation());
+				AssemblyUtils.InstallAssemblyResolver(PathToBinariesDotNET);
+				AssemblyUtils.InstallRecursiveAssemblyResolver(PathToBinariesDotNET);
 
 				// Initialize the host platform layer
 				HostPlatform.Initialize();

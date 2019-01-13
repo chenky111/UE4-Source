@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	InstancedStaticMesh.cpp: Static mesh rendering code.
@@ -2198,7 +2198,7 @@ int32 UHierarchicalInstancedStaticMeshComponent::AddInstance(const FTransform& I
 
 	int32 InstanceIndex = UInstancedStaticMeshComponent::AddInstance(InstanceTransform);
 
-	if (InstanceIndex != INDEX_NONE)
+	if (InstanceIndex != INDEX_NONE && GetStaticMesh() && GetStaticMesh()->HasValidRenderData())
 	{	
 		check(InstanceIndex == InstanceReorderTable.Num());
 
@@ -2213,12 +2213,9 @@ int32 UHierarchicalInstancedStaticMeshComponent::AddInstance(const FTransform& I
 
 		InstanceUpdateCmdBuffer.AddInstance(InstanceTransform.ToMatrixWithScale());
 
-		if (GetStaticMesh())
-		{
-			const FBox NewInstanceBounds = GetStaticMesh()->GetBounds().GetBox().TransformBy(InstanceTransform);
-			UnbuiltInstanceBounds += NewInstanceBounds;
-			UnbuiltInstanceBoundsList.Add(NewInstanceBounds);
-		}
+		const FBox NewInstanceBounds = GetStaticMesh()->GetBounds().GetBox().TransformBy(InstanceTransform);
+		UnbuiltInstanceBounds += NewInstanceBounds;
+		UnbuiltInstanceBoundsList.Add(NewInstanceBounds);
 
 		if (bAutoRebuildTreeOnInstanceChanges)
 		{
@@ -2593,6 +2590,22 @@ void UHierarchicalInstancedStaticMeshComponent::ApplyBuildTreeAsync(ENamedThread
 
 	MarkRenderStateDirty();
 	PostBuildStats();
+}
+
+void UHierarchicalInstancedStaticMeshComponent::OnComponentCreated()
+{
+	Super::OnComponentCreated();
+
+	if (FApp::CanEverRender() && !HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
+	{
+		// if we are pasting/duplicating this component, it may be created with some instances already in place
+		// in this case, need to ensure that the tree is properly created
+		if (PerInstanceSMData.Num() > 0 && ClusterTreePtr->Num() == 0)
+		{
+			const bool bForceUpdate = true;
+			BuildTreeIfOutdated(false, bForceUpdate);
+		}
+	}
 }
 
 bool UHierarchicalInstancedStaticMeshComponent::BuildTreeIfOutdated(bool Async, bool ForceUpdate)

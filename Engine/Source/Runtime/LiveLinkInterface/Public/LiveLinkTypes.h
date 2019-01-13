@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -64,10 +64,11 @@ public:
 	{
 		Offset = FPlatformTime::Seconds() - InTime;
 	};
+
 };
 
 USTRUCT()
-struct DEPRECATED(4.20, "FLiveLinkFrameRate is no longer used, please use FFrameRate from TimeManagement instead.") FLiveLinkFrameRate : public FFrameRate
+struct UE_DEPRECATED(4.20, "FLiveLinkFrameRate is no longer used, please use FFrameRate from TimeManagement instead.") FLiveLinkFrameRate : public FFrameRate
 {
 public:
 	GENERATED_USTRUCT_BODY()
@@ -123,7 +124,7 @@ struct FLiveLinkTimeCode_Base_DEPRECATED
 
 // A Qualified TimeCode associated with 
 USTRUCT()
-struct DEPRECATED(4.20, "FLiveLinkTimeCode is no longer used, please use FQualifiedFrameTime from TimeManagement instead.") FLiveLinkTimeCode : public FLiveLinkTimeCode_Base_DEPRECATED
+struct UE_DEPRECATED(4.20, "FLiveLinkTimeCode is no longer used, please use FQualifiedFrameTime from TimeManagement instead.") FLiveLinkTimeCode : public FLiveLinkTimeCode_Base_DEPRECATED
 {
 public:
 	GENERATED_BODY()
@@ -220,6 +221,14 @@ struct FOptionalCurveElement
 		Value = InValue;
 		bValid = true;
 	}
+
+	friend FArchive& operator<<(FArchive& Ar, FOptionalCurveElement& InElement)
+	{
+		Ar << InElement.Value;
+		Ar << InElement.bValid;
+
+		return Ar;
+	}
 };
 
 //Helper struct for updating curve data across multiple frames of live link data
@@ -276,5 +285,15 @@ public:
 	void ExtendCurveData(int32 ExtraCurves)
 	{
 		Curves.AddDefaulted(ExtraCurves);
+	}
+
+	friend FArchive& operator<<(FArchive& Ar, FLiveLinkFrame& InFrame)
+	{
+		Ar << InFrame.Transforms;
+		Ar << InFrame.Curves;
+		//FLiveLinkMetaData::StaticStruct()->SerializeItem(Ar, (void*)& InFrame.MetaData, nullptr);
+		FLiveLinkWorldTime::StaticStruct()->SerializeItem(Ar, (void*)& InFrame.WorldTime, nullptr);
+
+		return Ar;
 	}
 };

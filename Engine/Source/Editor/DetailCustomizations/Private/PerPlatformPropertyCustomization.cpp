@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "PerPlatformPropertyCustomization.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
@@ -232,5 +232,6 @@ TSharedRef<IPropertyTypeCustomization> FPerPlatformPropertyCustomization<PerPlat
 
 template class FPerPlatformPropertyCustomization<FPerPlatformInt>;
 template class FPerPlatformPropertyCustomization<FPerPlatformFloat>;
+template class FPerPlatformPropertyCustomization<FPerPlatformBool>;
 
 #undef LOCTEXT_NAMESPACE

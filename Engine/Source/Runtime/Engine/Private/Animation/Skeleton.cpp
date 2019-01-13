@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	Skeleton.cpp: Skeleton features
@@ -68,6 +68,14 @@ FArchive& operator<<(FArchive& Ar, FReferencePose & P)
 		}
 		else
 		{
+			// Scope the soft pointer serialization so we can tag it as editor only
+			FName PackageName;
+			FName PropertyName;
+			ESoftObjectPathCollectType CollectType = ESoftObjectPathCollectType::AlwaysCollect;
+			ESoftObjectPathSerializeType SerializeType = ESoftObjectPathSerializeType::AlwaysSerialize;
+			FSoftObjectPathThreadContext& ThreadContext = FSoftObjectPathThreadContext::Get();
+			ThreadContext.GetSerializationOptions(PackageName, PropertyName, CollectType, SerializeType);
+			FSoftObjectPathSerializationScope SerializationScope(PackageName, PropertyName, ESoftObjectPathCollectType::EditorOnlyCollect, SerializeType);
 			Ar << P.SourceReferenceMesh;
 		}
 	}
@@ -1339,8 +1347,7 @@ SmartName::UID_Type USkeleton::GetUIDByName(const FName& ContainerName, const FN
 // @todo: @fixme: this has to be fixed when we have GUID
 void USkeleton::VerifySmartName(const FName& ContainerName, FSmartName& InOutSmartName)
 {
-	VerifySmartNameInternal(ContainerName, InOutSmartName);
-	if (ContainerName == USkeleton::AnimCurveMappingName)
+	if (VerifySmartNameInternal(ContainerName, InOutSmartName) && ContainerName == USkeleton::AnimCurveMappingName)
 	{
 		IncreaseAnimCurveUidVersion();
 	}

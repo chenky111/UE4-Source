@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -39,6 +39,8 @@ enum ECompressionFlags
 /** mask out compression type */
 #define COMPRESSION_FLAGS_OPTIONS_MASK	0xF0
 
+#define COMPRESSION_FLAGS_BIAS_MASK (COMPRESS_BiasMemory | COMPRESS_BiasSpeed)
+
 /** Default compressor bit window for Zlib */
 #define DEFAULT_ZLIB_BIT_WINDOW		15
 
@@ -53,10 +55,41 @@ enum ECompressionFlags
 
 #define CUSTOM_COMPRESSOR_FEATURE_NAME "CustomCompressor"
 
+/**
+ * Interface for custom compressors. Register implementors of this class as a modular feature with the CUSTOM_COMPRESSOR_FEATURE_NAME name.
+ */
 struct ICustomCompressor : IModularFeature
 {
+	/**
+	 * Compresses memory from uncompressed buffer and writes it to compressed buffer. Updates CompressedSize with size of compressed data.
+	 *
+	 * @param	CompressedBuffer			Buffer compressed data is going to be written to
+	 * @param	CompressedSize	[in/out]	Size of CompressedBuffer, at exit will be size of compressed data
+	 * @param	UncompressedBuffer			Buffer containing uncompressed data
+	 * @param	UncompressedSize			Size of uncompressed data in bytes
+	 * @return true if compression succeeds, false if it fails because CompressedBuffer was too small or other reasons
+	 */
 	virtual bool Compress(void* CompressedBuffer, int32& CompressedSize, const void* UncompressedBuffer, int32 UncompressedSize) = 0;
-	virtual bool Uncompress(void* UncompressedBuffer, int32& UncompressedSize, const void* CompressedBuffer, int32 CompressedSize, int32 BitWindow = 0) = 0;
+
+	/**
+	 * Uncompresses memory from compressed buffer and writes it to uncompressed buffer.
+	 *
+	 * @param	UncompressedBuffer			Buffer containing uncompressed data
+	 * @param	UncompressedSize			Exact size of uncompressed data in bytes.
+	 * @param	CompressedBuffer			Buffer compressed data is going to be read from
+	 * @param	CompressedSize				Size of CompressedBuffer data in bytes
+	 * @return true if compression succeeds, false if it fails because CompressedBuffer was too small or other reasons
+	 */
+	virtual bool Uncompress(void* UncompressedBuffer, int32 UncompressedSize, const void* CompressedBuffer, int32 CompressedSize, int32 BitWindow = 0) = 0;
+
+	/**
+	 * Determines the maximum size of upper bound Thread-safe abstract compression routine to query memory requirements for a compression operation.
+	 *
+	 * @param	Flags						Flags to control what method to use and optionally control memory vs speed
+	 * @param	UncompressedSize			Size of uncompressed data in bytes
+	 * @param	BitWindow					Bit window to use in compression
+	 * @return The maximum possible bytes needed for compression of data buffer of size UncompressedSize
+	 */
 	virtual int32 GetCompressedBufferSize(int32 UncompressedSize) = 0;
 };
 

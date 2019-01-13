@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	IOSAudioBuffer.cpp: Unreal IOSAudio buffer interface object.
@@ -123,7 +123,7 @@ bool FIOSAudioSoundBuffer::ReadCompressedInfo(USoundWave* InWave)
 	return DecompressionState->ReadCompressedInfo(InWave->ResourceData, InWave->ResourceSize, &QualityInfo);
 }
 
-bool FIOSAudioSoundBuffer::ReadCompressedData( uint8* Destination, bool bLooping )
+bool FIOSAudioSoundBuffer::ReadCompressedData( uint8* Destination, int32 NumFramesToDecode, bool bLooping )
 {
 	if(bStreaming)
 	{

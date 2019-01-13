@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
@@ -89,11 +89,10 @@ namespace UnrealBuildTool
 		/// <summary>
 		/// Accessors for fields on the inner TargetRules instance
 		/// </summary>
-
-        #region Read-only accessor properties
-        #if !__MonoCS__
-        #pragma warning disable CS1591
-        #endif
+		#region Read-only accessor properties 
+		#if !__MonoCS__
+		#pragma warning disable CS1591
+		#endif
 
 		public bool bPreservePSYM
 		{
@@ -115,10 +114,10 @@ namespace UnrealBuildTool
 			get { return Inner.bEnableUndefinedBehaviorSanitizer; }
 		}
 
-        #if !__MonoCS__
-        #pragma warning restore CS1591
-        #endif
-        #endregion
+		#if !__MonoCS__
+		#pragma warning restore CS1591
+		#endif
+		#endregion
 	}
 
 	class LinuxPlatform : UEBuildPlatform
@@ -234,6 +233,11 @@ namespace UnrealBuildTool
 
 		public override void ValidateTarget(TargetRules Target)
 		{
+			if (Target.bAllowLTCG && Target.LinkType != TargetLinkType.Monolithic)
+			{
+				throw new BuildException("LTO (LTCG) for modular builds is not supported (lld is not currently used for dynamic libraries).");
+			}
+
 			Target.bCompileSimplygon = false;
 			Target.bCompileSimplygonSSF = false;
 			// depends on arch, APEX cannot be as of November'16 compiled for AArch32/64
@@ -287,7 +291,9 @@ namespace UnrealBuildTool
 			// [RCL] 2018-05-02: disabling XGE even during a native build because the support is not ready and you can have mysterious build failures when ib_console is installed.
 			// [RCL] 2018-07-10: enabling XGE for Windows to see if the crash from 2016 still persists. Please disable if you see spurious build errors that don't repro without XGE
 			// [bschaefer] 2018-08-24: disabling XGE due to a bug where XGE seems to be lower casing folders names that are headers ie. misc/Header.h vs Misc/Header.h
-			return false;//BuildHostPlatform.Current.Platform == UnrealTargetPlatform.Win64;
+			// [bschaefer] 2018-10-04: enabling XGE as an update in xgConsole seems to have fixed it for me
+			// [bschaefer] 2018-12-17: disable XGE again, as the same issue before seems to still be happening but intermittently
+			return false; //BuildHostPlatform.Current.Platform == UnrealTargetPlatform.Win64;
 		}
 
 		public override bool CanUseParallelExecutor()
@@ -463,8 +469,6 @@ namespace UnrealBuildTool
 		/// <param name="LinkEnvironment">The link environment for this target</param>
 		public override void SetUpEnvironment(ReadOnlyTargetRules Target, CppCompileEnvironment CompileEnvironment, LinkEnvironment LinkEnvironment)
 		{
-			CompileEnvironment.Definitions.Add("WITH_DATABASE_SUPPORT=0");		//@todo linux: valid?
-
 			// During the native builds, check the system includes as well (check toolchain when cross-compiling?)
 			string BaseLinuxPath = SDK.GetBaseLinuxPathForArchitecture(Target.Architecture);
 			if (BuildHostPlatform.Current.Platform == UnrealTargetPlatform.Linux && String.IsNullOrEmpty(BaseLinuxPath))
@@ -474,16 +478,16 @@ namespace UnrealBuildTool
 
 			if (CompileEnvironment.bAllowLTCG != LinkEnvironment.bAllowLTCG)
 			{
-				Log.TraceWarning("Inconsistency between LTCG settings in Compile and Link environments: link one takes priority");
-				CompileEnvironment.bAllowLTCG = LinkEnvironment.bAllowLTCG;
+				throw new BuildException("Inconsistency between LTCG settings in Compile ({0}) and Link ({1}) environments",
+					CompileEnvironment.bAllowLTCG,
+					LinkEnvironment.bAllowLTCG
+				);
 			}
 
-			// disable to LTO for modular builds
-			if (CompileEnvironment.bAllowLTCG && Target.LinkType != TargetLinkType.Monolithic)
+			// for now only hide by default monolithic builds.
+			if (Target.LinkType == TargetLinkType.Monolithic)
 			{
-				Log.TraceWarning("LTO (LTCG) for modular builds is not supported, disabling it");
-				CompileEnvironment.bAllowLTCG = false;
-				LinkEnvironment.bAllowLTCG = false;
+				CompileEnvironment.bHideSymbolsByDefault = true;
 			}
 
 			// link with Linux libraries.

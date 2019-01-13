@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
 	SceneRenderTargets.h: Scene render target definitions.
@@ -30,8 +30,12 @@ static const int32 NumTranslucentVolumeRenderTargetSets = (TVC_MAX + 1);
 /** Forward declaration of console variable controlling translucent volume blur */
 extern int32 GUseTranslucencyVolumeBlur;
 
-/** Forward declaration of console variable controlling translucent lighting volume dimensions */
-extern int32 GTranslucencyLightingVolumeDim;
+/** Function returning current translucency lighting volume dimensions. */
+inline int32 GetTranslucencyLightingVolumeDim()
+{
+	extern int32 GTranslucencyLightingVolumeDim;
+	return FMath::Clamp(GTranslucencyLightingVolumeDim, 4, 2048);
+}
 
 /** Function to select the index of the volume texture that we will hold the final translucency lighting volume texture */
 inline int SelectTranslucencyVolumeTarget(ETranslucencyVolumeCascade InCascade)
@@ -197,6 +201,8 @@ public:
 	 */
 	void Allocate(FRHICommandListImmediate& RHICmdList, const FSceneRenderer* SceneRenderer);
 
+	void AllocSceneColor(FRHICommandList& RHICmdList);
+
 	/**
 	 *
 	 */
@@ -205,13 +211,15 @@ public:
 	void SetSeparateTranslucencyBufferSize(bool bAnyViewWantsDownsampledSeparateTranslucency);
 
 	void SetQuadOverdrawUAV(FRHICommandList& RHICmdList, bool bBindQuadOverdrawBuffers, FRHISetRenderTargetsInfo& Info);
-	void BeginRenderingGBuffer(FRHICommandList& RHICmdList, ERenderTargetLoadAction ColorLoadAction, ERenderTargetLoadAction DepthLoadAction, FExclusiveDepthStencil::Type DepthStencilAccess, bool bBindQuadOverdrawBuffers, const FLinearColor& ClearColor = FLinearColor(0, 0, 0, 1));
-	void FinishRenderingGBuffer(FRHICommandListImmediate& RHICmdList);
+	void SetQuadOverdrawUAV(FRHICommandList& RHICmdList, bool bBindQuadOverdrawBuffers, bool bClearQuadOverdrawBuffers, FRHIRenderPassInfo& Info);
+	void BeginRenderingGBuffer(FRHICommandList& RHICmdList, ERenderTargetLoadAction ColorLoadAction, ERenderTargetLoadAction DepthLoadAction, FExclusiveDepthStencil::Type DepthStencilAccess, bool bBindQuadOverdrawBuffers, bool bClearQuadOverdrawBuffers = false, const FLinearColor& ClearColor = FLinearColor(0, 0, 0, 1));
+	void FinishGBufferPassAndResolve(FRHICommandListImmediate& RHICmdList);
 
 	/**
 	 * Sets the scene color target and restores its contents if necessary
 	 */
 	void BeginRenderingSceneColor(FRHICommandList& FRHICommandListImmediate, ESimpleRenderTargetMode RenderTargetMode = ESimpleRenderTargetMode::EUninitializedColorExistingDepth, FExclusiveDepthStencil DepthStencilAccess = FExclusiveDepthStencil::DepthWrite_StencilWrite, bool bTransitionWritable = true);
+	void FinishRenderingSceneColor(FRHICommandList& RHICmdList);
 
 	void BeginRenderingSceneMonoColor(FRHICommandList& RHICmdList, ESimpleRenderTargetMode RenderTargetMode = ESimpleRenderTargetMode::EUninitializedColorExistingDepth, FExclusiveDepthStencil DepthStencilAccess = FExclusiveDepthStencil::DepthWrite_StencilWrite);
 
@@ -225,9 +233,11 @@ public:
 
 	/** Begin rendering translucency in the scene color. */
 	void BeginRenderingTranslucency(FRHICommandList& RHICmdList, const class FViewInfo& View, const FSceneRenderer& Renderer, bool bFirstTimeThisFrame = true);
+	void FinishRenderingTranslucency(FRHICommandList& RHICmdList);
+
 	/** Begin rendering translucency in a separate (offscreen) buffer. This can be any translucency pass. */
 	void BeginRenderingSeparateTranslucency(FRHICommandList& RHICmdList, const FViewInfo& View, const FSceneRenderer& Renderer, bool bFirstTimeThisFrame);
-	void FinishRenderingSeparateTranslucency(FRHICommandList& RHICmdList, const FViewInfo& View);
+	void ResolveSeparateTranslucency(FRHICommandList& RHICmdList, const FViewInfo& View);
 
 	void FreeSeparateTranslucency()
 	{
@@ -622,8 +632,6 @@ private:
 	/** Determine the appropriate render target dimensions. */
 	FIntPoint ComputeDesiredSize(const FSceneViewFamily& ViewFamily);
 
-	void AllocSceneColor(FRHICommandList& RHICmdList);
-
 	/** Allocates the mobile multi-view scene color texture array render target. */
 	void AllocMobileMultiViewSceneColor(FRHICommandList& RHICmdList, const int32 ScaleFactor);
 
@@ -656,6 +664,9 @@ private:
 
 	/** Gets all GBuffers to use.  Returns the number actually used. */
 	int32 GetGBufferRenderTargets(ERenderTargetLoadAction ColorLoadAction, FRHIRenderTargetView OutRenderTargets[MaxSimultaneousRenderTargets], int32& OutVelocityRTIndex);
+
+	/** Fills the given FRenderPassInfo with the current GBuffer */
+	int32 FillGBufferRenderPassInfo(ERenderTargetLoadAction ColorLoadAction, FRHIRenderPassInfo& OutRenderPassInfo, int32& OutVelocityRTIndex);
 
 	ESceneColorFormatType GetSceneColorFormatType() const
 	{
