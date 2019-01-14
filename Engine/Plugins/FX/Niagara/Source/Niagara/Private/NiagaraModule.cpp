@@ -616,6 +616,8 @@ void FNiagaraTypeDefinition::RecreateUserDefinedTypeRegistry()
 
 	for (FSoftObjectPath AssetRef : TotalStructAssets)
 	{
+		FName AssetRefPathNamePreResolve = AssetRef.GetAssetPathName();
+
 		UObject* Obj = AssetRef.ResolveObject();
 		if (Obj == nullptr)
 		{
@@ -631,6 +633,11 @@ void FNiagaraTypeDefinition::RecreateUserDefinedTypeRegistry()
 			{
 				FNiagaraTypeRegistry::Register(ScriptStruct, ParamRefFound != nullptr, PayloadRefFound != nullptr, true);
 			}
+			if (Obj->GetPathName() != AssetRefPathNamePreResolve.ToString())
+			{
+				UE_LOG(LogNiagara, Warning, TEXT("Additional parameter/payload enum has moved from where it was in settings (this may cause errors at runtime): Was: \"%s\" Now: \"%s\""), *AssetRefPathNamePreResolve.ToString(), *Obj->GetPathName());
+			}
+
 		}
 		else
 		{
@@ -641,6 +648,7 @@ void FNiagaraTypeDefinition::RecreateUserDefinedTypeRegistry()
 
 	for (FSoftObjectPath AssetRef : Settings->AdditionalParameterEnums)
 	{
+		FName AssetRefPathNamePreResolve = AssetRef.GetAssetPathName();
 		UObject* Obj = AssetRef.ResolveObject();
 		if (Obj == nullptr)
 		{
@@ -655,6 +663,11 @@ void FNiagaraTypeDefinition::RecreateUserDefinedTypeRegistry()
 			if (Enum != nullptr)
 			{
 				FNiagaraTypeRegistry::Register(Enum, ParamRefFound != nullptr, PayloadRefFound != nullptr, true);
+			}
+
+			if (Obj->GetPathName() != AssetRefPathNamePreResolve.ToString())
+			{
+				UE_LOG(LogNiagara, Warning, TEXT("Additional parameter/payload enum has moved from where it was in settings (this may cause errors at runtime): Was: \"%s\" Now: \"%s\""), *AssetRefPathNamePreResolve.ToString(), *Obj->GetPathName());
 			}
 		}
 		else
