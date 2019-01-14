@@ -802,72 +802,88 @@ const FNiagaraTranslateResults &FHlslNiagaraTranslator::Translate(const FNiagara
 
 	// Get all the parameter map histories traced to this graph from output nodes. We'll revisit this shortly in order to build out just the ones we care about for this translation.
 	OtherOutputParamMapHistories = CompileData->GetPrecomputedHistories();
-	for (FNiagaraParameterMapHistory& FoundHistory : OtherOutputParamMapHistories)
+
+	if (ParamMapHistories.Num() == 1 && OtherOutputParamMapHistories.Num() == 1 && ( CompileOptions.TargetUsage == ENiagaraScriptUsage::Function || CompileOptions.TargetUsage == ENiagaraScriptUsage::DynamicInput ) )
 	{
-		const UNiagaraNodeOutput* HistoryOutputNode = FoundHistory.GetFinalOutputNode();
-		if (HistoryOutputNode != nullptr && !ShouldConsiderTargetParameterMap(HistoryOutputNode->GetUsage()))
+		ParamMapHistories[0] = (OtherOutputParamMapHistories[0]);
+
+		TArray<int32> Entries;
+		Entries.AddZeroed(OtherOutputParamMapHistories[0].Variables.Num());
+		for (int32 i = 0; i < Entries.Num(); i++)
 		{
-			continue;
+			Entries[i] = INDEX_NONE;
 		}
-		
-		// Now see if we want to use any of these specifically..
-		for (int32 ParamMapIdx = 0; ParamMapIdx < TranslationStages.Num(); ParamMapIdx++)
+		ParamMapSetVariablesToChunks[0] = (Entries);
+	}
+	else
+	{
+		for (FNiagaraParameterMapHistory& FoundHistory : OtherOutputParamMapHistories)
 		{
-			UNiagaraNodeOutput* TargetOutputNode = TranslationStages[ParamMapIdx].OutputNode;
-			if (FoundHistory.GetFinalOutputNode() == TargetOutputNode)
+			const UNiagaraNodeOutput* HistoryOutputNode = FoundHistory.GetFinalOutputNode();
+			if (HistoryOutputNode != nullptr && !ShouldConsiderTargetParameterMap(HistoryOutputNode->GetUsage()))
 			{
-				if (bNeedsPersistentIDs)
+				continue;
+			}
+
+			// Now see if we want to use any of these specifically..
+			for (int32 ParamMapIdx = 0; ParamMapIdx < TranslationStages.Num(); ParamMapIdx++)
+			{
+				UNiagaraNodeOutput* TargetOutputNode = TranslationStages[ParamMapIdx].OutputNode;
+				if (FoundHistory.GetFinalOutputNode() == TargetOutputNode)
 				{
-					//TODO: Setup alias for current level to decouple from "Particles". Would we ever want emitter or system persistent IDs?
-					FNiagaraVariable Var = FNiagaraVariable(FNiagaraTypeDefinition::GetIDDef(), TEXT("Particles.ID"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
+					if(bNeedsPersistentIDs)
+					{
+						//TODO: Setup alias for current level to decouple from "Particles". Would we ever want emitter or system persistent IDs?
+						FNiagaraVariable Var = FNiagaraVariable(FNiagaraTypeDefinition::GetIDDef(), TEXT("Particles.ID"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+					}
+					{
+						// NOTE(mv): This will explicitly expose Particles.UniqueID to the HLSL code regardless of whether it is exposed in a script or not. 
+						//           This is necessary as the script needs to know about it even when no scripts reference it. 
+						FNiagaraVariable Var = FNiagaraVariable(FNiagaraTypeDefinition::GetIntDef(), TEXT("Particles.UniqueID"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+					}
+
+					if (RequiresInterpolation())
+					{
+						FNiagaraVariable Var = FNiagaraVariable(FNiagaraTypeDefinition::GetIntDef(), TEXT("Interpolation.InterpSpawn_Index"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+
+						Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.InterpSpawn_SpawnTime"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+
+						Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.InterpSpawn_UpdateTime"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+
+						Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.InterpSpawn_InvSpawnTime"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+
+						Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.InterpSpawn_InvUpdateTime"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+
+						Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.SpawnInterp"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+
+						Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.Emitter_SpawnInterval"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+
+						Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.Emitter_InterpSpawnStartDt"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+
+						Var = FNiagaraVariable(FNiagaraTypeDefinition::GetIntDef(), TEXT("Interpolation.Emitter_SpawnGroup"));
+						FoundHistory.AddVariable(Var, Var, nullptr);
+					}
+
+					ParamMapHistories[ParamMapIdx] = (FoundHistory);
+
+					TArray<int32> Entries;
+					Entries.AddZeroed(FoundHistory.Variables.Num());
+					for (int32 i = 0; i < Entries.Num(); i++)
+					{
+						Entries[i] = INDEX_NONE;
+					}
+					ParamMapSetVariablesToChunks[ParamMapIdx] = (Entries);
 				}
-				{
-					// NOTE(mv): This will explicitly expose Particles.UniqueID to the HLSL code regardless of whether it is exposed in a script or not. 
-					//           This is necessary as the script needs to know about it even when no scripts reference it. 
-					FNiagaraVariable Var = FNiagaraVariable(FNiagaraTypeDefinition::GetIntDef(), TEXT("Particles.UniqueID"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-				}
-
-				if (RequiresInterpolation())
-				{
-					FNiagaraVariable Var = FNiagaraVariable(FNiagaraTypeDefinition::GetIntDef(), TEXT("Interpolation.InterpSpawn_Index"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-
-					Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.InterpSpawn_SpawnTime"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-
-					Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.InterpSpawn_UpdateTime"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-
-					Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.InterpSpawn_InvSpawnTime"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-
-					Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.InterpSpawn_InvUpdateTime"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-
-					Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.SpawnInterp"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-
-					Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.Emitter_SpawnInterval"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-
-					Var = FNiagaraVariable(FNiagaraTypeDefinition::GetFloatDef(), TEXT("Interpolation.Emitter_InterpSpawnStartDt"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-
-					Var = FNiagaraVariable(FNiagaraTypeDefinition::GetIntDef(), TEXT("Interpolation.Emitter_SpawnGroup"));
-					FoundHistory.AddVariable(Var, Var, nullptr);
-				}
-
-				ParamMapHistories[ParamMapIdx] = (FoundHistory);
-
-				TArray<int32> Entries;
-				Entries.AddZeroed(FoundHistory.Variables.Num());
-				for (int32 i = 0; i < Entries.Num(); i++)
-				{
-					Entries[i] = INDEX_NONE;
-				}
-				ParamMapSetVariablesToChunks[ParamMapIdx] = (Entries);
 			}
 		}
 	}
