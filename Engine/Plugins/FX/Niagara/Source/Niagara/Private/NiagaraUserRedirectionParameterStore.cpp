@@ -25,12 +25,7 @@ FNiagaraUserRedirectionParameterStore& FNiagaraUserRedirectionParameterStore::op
 
 bool FNiagaraUserRedirectionParameterStore::IsUserParameter(const FNiagaraVariable& InVar) const
 {
-#if WITH_EDITOR
 	return InVar.GetName().ToString().StartsWith(TEXT("User."));
-#else
-	check(0);
-	return false;
-#endif
 }
 
 FNiagaraVariable FNiagaraUserRedirectionParameterStore::GetUserRedirection(const FNiagaraVariable & InVar) const
