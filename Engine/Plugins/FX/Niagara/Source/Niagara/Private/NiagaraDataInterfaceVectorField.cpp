@@ -245,12 +245,15 @@ bool UNiagaraDataInterfaceVectorField::GetFunctionHLSL(const FName& DefinitionFu
 		static const TCHAR *FormatSample = TEXT(R"(
 			void {FunctionName}(float3 In_SamplePoint, out float3 Out_Sample)
 			{
-				Out_Sample = Texture3DSample({TextureName}, {SamplerName}, In_SamplePoint).xyz;
+				float3 SamplePoint = (In_SamplePoint - {MinBoundsName}) / ({MaxBoundsName} - {MinBoundsName});
+				Out_Sample = Texture3DSample({TextureName}, {SamplerName}, SamplePoint).xyz;
 			}
 		)");
 		TMap<FString, FStringFormatArg> ArgsSample = {
 			{TEXT("FunctionName"), InstanceFunctionName},
 			{TEXT("TextureName"), TextureBaseName + ParamInfo.DataInterfaceHLSLSymbol},
+			{TEXT("MinBoundsName"), MinBoundsBaseName + ParamInfo.DataInterfaceHLSLSymbol},
+			{TEXT("MaxBoundsName"), MaxBoundsBaseName + ParamInfo.DataInterfaceHLSLSymbol},
 			{TEXT("SamplerName"), SamplerBaseName + ParamInfo.DataInterfaceHLSLSymbol}
 		};
 		OutHLSL += FString::Format(FormatSample, ArgsSample);
@@ -480,6 +483,9 @@ void UNiagaraDataInterfaceVectorField::SampleVectorField(FVectorVMContext& Conte
 		const uint32 SizeZ = (uint32)StaticVectorField->SizeZ;
 		const FVector4 Size(SizeX, SizeY, SizeZ, 1.0f);
 
+		const FVector4 MinBounds(StaticVectorField->Bounds.Min.X, StaticVectorField->Bounds.Min.Y, StaticVectorField->Bounds.Min.Z, 1.0f);
+		const FVector4 MaxBounds(StaticVectorField->Bounds.Max.X, StaticVectorField->Bounds.Max.Y, StaticVectorField->Bounds.Max.Z, 1.0f);
+
 		const FVector4 *Data = StaticVectorField->CPUData.GetData();
 
 		check(Data != nullptr); // TODO(mv): Guard better? This shouldn't happen 
@@ -501,8 +507,11 @@ void UNiagaraDataInterfaceVectorField::SampleVectorField(FVectorVMContext& Conte
 
 		for (int32 InstanceIdx = 0; InstanceIdx < Context.NumInstances; ++InstanceIdx)
 		{
-			// Normalized position
+			// Position in Volume Space
 			FVector4 Pos(XParam.Get(), YParam.Get(), ZParam.Get(), 0.0f);
+
+			// Normalize position
+			Pos = (Pos - MinBounds) / (MaxBounds - MinBounds);
 
 			// Scaled position
 			Pos = Pos * Size;
