@@ -947,7 +947,13 @@ const FPinConnectionResponse UEdGraphSchema_Niagara::CanCreateConnection(const U
 		{
 			FNiagaraTypeDefinition PinTypeA = PinToTypeDefinition(PinA);
 			FNiagaraTypeDefinition PinTypeB = PinToTypeDefinition(PinB);
-			if (FNiagaraTypeDefinition::TypesAreAssignable(PinTypeA, PinTypeB) == false)
+
+			if (PinTypeA == FNiagaraTypeDefinition::GetParameterMapDef() || PinTypeB == FNiagaraTypeDefinition::GetParameterMapDef())
+			{
+				return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Types are not compatible"));
+			}
+
+			else if (FNiagaraTypeDefinition::TypesAreAssignable(PinTypeA, PinTypeB) == false)
 			{
 				//Do some limiting on auto conversions here?
 				if (PinTypeA.GetClass())
@@ -968,11 +974,13 @@ const FPinConnectionResponse UEdGraphSchema_Niagara::CanCreateConnection(const U
 			// TODO: This shouldn't be handled explicitly here.
 			bool PinAIsConvertAddAndPinBIsNonGenericType =
 				PinA->PinType.PinCategory == PinCategoryMisc && PinA->PinType.PinSubCategory == UNiagaraNodeWithDynamicPins::AddPinSubCategory &&
-				PinB->PinType.PinCategory == PinCategoryType && PinToTypeDefinition(PinB) != FNiagaraTypeDefinition::GetGenericNumericDef();
+				PinB->PinType.PinCategory == PinCategoryType && PinToTypeDefinition(PinB) != FNiagaraTypeDefinition::GetGenericNumericDef() &&
+				PinToTypeDefinition(PinB) != FNiagaraTypeDefinition::GetParameterMapDef();
 
 			bool PinBIsConvertAddAndPinAIsNonGenericType =
 				PinB->PinType.PinCategory == PinCategoryMisc && PinB->PinType.PinSubCategory == UNiagaraNodeWithDynamicPins::AddPinSubCategory &&
-				PinA->PinType.PinCategory == PinCategoryType && PinToTypeDefinition(PinA) != FNiagaraTypeDefinition::GetGenericNumericDef();
+				PinA->PinType.PinCategory == PinCategoryType && PinToTypeDefinition(PinA) != FNiagaraTypeDefinition::GetGenericNumericDef() &&
+				PinToTypeDefinition(PinA) != FNiagaraTypeDefinition::GetParameterMapDef();
 
 			if (PinAIsConvertAddAndPinBIsNonGenericType == false && PinBIsConvertAddAndPinAIsNonGenericType == false)
 			{
