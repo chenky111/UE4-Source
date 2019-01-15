@@ -1479,6 +1479,7 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 		SceneContext.FinishRenderingSceneColor(RHICmdList);
 	}
 	checkSlow(RHICmdList.IsOutsideRenderPass());
+	UnbindRenderTargets(RHICmdList);
 	RendererModule.DispatchPostOpaqueCompute(RHICmdList, Views[0].ViewUniformBuffer);
 
 	// No longer needed, release
