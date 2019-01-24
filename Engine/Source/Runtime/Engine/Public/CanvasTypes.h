@@ -929,6 +929,12 @@ private:
 			,	Transform(InTransform)
 			,	GlowInfo(InGlowInfo)
 		{}
+
+		~FRenderData()
+		{
+			BatchedElements.Clear();
+		}
+
 		/** Current batched elements, destroyed once rendering completes. */
 		FBatchedElements BatchedElements;
 		/** Batched element parameters */
