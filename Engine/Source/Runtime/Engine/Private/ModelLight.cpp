@@ -35,7 +35,7 @@ TMap<UModelComponent*, TIndirectArray<FModelElement> > UModelComponent::TempBSPE
 #define SHADOWMAP_TEXTURE_WIDTH		512
 #define SHADOWMAP_TEXTURE_HEIGHT	512
 
-#if (defined(_MSC_VER) || PLATFORM_MAC || PLATFORM_UNIX) && WITH_EDITOR && !UE_BUILD_MINIMAL
+#if (defined(_MSC_VER) || PLATFORM_MAC || PLATFORM_UNIX) && WITH_EDITOR
 	/** Whether to allow cropping of unmapped borders in lightmaps and shadowmaps. Controlled by BaseLightmass.ini setting. */
 	extern ENGINE_API bool GAllowLightmapCropping;
 #endif
@@ -198,7 +198,8 @@ FModelElement* UModelComponent::CreateNewTempElement(UModelComponent* Component)
 	}
 
 	// make it in the temp array
-	FModelElement* Element = new(*TempElements) FModelElement(Component, NULL);
+	FModelElement* Element = new FModelElement(Component, NULL);
+	TempElements->Add(Element);
 	return Element;
 }
 
@@ -240,7 +241,7 @@ void UModelComponent::ApplyTempElements(bool bLightingWasSuccessful)
 		{
 			UModelComponent* Component = UpdatedComponents[ComponentIndex];
 
-			new(ComponentContexts) FComponentReregisterContext(Component);
+			ComponentContexts.Add(new FComponentReregisterContext(Component));
 		}
 
 		// Release all index buffers since they will be modified by BuildRenderData()

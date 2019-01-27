@@ -18,6 +18,7 @@
 
 #include "Interfaces/IMainFrameModule.h"
 #include "DesktopPlatformModule.h"
+#include "NewLevelDialogModule.h"
 
 #include "StreamingLevels/StreamingLevelCustomization.h"
 #include "StreamingLevels/StreamingLevelModel.h"
@@ -184,7 +185,7 @@ void FStreamingLevelCollectionModel::BindCommands()
 	
 	ActionList.MapAction( Commands.World_RemoveSelectedLevels,
 		FExecuteAction::CreateSP( this, &FStreamingLevelCollectionModel::UnloadSelectedLevels_Executed  ),
-		FCanExecuteAction::CreateSP( this, &FLevelCollectionModel::AreAllSelectedLevelsEditable ) );
+		FCanExecuteAction::CreateSP( this, &FStreamingLevelCollectionModel::AreAllSelectedLevelsRemovable ) );
 	
 	ActionList.MapAction( Commands.World_MergeSelectedLevels,
 		FExecuteAction::CreateSP( this, &FStreamingLevelCollectionModel::MergeSelectedLevels_Executed  ),
@@ -415,10 +416,20 @@ const FLevelModelList& FStreamingLevelCollectionModel::GetInvalidSelectedLevels(
 //levels
 void FStreamingLevelCollectionModel::CreateEmptyLevel_Executed()
 {
-	EditorLevelUtils::CreateNewStreamingLevelForWorld( *CurrentWorld, AddedLevelStreamingClass, TEXT(""), false);
+	FString TemplateMapPackageName;
+	FNewLevelDialogModule& NewLevelDialogModule = FModuleManager::LoadModuleChecked<FNewLevelDialogModule>("NewLevelDialog");
+	IMainFrameModule& MainFrameModule = FModuleManager::LoadModuleChecked<IMainFrameModule>(TEXT("MainFrame"));
+	if (NewLevelDialogModule.CreateAndShowNewLevelDialog(MainFrameModule.GetParentWindow(), TemplateMapPackageName))
+	{
+		UPackage* TemplatePackage = LoadPackage(nullptr, *TemplateMapPackageName, LOAD_None);
+		UWorld* TemplateWorld = TemplatePackage ? UWorld::FindWorldInPackage(TemplatePackage) : nullptr;
 
-	// Force a cached level list rebuild
-	PopulateLevelsList();
+		// Create the new level
+		EditorLevelUtils::CreateNewStreamingLevelForWorld(*CurrentWorld, AddedLevelStreamingClass, TEXT(""), false, TemplateWorld);
+
+		// Force a cached level list rebuild
+		PopulateLevelsList();
+	}
 }
 
 void FStreamingLevelCollectionModel::AddExistingLevel_Executed()
@@ -564,6 +575,19 @@ bool FStreamingLevelCollectionModel::IsStreamingMethodChecked(UClass* InClass) c
 		}
 	}
 	return false;
+}
+
+bool FStreamingLevelCollectionModel::AreAllSelectedLevelsRemovable() const
+{
+	for (const TSharedPtr<FLevelModel>& LevelModel : SelectedLevelsList)
+	{
+		if (LevelModel->IsLocked() || LevelModel->IsPersistent())
+		{
+			return false;
+		}
+	}
+
+	return AreAnyLevelsSelected();
 }
 
 void FStreamingLevelCollectionModel::SetStreamingLevelsClass_Executed(UClass* InClass)

@@ -22,7 +22,6 @@ static const TArray<FString> StringArray = {
 UMovieSceneLiveLinkSection::UMovieSceneLiveLinkSection(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	bAlwaysSendInterpolated = true;
 	BlendType = EMovieSceneBlendType::Absolute;
 }
 void UMovieSceneLiveLinkSection::SetSubjectName(const FName& InSubjectName)
@@ -152,6 +151,13 @@ void UMovieSceneLiveLinkSection::Serialize(FArchive& Ar)
 		}
 		UpdateChannelProxy();
 	}
+}
+
+void UMovieSceneLiveLinkSection::PostEditImport()
+{
+	Super::PostEditImport();
+
+	UpdateChannelProxy();
 }
 
 void UMovieSceneLiveLinkSection::SetMask(const TArray<bool>& InChannelMask)

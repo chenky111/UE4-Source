@@ -448,15 +448,44 @@ void FQuadricSkeletalMeshReduction::ConvertToFSkinnedSkeletalMesh( const FSkelet
 		Vertex.Position   = WeightedPosition;
 	};
 
-	auto CreatSkinningMatrix = [&BoneMatrices](const FSoftSkinVertex& Vertex, const FSkelMeshSection& Section)->FMatrix
+	auto CreateSkinningMatrix = [&BoneMatrices](const FSoftSkinVertex& Vertex, const FSkelMeshSection& Section, bool& bValidBoneWeights)->FMatrix
 	{
-		FMatrix BlendedMatrix(ForceInitToZero);
-		int32 TotalInfluence = 0;
-		int32 ValidInfluenceCount = 0;
+		// Compute the inverse of the total bone influence for this vertex.
+		
+		float InvTotalInfluence = 1.f / 255.f;   // expected default - anything else could indicate a problem with the asset.
+		{
+			int32 TotalInfluence = 0;
 
-		const TArray<uint16>& BoneMap = Section.BoneMap;
+			for (int32 i = 0; i < MAX_TOTAL_INFLUENCES; ++i)
+			{
+				const uint8 BoneInfluence = Vertex.InfluenceWeights[i];
+				TotalInfluence += BoneInfluence;
+			}
+
+			if (TotalInfluence != 255) // 255 is the expected value.  This logic just allows for graceful failure.
+			{
+				// Not expected value - record that.
+				bValidBoneWeights = false;
+
+				if (TotalInfluence == 0)
+				{
+					InvTotalInfluence = 0.f;
+				}
+				else
+				{
+					InvTotalInfluence = 1.f / float(TotalInfluence);
+				}
+			}
+		}
+
 
 		// Build the blended matrix 
+
+		FMatrix BlendedMatrix(ForceInitToZero);
+
+		int32 ValidInfluenceCount = 0;
+		
+		const TArray<uint16>& BoneMap = Section.BoneMap;
 
 		for (int32 i = 0; i < MAX_TOTAL_INFLUENCES; ++i)
 		{
@@ -465,13 +494,11 @@ void FQuadricSkeletalMeshReduction::ConvertToFSkinnedSkeletalMesh( const FSkelet
 
 			// Accumulate the bone influence for this vert into the BlendedMatrix
 
-			TotalInfluence += BoneInfluence;
-
 			if (BoneInfluence > 0)
 			{
 				check(BoneIndex < BoneMap.Num());
 				const uint16 SectionBoneId = BoneMap[BoneIndex]; // Third-party tool uses an additional indirection bode table here 
-				const float  BoneWeight = BoneInfluence / 255.0f;  // convert to [0,1] float
+				const float  BoneWeight = BoneInfluence * InvTotalInfluence;  // convert to [0,1] float
 
 				if (BoneMatrices.IsValidIndex(SectionBoneId))
 				{
@@ -483,12 +510,13 @@ void FQuadricSkeletalMeshReduction::ConvertToFSkinnedSkeletalMesh( const FSkelet
 		}
 
 		// default identity matrix for the special case of the vertex having no valid transforms..
+
 		if (ValidInfluenceCount == 0)
 		{
 			BlendedMatrix = FMatrix::Identity;
 		}
 
-		check(TotalInfluence == 255);
+		
 
 		return BlendedMatrix;
 	};
@@ -548,17 +576,23 @@ void FQuadricSkeletalMeshReduction::ConvertToFSkinnedSkeletalMesh( const FSkelet
 		const FSectionRange VertexRange  = SectionRangeArray[SectionIndex];
 		
 		// Loop over the vertices in this section.
-
+		bool bHasValidBoneWeights = true;
 		for (int32 VertexIndex = VertexRange.Begin; VertexIndex < VertexRange.End; ++VertexIndex)
 		{
 			FSoftSkinVertex& SkinVertex = SoftSkinVertices[VertexIndex];
 
 			// Use the bone weights for this vertex to create a blended matrix 
-			const FMatrix BlendedMatrix = CreatSkinningMatrix(SkinVertex, Section);
+			const FMatrix BlendedMatrix = CreateSkinningMatrix(SkinVertex, Section, bHasValidBoneWeights);
 
 			// Update this Skin Vertex to the correct location, normal, etc.
 			ApplySkinning(BlendedMatrix, SkinVertex);
 
+		}
+
+		// Report any error with invalid bone weights
+		if (!bHasValidBoneWeights && !SkipSection(SectionIndex))
+		{
+			UE_LOG(LogSkeletalMeshReduction, Warning, TEXT("Building LOD %d - Encountered questionable vertex weights in source."), LODIndex);
 		}
 	}
 
@@ -826,21 +860,26 @@ float FQuadricSkeletalMeshReduction::SimplifyMesh( const FSkeletalMeshOptimizati
 
 	// Determine the stop criteria used
 
-	const bool bUseVertexCriterion   = Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_NumOfVerts     || Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_TriangleOrVert;
-	const bool bUseTriangleCriterion = Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_NumOfTriangles || Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_TriangleOrVert;
+	const bool bUseVertexPercentCriterion = Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_NumOfVerts || Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_TriangleOrVert;
+	const bool bUseTrianglePercentCriterion = Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_NumOfTriangles || Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_TriangleOrVert;
 
+	const bool bUseMaxVertNumCriterion = Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_AbsNumOfVerts || Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_AbsTriangleOrVert;
+	const bool bUseMaxTrisNumCriterion = Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_AbsNumOfTriangles || Settings.TerminationCriterion == SkeletalMeshTerminationCriterion::SMTC_AbsTriangleOrVert;
 
 	// We can support a stopping criteria based on the MaxDistance the new vertex is from the plans of the source triangles.
 	// but there seems to be no good use for this.  We are better off just using triangle count.
-	const float MaxDist              = FLT_MAX; // (Settings.ReductionMethod != SkeletalMeshOptimizationType::SMOT_NumOfTriangles) ? Settings.MaxDeviationPercentage * Bounds.SphereRadius : FLT_MAX;
-	const int32 MaxTriNumToRetain    = Mesh.NumIndices() / 3;
-	const float TriangleRetainRatio  = FMath::Clamp(Settings.NumOfTrianglesPercentage, 0.f, 1.f);
-	const int32 MinTriNumToRetain    = (bUseTriangleCriterion) ? FMath::Max(4, FMath::CeilToInt(TriangleRetainRatio * MaxTriNumToRetain)) : 4 ; 	
-	const float MaxCollapseCost      = FLT_MAX;
+	const float MaxDist = FLT_MAX; // (Settings.ReductionMethod != SkeletalMeshOptimizationType::SMOT_NumOfTriangles) ? Settings.MaxDeviationPercentage * Bounds.SphereRadius : FLT_MAX;
+	const int32 SrcTriNum = Mesh.NumIndices() / 3;
+	const float TriangleRetainRatio = FMath::Clamp(Settings.NumOfTrianglesPercentage, 0.f, 1.f);
+	const int32 TargetTriNum = (bUseTrianglePercentCriterion) ? FMath::CeilToInt(TriangleRetainRatio * SrcTriNum) : Settings.MaxNumOfTriangles;
 
-	const int32 MaxVerNumToRetain = Mesh.NumVertices();
-	const float VertRetainRatio   = FMath::Clamp(Settings.NumOfVertPercentage, 0.f, 1.f);
-	const int32 MinVerNumToRetain = (bUseVertexCriterion) ? FMath::Max(3, FMath::CeilToInt(VertRetainRatio * MaxVerNumToRetain)) : 0;
+	const int32 MinTriNumToRetain = (bUseTrianglePercentCriterion || bUseMaxTrisNumCriterion) ? FMath::Max(4, TargetTriNum) : 4;
+	const float MaxCollapseCost = FLT_MAX;
+
+	const int32 SrcVertNum = Mesh.NumVertices();
+	const float VertRetainRatio = FMath::Clamp(Settings.NumOfVertPercentage, 0.f, 1.f);
+	const int32 TargetVertNum = (bUseVertexPercentCriterion) ? FMath::CeilToInt(VertRetainRatio * SrcVertNum) : Settings.MaxNumOfVerts + 1;
+	const int32 MinVerNumToRetain = (bUseVertexPercentCriterion || bUseMaxVertNumCriterion) ? FMath::Max(6, TargetVertNum) : 6;
 
 	const float VolumeImportance      = FMath::Clamp(Settings.VolumeImportance, 0.f, 2.f);
 	const bool bLockEdges             = Settings.bLockEdges;
@@ -848,7 +887,7 @@ float FQuadricSkeletalMeshReduction::SimplifyMesh( const FSkeletalMeshOptimizati
 	const bool bEnforceBoneBoundaries = Settings.bEnforceBoneBoundaries;
 
 	// Terminator tells the simplifier when to stop
-	SkeletalSimplifier::FSimplifierTerminator Terminator(MinTriNumToRetain, MaxTriNumToRetain, MinVerNumToRetain, MaxVerNumToRetain, MaxCollapseCost, MaxDist);
+	SkeletalSimplifier::FSimplifierTerminator Terminator(MinTriNumToRetain, SrcTriNum, MinVerNumToRetain, SrcVertNum, MaxCollapseCost, MaxDist);
 
 	double NormalWeight    =16.00;
 	double TangentWeight   = 0.10;
@@ -1542,3 +1581,5 @@ void FQuadricSkeletalMeshReduction::ReduceSkeletalMesh(USkeletalMesh& SkeletalMe
 
 	SkeletalMesh.CalculateRequiredBones(SkeletalMeshResource.LODModels[LODIndex], SkeletalMesh.RefSkeleton, &BonesToRemove);
 }
+
+#undef LOCTEXT_NAMESPACE

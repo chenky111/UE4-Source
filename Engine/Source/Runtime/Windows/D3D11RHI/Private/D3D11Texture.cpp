@@ -239,6 +239,8 @@ TD3D11Texture2D<BaseResourceType>::~TD3D11Texture2D()
 #endif
 }
 
+template TD3D11Texture2D<FD3D11BaseTexture2D>::~TD3D11Texture2D();
+
 FD3D11Texture3D::~FD3D11Texture3D()
 {
 	D3D11TextureDeleted( *this );
@@ -1786,11 +1788,11 @@ void FD3D11DynamicRHI::RHICopySubTextureRegion(FTexture2DRHIParamRef SourceTextu
 
 	D3D11_BOX SourceBoxAdjust =
 	{
-		SourceStartX,
-		SourceStartY,
+		static_cast<UINT>(SourceStartX),
+		static_cast<UINT>(SourceStartY),
 		0,
-		SourceEndX,
-		SourceEndY,
+		static_cast<UINT>(SourceEndX),
+		static_cast<UINT>(SourceEndY),
 		1
 	};
 
@@ -2057,5 +2059,53 @@ void FD3D11DynamicRHI::RHIAliasTextureResources(FTextureRHIParamRef DestTextureR
 	if (DestTexture && SrcTexture)
 	{
 		DestTexture->AliasResources(SrcTexture);
+	}
+}
+
+void FD3D11DynamicRHI::RHICopyTexture(FTextureRHIParamRef SourceTextureRHI, FTextureRHIParamRef DestTextureRHI, const FRHICopyTextureInfo& CopyInfo)
+{
+	if (!SourceTextureRHI || !DestTextureRHI || SourceTextureRHI == DestTextureRHI)
+	{
+		// no need to do anything (silently ignored)
+		return;
+	}
+
+	RHITransitionResources(EResourceTransitionAccess::EReadable, &SourceTextureRHI, 1);
+
+	FRHICommandList_RecursiveHazardous RHICmdList(this);	
+
+	FD3D11TextureBase* SourceTexture = GetD3D11TextureFromRHITexture(SourceTextureRHI);
+	FD3D11TextureBase* DestTexture = GetD3D11TextureFromRHITexture(DestTextureRHI);
+
+	check(SourceTexture && DestTexture);
+
+	GPUProfilingData.RegisterGPUWork();
+
+	if (CopyInfo.Size != FIntVector::ZeroValue)
+	{
+		D3D11_BOX SrcBox;
+		SrcBox.left = CopyInfo.SourcePosition.X;
+		SrcBox.top = CopyInfo.SourcePosition.Y;
+		SrcBox.front = CopyInfo.SourcePosition.Z;
+		SrcBox.right = CopyInfo.SourcePosition.X + CopyInfo.Size.X;
+		SrcBox.bottom = CopyInfo.SourcePosition.Y + CopyInfo.Size.Y;
+		SrcBox.back = CopyInfo.SourcePosition.Z + CopyInfo.Size.Z;
+
+		for (uint32 i = 0; i < CopyInfo.NumSlices; ++i)
+		{
+			uint32 SourceSliceIndex = CopyInfo.SourceSliceIndex + i;
+			uint32 DestSliceIndex = CopyInfo.DestSliceIndex + i;
+
+			const uint32 SourceSubresource = D3D11CalcSubresource(CopyInfo.SourceMipIndex, SourceSliceIndex, SourceTextureRHI->GetNumMips());
+			const uint32 DestSubresource = D3D11CalcSubresource(CopyInfo.DestMipIndex, DestSliceIndex, DestTextureRHI->GetNumMips());
+
+			Direct3DDeviceIMContext->CopySubresourceRegion(DestTexture->GetResource(), DestSubresource, CopyInfo.DestPosition.X, CopyInfo.DestPosition.Y, CopyInfo.DestPosition.Z, SourceTexture->GetResource(), SourceSubresource, &SrcBox);
+		}
+	}
+	else
+	{
+		// Make sure the params are all by default when using this case
+		ensure(CopyInfo.SourceSliceIndex == 0 && CopyInfo.DestSliceIndex == 0 && CopyInfo.SourcePosition == FIntVector::ZeroValue && CopyInfo.DestPosition == FIntVector::ZeroValue && CopyInfo.SourceMipIndex == 0 && CopyInfo.DestMipIndex == 0);
+		Direct3DDeviceIMContext->CopyResource(DestTexture->GetResource(), SourceTexture->GetResource());
 	}
 }

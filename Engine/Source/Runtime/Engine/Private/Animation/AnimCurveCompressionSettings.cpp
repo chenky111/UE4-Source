@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "Animation/AnimCurveCompressionSettings.h"
 #include "Animation/AnimCurveCompressionCodec_CompressedRichCurve.h"
@@ -43,6 +43,11 @@ bool UAnimCurveCompressionSettings::Compress(UAnimSequence& AnimSeq) const
 	}
 
 	return Success;
+}
+
+UAnimCurveCompressionCodec* UAnimCurveCompressionSettings::GetCodec(const FString& Path)
+{
+	return Codec->GetCodec(Path);
 }
 
 FString UAnimCurveCompressionSettings::MakeDDCKey() const

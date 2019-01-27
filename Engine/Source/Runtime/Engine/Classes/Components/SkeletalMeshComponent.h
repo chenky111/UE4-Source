@@ -1855,6 +1855,7 @@ public:
 
 public:
 	bool IsAnimBlueprintInstanced() const;
+	void ClearAnimScriptInstance();
 
 protected:
 	bool NeedToSpawnAnimScriptInstance() const;
@@ -1874,7 +1875,7 @@ private:
 	void EndPhysicsTickComponent(FSkeletalMeshComponentEndPhysicsTickFunction& ThisTickFunction);
 
 	/** Evaluate Anim System **/
-	void EvaluateAnimation(const USkeletalMesh* InSkeletalMesh, UAnimInstance* InAnimInstance, TArray<FTransform>& OutBoneSpaceTransforms, FVector& OutRootBoneTranslation, FBlendedHeapCurve& OutCurve, FCompactPose& OutPose) const;
+	void EvaluateAnimation(const USkeletalMesh* InSkeletalMesh, UAnimInstance* InAnimInstance, FVector& OutRootBoneTranslation, FBlendedHeapCurve& OutCurve, FCompactPose& OutPose) const;
 
 	/** Queues up tasks for parallel update/evaluation, as well as the chained game thread completion task */
 	void DispatchParallelEvaluationTasks(FActorComponentTickFunction* TickFunction);
@@ -1897,7 +1898,6 @@ private:
 
 	bool DoAnyPhysicsBodiesHaveWeight() const;
 
-	void ClearAnimScriptInstance();
 	virtual void RefreshMorphTargets() override;
 
 	void GetWindForCloth_GameThread(FVector& WindVector, float& WindAdaption) const;

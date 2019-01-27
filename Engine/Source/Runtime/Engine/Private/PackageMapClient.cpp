@@ -371,7 +371,7 @@ bool UPackageMapClient::SerializeNewActor(FArchive& Ar, class UActorChannel *Cha
 				Location = LocalLocation = FVector::ZeroVector;
 			}
 			Rotation = RootComponent ? Actor->GetActorRotation() : FRotator::ZeroRotator;
-			Scale = RootComponent ? Actor->GetActorScale() : FVector::ZeroVector;
+			Scale = RootComponent ? Actor->GetActorScale() : FVector::OneVector;
 			Velocity = RootComponent ? Actor->GetVelocity() : FVector::ZeroVector;
 		}
 
@@ -3187,8 +3187,10 @@ void FNetGUIDCache::CountBytes(FArchive& Ar) const
 
 void FNetFieldExport::CountBytes(FArchive& Ar) const
 {
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	Ar << const_cast<FString&>(Name);
 	Ar << const_cast<FString&>(Type);
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 }
 
 void FNetFieldExportGroup::CountBytes(FArchive& Ar) const

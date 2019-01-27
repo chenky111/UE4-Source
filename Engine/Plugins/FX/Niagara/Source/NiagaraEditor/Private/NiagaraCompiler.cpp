@@ -344,8 +344,8 @@ void FNiagaraCompileRequestData::DeepCopyGraphs(UNiagaraScriptSource* ScriptSour
 void FNiagaraCompileRequestData::FinishPrecompile(UNiagaraScriptSource* ScriptSource, const TArray<FNiagaraVariable>& EncounterableVariables, ENiagaraScriptUsage InUsage)
 {
 	{
-		ENiagaraScriptCompileStatusEnum = FindObject<UEnum>(ANY_PACKAGE, TEXT("ENiagaraScriptCompileStatus"), true);
-		ENiagaraScriptUsageEnum = FindObject<UEnum>(ANY_PACKAGE, TEXT("ENiagaraScriptUsage"), true);
+		ENiagaraScriptCompileStatusEnum = StaticEnum<ENiagaraScriptCompileStatus>();
+		ENiagaraScriptUsageEnum = StaticEnum<ENiagaraScriptUsage>();
 
 		PrecompiledHistories.Empty();
 
@@ -388,6 +388,31 @@ void FNiagaraCompileRequestData::FinishPrecompile(UNiagaraScriptSource* ScriptSo
 					UClass* Class = const_cast<UClass*>(Var.GetType().GetClass());
 					UObject* Obj = DuplicateObject(Class->GetDefaultObject(true), GetTransientPackage());
 					CDOs.Add(Class, Obj);
+				}
+			}
+		}
+
+		// Generate CDO's for data interfaces that are passed in to function or dynamic input scripts compiled standalone as we do not have a history
+		if (InUsage == ENiagaraScriptUsage::Function || InUsage == ENiagaraScriptUsage::DynamicInput)
+		{
+			for (const auto ReferencedGraph : ClonedGraphs)
+			{
+				TArray<UNiagaraNodeInput*> InputNodes;
+				TArray<FNiagaraVariable*> InputVariables;
+				ReferencedGraph->FindInputNodes(InputNodes);
+				for (const auto InputNode : InputNodes)
+				{
+					InputVariables.Add(&InputNode->Input);
+				}
+
+				for (const auto InputVariable : InputVariables)
+				{
+					if (InputVariable->IsDataInterface())
+					{
+						UClass* Class = const_cast<UClass*>(InputVariable->GetType().GetClass());
+						UObject* Obj = DuplicateObject(Class->GetDefaultObject(true), GetTransientPackage());
+						CDOs.Add(Class, Obj);
+					}
 				}
 			}
 		}

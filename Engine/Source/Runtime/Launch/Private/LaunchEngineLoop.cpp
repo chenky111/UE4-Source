@@ -299,6 +299,11 @@ public:
 		{
 			AllowedLogVerbosity = ELogVerbosity::All;
 		}
+
+		if (stdout == nullptr)
+		{
+			AllowedLogVerbosity = ELogVerbosity::NoLogging;
+		}
 	}
 
 	virtual bool CanBeUsedOnAnyThread() const override
@@ -984,12 +989,54 @@ static void UpdateCoreCsvStats()
 }
 #endif // WITH_ENGINE && CSV_PROFILER
 
+#if WITH_ENGINE
+namespace AppLifetimeEventCapture
+{
+	static void AppWillDeactivate()
+	{
+		UE_LOG( LogCore, Display, TEXT("AppLifetime: Application will deactivate") );
+		CSV_EVENT_GLOBAL(TEXT("App_WillDeactivate"));
+	}
+
+	static void AppHasReactivated()
+	{
+		UE_LOG( LogCore, Display, TEXT("AppLifetime: Application has reactivated") );
+		CSV_EVENT_GLOBAL(TEXT("App_HasReactivated"));
+	}
+
+	static void AppWillEnterBackground()
+	{
+		UE_LOG( LogCore, Display, TEXT("AppLifetime: Application will enter background") );
+		CSV_EVENT_GLOBAL(TEXT("App_WillEnterBackground"));
+	}
+
+	static void AppHasEnteredForeground()
+	{
+		UE_LOG( LogCore, Display, TEXT("AppLifetime: Application has entered foreground") );
+		CSV_EVENT_GLOBAL(TEXT("App_HasEnteredForeground"));
+	}
+
+	static void Init()
+	{
+		FCoreDelegates::ApplicationWillDeactivateDelegate.AddStatic(AppWillDeactivate);
+		FCoreDelegates::ApplicationHasReactivatedDelegate.AddStatic(AppHasReactivated);
+		FCoreDelegates::ApplicationWillEnterBackgroundDelegate.AddStatic(AppWillEnterBackground);
+		FCoreDelegates::ApplicationHasEnteredForegroundDelegate.AddStatic(AppHasEnteredForeground);
+	}
+}
+#endif //WITH_ENGINE
+
 
 DECLARE_CYCLE_STAT( TEXT( "FEngineLoop::PreInit.AfterStats" ), STAT_FEngineLoop_PreInit_AfterStats, STATGROUP_LoadTime );
 
 int32 FEngineLoop::PreInit(const TCHAR* CmdLine)
 {
 	SCOPED_BOOT_TIMING("FEngineLoop::PreInit");
+
+#if PLATFORM_WINDOWS
+	// Register a handler for Ctrl-C so we've effective signal handling from the outset.
+	FWindowsPlatformMisc::SetGracefulTerminationHandler();
+#endif // PLATFORM_WINDOWS
 
 	FMemory::SetupTLSCachesOnCurrentThread();
 
@@ -1614,6 +1661,10 @@ int32 FEngineLoop::PreInit(const TCHAR* CmdLine)
 		FCoreDelegates::OnEndFrame.AddStatic(UpdateCoreCsvStats);
 	}
 	FCsvProfiler::Get()->Init();
+#endif
+
+#if WITH_ENGINE
+	AppLifetimeEventCapture::Init();
 #endif
 
 #if WITH_ENGINE && TRACING_PROFILER
@@ -4397,6 +4448,14 @@ bool FEngineLoop::AppInit( )
 		FConfigCacheIni::InitializeConfigSystem();
 	}
 
+	// Load "asap" plugin modules
+	IPluginManager&  PluginManager = IPluginManager::Get();
+	IProjectManager& ProjectManager = IProjectManager::Get();
+	if (!ProjectManager.LoadModulesForProject(ELoadingPhase::EarliestPossible) || !PluginManager.LoadModulesForEnabledPlugins(ELoadingPhase::EarliestPossible))
+	{
+		return false;
+	}
+
 	{
 		SCOPED_BOOT_TIMING("FPlatformStackWalk::Init");
 		// Now that configs have been initialized, setup stack walking options
@@ -4408,9 +4467,6 @@ bool FEngineLoop::AppInit( )
 #endif
 
 	CheckForPrintTimesOverride();
-
-	IPluginManager&  PluginManager  = IPluginManager::Get();
-	IProjectManager& ProjectManager = IProjectManager::Get();
 
 	// Check whether the project or any of its plugins are missing or are out of date
 #if UE_EDITOR && !IS_MONOLITHIC

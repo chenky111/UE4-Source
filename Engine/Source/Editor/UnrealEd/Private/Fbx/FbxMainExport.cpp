@@ -2661,10 +2661,16 @@ void FFbxExporter::ExportLevelSequencePropertyTrack( FbxNode* FbxNode, UMovieSce
 	FbxCamera* FbxCamera = FbxNode->GetCamera();
 	FFrameRate TickResolution = PropertyTrack.GetTypedOuter<UMovieScene>()->GetTickResolution();
 
+	const FName FloatChannelTypeName = FMovieSceneFloatChannel::StaticStruct()->GetFName();
 	FMovieSceneChannelProxy& ChannelProxy = Section->GetChannelProxy();
 	for (const FMovieSceneChannelEntry& Entry : Section->GetChannelProxy().GetAllEntries())
 	{
 		const FName ChannelTypeName = Entry.GetChannelTypeName();
+		if (ChannelTypeName != FloatChannelTypeName)
+		{
+			continue;
+		}
+		
 		TArrayView<FMovieSceneChannel* const>        Channels = Entry.GetChannels();
 		TArrayView<const FMovieSceneChannelMetaData> AllMetaData = Entry.GetMetaData();
 
@@ -3558,11 +3564,22 @@ void FFbxExporter::ExportObjectMetadata(const UObject* ObjectToExport, FbxNode* 
 					// Remaining tag follows the format NodeName.PropertyName, so replace '.' with '_'
 					TagAsString.ReplaceInline(TEXT("."), TEXT("_"));
 
-					FbxProperty Property = FbxProperty::Create(Node, FbxStringDT, TCHAR_TO_UTF8(*TagAsString));
-					FbxString ValueString(TCHAR_TO_UTF8(*MetadataIt.Value));
+					if (MetadataIt.Value == TEXT("true") || MetadataIt.Value == TEXT("false"))
+					{
+						FbxProperty Property = FbxProperty::Create(Node, FbxBoolDT, TCHAR_TO_UTF8(*TagAsString));
+						FbxBool ValueBool = MetadataIt.Value == TEXT("true") ? true : false;
 
-					Property.Set(ValueString);
-					Property.ModifyFlag(FbxPropertyFlags::eUserDefined, true);
+						Property.Set(ValueBool);
+						Property.ModifyFlag(FbxPropertyFlags::eUserDefined, true);
+					}
+					else
+					{
+						FbxProperty Property = FbxProperty::Create(Node, FbxStringDT, TCHAR_TO_UTF8(*TagAsString));
+						FbxString ValueString(TCHAR_TO_UTF8(*MetadataIt.Value));
+
+						Property.Set(ValueString);
+						Property.ModifyFlag(FbxPropertyFlags::eUserDefined, true);
+					}
 				}
 			}
 		}

@@ -268,14 +268,27 @@ void FPropertyLocalizationDataGatherer::GatherLocalizationDataFromChildTextPrope
 			const int32 ElementCount = ScriptArrayHelper.Num();
 			for(int32 j = 0; j < ElementCount; ++j)
 			{
-				GatherLocalizationDataFromChildTextProperties(PathToElement + FString::Printf(TEXT("(%d)"), j), ArrayProperty->Inner, ScriptArrayHelper.GetRawPtr(j), nullptr, ChildPropertyGatherTextFlags);
+				const uint8* ElementPtr = ScriptArrayHelper.GetRawPtr(j);
+				const uint8* DefaultElementPtr = nullptr;
+				if (DefaultElementValueAddress)
+				{
+					FScriptArrayHelper DefaultScriptArrayHelper(ArrayProperty, DefaultElementValueAddress);
+					if (DefaultScriptArrayHelper.IsValidIndex(j))
+					{
+						DefaultElementPtr = DefaultScriptArrayHelper.GetRawPtr(j);
+					}
+				}
+
+				GatherLocalizationDataFromChildTextProperties(PathToElement + FString::Printf(TEXT("(%d)"), j), ArrayProperty->Inner, ElementPtr, DefaultElementPtr, ChildPropertyGatherTextFlags);
 			}
 		}
 		// Property is a map property.
 		else if (MapProperty)
 		{
 			// Skip maps of types which can't contain any text.
-			if (CanGatherFromInnerProperty(MapProperty->KeyProp) == false && CanGatherFromInnerProperty(MapProperty->ValueProp) == false)
+			const bool bGatherMapKey = CanGatherFromInnerProperty(MapProperty->KeyProp);
+			const bool bGatherMapValue = CanGatherFromInnerProperty(MapProperty->ValueProp);
+			if (!bGatherMapKey && !bGatherMapValue)
 			{
 				continue;
 			}
@@ -291,13 +304,25 @@ void FPropertyLocalizationDataGatherer::GatherLocalizationDataFromChildTextPrope
 				}
 
 				const uint8* MapPairPtr = ScriptMapHelper.GetPairPtr(j);
-				if (CanGatherFromInnerProperty(MapProperty->KeyProp))
+				const uint8* DefaultPairPtr = nullptr;
+				if (DefaultElementValueAddress)
 				{
-					GatherLocalizationDataFromChildTextProperties(PathToElement + FString::Printf(TEXT("(%d - Key)"), ElementIndex), MapProperty->KeyProp, MapPairPtr + MapProperty->MapLayout.KeyOffset, nullptr, ChildPropertyGatherTextFlags);
+					const uint8* MapKeyPtr = MapPairPtr;
+					FScriptMapHelper DefaultScriptMapHelper(MapProperty, DefaultElementValueAddress);
+					DefaultPairPtr = DefaultScriptMapHelper.FindMapPairPtrFromHash(MapKeyPtr);
 				}
-				if (CanGatherFromInnerProperty(MapProperty->ValueProp))
+
+				if (bGatherMapKey)
 				{
-					GatherLocalizationDataFromChildTextProperties(PathToElement + FString::Printf(TEXT("(%d - Value)"), ElementIndex), MapProperty->ValueProp, MapPairPtr + MapProperty->MapLayout.ValueOffset, nullptr, ChildPropertyGatherTextFlags);
+					const uint8* MapKeyPtr = MapPairPtr;
+					const uint8* DefaultMapKeyPtr = DefaultPairPtr ? DefaultPairPtr : nullptr;
+					GatherLocalizationDataFromChildTextProperties(PathToElement + FString::Printf(TEXT("(%d - Key)"), ElementIndex), MapProperty->KeyProp, MapKeyPtr, DefaultMapKeyPtr, ChildPropertyGatherTextFlags);
+				}
+				if (bGatherMapValue)
+				{
+					const uint8* MapValuePtr = MapPairPtr + MapProperty->MapLayout.ValueOffset;
+					const uint8* DefaultMapValuePtr = DefaultPairPtr ? DefaultPairPtr + MapProperty->MapLayout.ValueOffset : nullptr;
+					GatherLocalizationDataFromChildTextProperties(PathToElement + FString::Printf(TEXT("(%d - Value)"), ElementIndex), MapProperty->ValueProp, MapValuePtr, DefaultMapValuePtr, ChildPropertyGatherTextFlags);
 				}
 				++ElementIndex;
 			}
@@ -322,7 +347,7 @@ void FPropertyLocalizationDataGatherer::GatherLocalizationDataFromChildTextPrope
 				}
 
 				const uint8* ElementPtr = ScriptSetHelper.GetElementPtr(j);
-				GatherLocalizationDataFromChildTextProperties(PathToElement + FString::Printf(TEXT("(%d)"), ElementIndex), SetProperty->ElementProp, ElementPtr + SetProperty->SetLayout.ElementOffset, nullptr, ChildPropertyGatherTextFlags);
+				GatherLocalizationDataFromChildTextProperties(PathToElement + FString::Printf(TEXT("(%d)"), ElementIndex), SetProperty->ElementProp, ElementPtr, nullptr, ChildPropertyGatherTextFlags);
 				++ElementIndex;
 			}
 		}

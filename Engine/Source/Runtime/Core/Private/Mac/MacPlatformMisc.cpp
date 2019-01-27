@@ -27,7 +27,9 @@
 #include "Internationalization/Internationalization.h"
 #include "Internationalization/Culture.h"
 #include "Modules/ModuleManager.h"
+#include "GenericPlatform/GenericPlatformChunkInstall.h"
 
+#include "Apple/PreAppleSystemHeaders.h"
 #include <dlfcn.h>
 #include <IOKit/IOKitLib.h>
 #include <IOKit/kext/KextManager.h>
@@ -41,6 +43,7 @@
 #include <libproc.h>
 #include <notify.h>
 #include <uuid/uuid.h>
+#include "Apple/PostAppleSystemHeaders.h"
 
 extern CORE_API bool GIsGPUCrashed;
 /*------------------------------------------------------------------------------
@@ -1906,7 +1909,7 @@ void ReportEnsure( const TCHAR* ErrorMessage, int NumStackFramesToIgnore )
 	EnsureLock.Unlock();
 }
 
-void ReportHang(const TCHAR* ErrorMessage, const TArray<FProgramCounterSymbolInfo>& Stack, uint32 HungThreadId)
+void ReportHang(const TCHAR* ErrorMessage, const uint64* StackFrames, int32 NumStackFrames, uint32 HungThreadId)
 {
 	EnsureLock.Lock();
 	if (!bReentranceGuard && FMacApplicationInfo::CrashReporter != nil)
@@ -1914,7 +1917,7 @@ void ReportHang(const TCHAR* ErrorMessage, const TArray<FProgramCounterSymbolInf
 		bReentranceGuard = true;
 
 		FMacCrashContext EnsureContext(ECrashContextType::Ensure, ErrorMessage);
-		EnsureContext.SetPortableCallStack(Stack);
+		EnsureContext.SetPortableCallStack(StackFrames, NumStackFrames);
 		EnsureContext.GenerateEnsureInfoAndLaunchReporter();
 
 		bReentranceGuard = false;
@@ -2366,4 +2369,38 @@ int FMacPlatformMisc::GetDefaultStackSize()
 #else
 	return 4 * 1024 * 1024;
 #endif
+}
+
+IPlatformChunkInstall* FMacPlatformMisc::GetPlatformChunkInstall()
+{
+	static IPlatformChunkInstall* ChunkInstall = nullptr;
+	static bool bIniChecked = false;
+	if (!ChunkInstall || !bIniChecked)
+	{
+		IPlatformChunkInstallModule* PlatformChunkInstallModule = nullptr;
+		if (!GEngineIni.IsEmpty())
+		{
+			FString InstallModule;
+			GConfig->GetString(TEXT("StreamingInstall"), TEXT("DefaultProviderName"), InstallModule, GEngineIni);
+			FModuleStatus Status;
+			if (FModuleManager::Get().QueryModule(*InstallModule, Status))
+			{
+				PlatformChunkInstallModule = FModuleManager::LoadModulePtr<IPlatformChunkInstallModule>(*InstallModule);
+				if (PlatformChunkInstallModule != nullptr)
+				{
+					// Attempt to grab the platform installer
+					ChunkInstall = PlatformChunkInstallModule->GetPlatformChunkInstall();
+				}
+			}
+			bIniChecked = true;
+		}
+
+		if (PlatformChunkInstallModule == nullptr)
+		{
+			// Placeholder instance
+			ChunkInstall = FGenericPlatformMisc::GetPlatformChunkInstall();
+		}
+	}
+
+	return ChunkInstall;
 }

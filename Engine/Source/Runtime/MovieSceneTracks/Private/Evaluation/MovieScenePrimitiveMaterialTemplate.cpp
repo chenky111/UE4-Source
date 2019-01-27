@@ -5,6 +5,7 @@
 #include "Sections/MovieScenePrimitiveMaterialSection.h"
 #include "UObject/StrongObjectPtr.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Components/PrimitiveComponent.h"
 
 struct FSetMaterialToken : IMovieScenePreAnimatedToken
@@ -52,14 +53,25 @@ struct FPrimitiveMaterialExecToken : IMovieSceneExecutionToken
 
 	virtual void Execute(const FMovieSceneContext& Context, const FMovieSceneEvaluationOperand& Operand, FPersistentEvaluationData& PersistentData, IMovieScenePlayer& Player) override
 	{
+		static TMovieSceneAnimTypeIDContainer<int32> MaterialIndexToTypeID;
+		FMovieSceneAnimTypeID TypeID = MaterialIndexToTypeID.GetAnimTypeID(MaterialIndex);
+
 		for (TWeakObjectPtr<> WeakObject : Player.FindBoundObjects(Operand))
 		{
 			UPrimitiveComponent* PrimitiveComponent = Cast<UPrimitiveComponent>(WeakObject.Get());
 			if (PrimitiveComponent && MaterialIndex >= 0 && MaterialIndex < PrimitiveComponent->GetNumMaterials())
 			{
-				UMaterialInterface* ExistingMaterial = PrimitiveComponent->GetMaterial(MaterialIndex);
-				Player.SavePreAnimatedState(*PrimitiveComponent, TMovieSceneAnimTypeID<FPrimitiveMaterialExecToken>(), FSetMaterialTokenProducer(MaterialIndex, ExistingMaterial));
+				UMaterialInterface*        ExistingMaterial = PrimitiveComponent->GetMaterial(MaterialIndex);
+				UMaterialInstanceDynamic*  MaterialInstance = Cast<UMaterialInstanceDynamic>(ExistingMaterial);
 
+				if (MaterialInstance && MaterialInstance->Parent && MaterialInstance->Parent == NewMaterial)
+				{
+					// Do not re-assign materials when a dynamic instance is already assigned with the same parent (since that's basically the same material, just with animated parameters)
+					// This is required for supporting material switchers alongside parameter tracks
+					continue;
+				}
+				
+				Player.SavePreAnimatedState(*PrimitiveComponent, TypeID, FSetMaterialTokenProducer(MaterialIndex, ExistingMaterial));
 				if (NewMaterial != ExistingMaterial)
 				{
 					PrimitiveComponent->SetMaterial(MaterialIndex, NewMaterial);

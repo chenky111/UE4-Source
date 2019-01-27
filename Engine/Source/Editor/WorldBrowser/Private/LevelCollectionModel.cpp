@@ -159,6 +159,10 @@ void FLevelCollectionModel::BindCommands()
 		FExecuteAction::CreateSP( this, &FLevelCollectionModel::ShowOnlySelectedLevels_Executed  ),
 		FCanExecuteAction::CreateSP( this, &FLevelCollectionModel::AreAnySelectedLevelsLoaded ) );
 
+	ActionList.MapAction(Commands.World_ShowAllButSelectedLevels,
+		FExecuteAction::CreateSP(this, &FLevelCollectionModel::ShowAllButSelectedLevels_Executed),
+		FCanExecuteAction::CreateSP(this, &FLevelCollectionModel::AreAnySelectedLevelsLoaded));
+
 	ActionList.MapAction(Commands.World_ShowAllLevels,
 		FExecuteAction::CreateSP(this, &FLevelCollectionModel::ShowAllLevels_Executed));
 	
@@ -472,6 +476,16 @@ void FLevelCollectionModel::ShowLevels(const FLevelModelList& InLevelList)
 	RequestUpdateAllLevels();
 }
 
+void FLevelCollectionModel::ShowOnlySelectedLevels()
+{
+	ShowOnlySelectedLevels_Executed();
+}
+
+void FLevelCollectionModel::ShowAllButSelectedLevels()
+{
+	ShowAllButSelectedLevels_Executed();
+}
+
 void FLevelCollectionModel::UnlockLevels(const FLevelModelList& InLevelList)
 {
 	if (!IsReadOnly())
@@ -663,6 +677,11 @@ void FLevelCollectionModel::UnloadLevels(const FLevelModelList& InLevelList)
 				FUnmodifiableObject ImmuneWorld(CurrentWorld.Get());
 				EditorLevelUtils::RemoveLevelFromWorld(Level);
 			}
+		}
+		else if (ULevelStreaming* StreamingLevel = Cast<ULevelStreaming>(LevelModel->GetNodeObject()))
+		{
+			StreamingLevel->MarkPendingKill();
+			ThisWorld->RemoveStreamingLevel(StreamingLevel);
 		}
 	}
 
@@ -1535,6 +1554,18 @@ void FLevelCollectionModel::ShowOnlySelectedLevels_Executed()
 	ShowSelectedLevels_Executed();
 }
 
+void FLevelCollectionModel::ShowAllButSelectedLevels_Executed()
+{
+	//stash off a copy of the original array, as setting visibility can destroy the selection
+	FLevelModelList SelectedLevelsCopy = GetSelectedLevels();
+
+	InvertSelection_Executed();
+	ShowSelectedLevels_Executed();
+	SetSelectedLevels(SelectedLevelsCopy);
+	HideSelectedLevels_Executed();
+}
+
+
 void FLevelCollectionModel::ShowAllLevels_Executed()
 {
 	ShowLevels(GetFilteredLevels());
@@ -1749,6 +1780,7 @@ void FLevelCollectionModel::FillVisibilitySubMenu(FMenuBuilder& InMenuBuilder)
 	InMenuBuilder.AddMenuEntry( Commands.World_ShowSelectedLevels );
 	InMenuBuilder.AddMenuEntry( Commands.World_HideSelectedLevels );
 	InMenuBuilder.AddMenuEntry( Commands.World_ShowOnlySelectedLevels );
+	InMenuBuilder.AddMenuEntry(Commands.World_ShowAllButSelectedLevels);
 	InMenuBuilder.AddMenuEntry( Commands.World_ShowAllLevels );
 	InMenuBuilder.AddMenuEntry( Commands.World_HideAllLevels );
 }

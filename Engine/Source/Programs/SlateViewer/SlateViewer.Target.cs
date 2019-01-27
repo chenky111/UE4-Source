@@ -15,10 +15,7 @@ public class SlateViewerTarget : TargetRules
 		LaunchModuleName = "SlateViewer";
 		ExtraModuleNames.Add("EditorStyle");
 
-		bCompileLeanAndMeanUE = true;
-
-		// Don't need editor
-		bBuildEditor = false;
+		bBuildDeveloperTools = false;
 
 		// SlateViewer doesn't ever compile with the engine linked in
 		bCompileAgainstEngine = false;
@@ -29,5 +26,8 @@ public class SlateViewerTarget : TargetRules
 		// SlateViewer.exe has no exports, so no need to verify that a .lib and .exp file was emitted by
 		// the linker.
 		bHasExports = false;
+
+		// Make sure to get all code in SlateEditorStyle compiled in
+        bBuildDeveloperTools = true;
 	}
 }

@@ -2581,7 +2581,14 @@ void UActorChannel::ProcessBunch( FInBunch & Bunch )
 
 	for (auto RepComp = ReplicationMap.CreateIterator(); RepComp; ++RepComp)
 	{
-		RepComp.Value()->PostReceivedBunch();
+		TSharedRef<FObjectReplicator>& ObjectReplicator = RepComp.Value();
+		if (ObjectReplicator->GetObject() == nullptr)
+		{
+			RepComp.RemoveCurrent();
+			continue;
+		}
+
+		ObjectReplicator->PostReceivedBunch();
 	}
 
 	// After all properties have been initialized, call PostNetInit. This should call BeginPlay() so initialization can be done with proper starting values.
@@ -3482,7 +3489,7 @@ bool UActorChannel::ReadFieldHeaderAndPayload( UObject* Object, const FClassNetC
 
 		if ( !ensure( NetFieldExport.CompatibleChecksum != 0 ) )
 		{
-			UE_LOG( LogNet, Error, TEXT( "ReadFieldHeaderAndPayload: NetFieldExport.CompatibleChecksum was 0. Object: %s, Property: %s, Type: %s" ), *Object->GetFullName(), *NetFieldExport.Name, *NetFieldExport.Type );
+			UE_LOG( LogNet, Error, TEXT( "ReadFieldHeaderAndPayload: NetFieldExport.CompatibleChecksum was 0. Object: %s, Property: %s" ), *Object->GetFullName(), *NetFieldExport.ExportName.ToString() );
 			Bunch.SetError();
 			return false;
 		}
@@ -3493,7 +3500,7 @@ bool UActorChannel::ReadFieldHeaderAndPayload( UObject* Object, const FClassNetC
 		{
 			if ( !NetFieldExport.bIncompatible )
 			{
-				UE_LOG( LogNet, Warning, TEXT( "ReadFieldHeaderAndPayload: GetFromChecksum failed (NetBackwardsCompatibility). Object: %s, Property: %s, Type: %s" ), *Object->GetFullName(), *NetFieldExport.Name, *NetFieldExport.Type );
+				UE_LOG( LogNet, Warning, TEXT( "ReadFieldHeaderAndPayload: GetFromChecksum failed (NetBackwardsCompatibility). Object: %s, Property: %s" ), *Object->GetFullName(), *NetFieldExport.ExportName.ToString() );
 				NetFieldExport.bIncompatible = true;
 			}
 		}
@@ -3595,13 +3602,7 @@ FNetFieldExportGroup* UActorChannel::GetOrCreateNetFieldExportGroupForClassNetCa
 					continue;	// We only care about net fields that aren't in a rep layout
 				}
 
-				FNetFieldExport NetFieldExport(
-					CurrentHandle++,
-					Fields[i].FieldChecksum,
-					Field ? Field->GetName() : TEXT( "" ),
-					Property ? Property->GetCPPType( nullptr, 0 ) : TEXT( "" ) );
-
-				NetFieldExportGroup->NetFieldExports.Add( NetFieldExport );
+				NetFieldExportGroup->NetFieldExports.Emplace( CurrentHandle++, Fields[i].FieldChecksum, Field ? Field->GetFName() : NAME_None );
 			}
 		}
 
@@ -3758,7 +3759,7 @@ bool UActorChannel::ReplicateSubobject(UObject *Obj, FOutBunch &Bunch, const FRe
 	// Once we can lazily handle unmapped references on the client side, this can be simplified.
 	if ( !Connection->Driver->GuidCache->SupportsObject( Obj, &WeakObj ) )
 	{
-		FNetworkGUID NetGUID = Connection->Driver->GuidCache->AssignNewNetGUID_Server( Obj );	//Make sure he gets a NetGUID so that he is now 'supported'
+		Connection->Driver->GuidCache->AssignNewNetGUID_Server( Obj );	//Make sure he gets a NetGUID so that he is now 'supported'
 	}
 
 	bool NewSubobject = false;

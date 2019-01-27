@@ -1,4 +1,4 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -38,6 +38,9 @@ class ENGINE_API UAnimCurveCompressionSettings : public UObject
 	 * and the codec used but it is left unchanged if compression fails.
 	 */
 	bool Compress(UAnimSequence& AnimSeq) const;
+
+	/** Allow us to convert DDC serialized path back into codec object */
+	UAnimCurveCompressionCodec* GetCodec(const FString& Path);
 
 	/** Generates a DDC key that takes into account the current settings and selected codec. */
 	FString MakeDDCKey() const;
