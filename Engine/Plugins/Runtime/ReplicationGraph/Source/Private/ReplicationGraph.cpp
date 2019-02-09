@@ -1093,6 +1093,14 @@ void UReplicationGraph::ReplicateActorListsForConnection_Default(UNetReplication
 				}
 
 				// -------------------
+				// Always prioritize the connection's owner and view target, since these are the most important actors for the client.
+				// -------------------
+				if (Actor == Viewer.ViewTarget || Actor == Viewer.InViewer)
+				{
+					AccumulatedPriority -= 10.0f;
+				}
+
+				// -------------------
 				//	Game code priority
 				// -------------------
 				
@@ -1385,6 +1393,7 @@ int64 UReplicationGraph::ReplicateSingleActor_FastShared(AActor* Actor, FConnect
 		// Make shared thing
 		FastSharedReplicationBunch = &OutBunch;
 		FastSharedReplicationChannel = ActorChannel;
+		FastSharedReplicationFuncName = GlobalActorInfo.Settings.FastSharedReplicationFuncName;
 
 		// Calling this function *should* result in an RPC call that we trap and fill out FastSharedReplicationBunch. See UReplicationGraph::ProcessRemoteFunction
 		if (GlobalActorInfo.Settings.FastSharedReplicationFunc(Actor) == false)
@@ -1392,6 +1401,7 @@ int64 UReplicationGraph::ReplicateSingleActor_FastShared(AActor* Actor, FConnect
 			// Something failed and we don't want to fast replicate. We wont check again this frame
 			FastSharedReplicationBunch = nullptr;
 			FastSharedReplicationChannel = nullptr;
+			FastSharedReplicationFuncName = NAME_None;
 			return 0;
 		}
 
@@ -1406,6 +1416,7 @@ int64 UReplicationGraph::ReplicateSingleActor_FastShared(AActor* Actor, FConnect
 			// A new bunch was not produced this frame, but there is still valid data (If FastSharedReplicationFunc returns false, there is no valid data)
 			FastSharedReplicationBunch = nullptr;
 			FastSharedReplicationChannel = nullptr;
+			FastSharedReplicationFuncName = NAME_None;
 		}
 	}
 
@@ -1644,7 +1655,7 @@ bool UReplicationGraph::ProcessRemoteFunction(class AActor* Actor, UFunction* Fu
 	// --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// FastShared Replication. This is ugly but the idea here is to just fill out the bunch parameters and return so that this bunch can be reused by other connections
 	// --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	if (FastSharedReplicationBunch)
+	if (FastSharedReplicationBunch && (FastSharedReplicationFuncName == Function->GetFName()))
 	{
 		// We also cache off a channel so we can call some of the serialization functions on it. This isn't really necessary though and we could break those parts off
 		// into a static function.
@@ -1665,6 +1676,7 @@ bool UReplicationGraph::ProcessRemoteFunction(class AActor* Actor, UFunction* Fu
 			
 			FastSharedReplicationBunch = nullptr;
 			FastSharedReplicationChannel = nullptr;
+			FastSharedReplicationFuncName = NAME_None;
 		}
 		return true;
 	}

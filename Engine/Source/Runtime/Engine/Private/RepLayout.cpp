@@ -51,6 +51,9 @@ static FAutoConsoleVariable CVarLogSkippedRepNotifies(TEXT("Net.LogSkippedRepNot
 int32 GUsePackedShadowBuffers = 1;
 static FAutoConsoleVariableRef CVarUsePackedShadowBuffers(TEXT("Net.UsePackedShadowBuffers"), GUsePackedShadowBuffers, TEXT("When enabled, FRepLayout will generate shadow buffers that are packed with only the necessary NetProperties, instead of copying entire object state."));
 
+int32 GShareShadowState = 1;
+static FAutoConsoleVariableRef CVarShareShadowState(TEXT("net.ShareShadowState"), GShareShadowState, TEXT("If true, work done to compare properties will be shared across connections"));
+
 int32 MaxRepArraySize = UNetworkSettings::DefaultMaxRepArraySize;
 int32 MaxRepArrayMemory = UNetworkSettings::DefaultMaxRepArrayMemory;
 
@@ -561,6 +564,66 @@ TStaticBitArray<COND_Max> BuildConditionMapFromRepFlags(FReplicationFlags RepFla
 	return ConditionMap;
 }
 
+void FRepStateStaticBuffer::CountBytes(FArchive& Ar) const
+{
+	Buffer.CountBytes(Ar);
+}
+
+FRepChangelistState::FRepChangelistState(const TSharedRef<const FRepLayout>& InRepLayout, const uint8* Source) :
+	HistoryStart(0),
+	HistoryEnd(0),
+	CompareIndex(0),
+	StaticBuffer(InRepLayout->CreateShadowBuffer(Source))
+{}
+
+void FRepChangelistState::CountBytes(FArchive& Ar) const
+{
+	StaticBuffer.CountBytes(Ar);
+	SharedSerialization.CountBytes(Ar);
+}
+
+FReplicationChangelistMgr::FReplicationChangelistMgr(const TSharedRef<const FRepLayout>& InRepLayout, const uint8* Source):
+	LastReplicationFrame(0),
+	RepChangelistState(InRepLayout, Source)
+{
+}
+
+FReceivingRepState::FReceivingRepState(FRepStateStaticBuffer&& InStaticBuffer) :
+	StaticBuffer(MoveTemp(InStaticBuffer))
+{
+}
+
+void FRepLayout::UpdateChangelistMgr(
+	FReplicationChangelistMgr& InChangelistMgr,
+	FSendingRepState* RESTRICT RepState,
+	const UObject* InObject,
+	const uint32 ReplicationFrame,
+	const FReplicationFlags& RepFlags,
+	const bool bForceCompare) const
+{
+	// See if we can re-use the work already done on a previous connection
+	// Rules:
+	//	1. We always compare once per frame (i.e. check LastReplicationFrame == ReplicationFrame)
+	//	2. We check LastCompareIndex > 1 so we can do at least one pass per connection to compare all properties
+	//		This is necessary due to how RemoteRole is manipulated per connection, so we need to give all connections a chance to see if it changed
+	//	3. We ALWAYS compare on bNetInitial to make sure we have a fresh changelist of net initial properties in this case
+	if (!bForceCompare && GShareShadowState && !RepFlags.bNetInitial && RepState->LastCompareIndex > 1 && InChangelistMgr.LastReplicationFrame == ReplicationFrame)
+	{
+		INC_DWORD_STAT_BY(STAT_NetSkippedDynamicProps, 1);
+		return;
+	}
+
+	CompareProperties(RepState, &InChangelistMgr.RepChangelistState, (const uint8*)InObject, RepFlags);
+
+	InChangelistMgr.LastReplicationFrame = ReplicationFrame;
+}
+
+void FReplicationChangelistMgr::CountBytes(FArchive& Ar) const
+{
+	RepChangelistState.CountBytes(Ar);
+}
+
+
 uint16 FRepLayout::CompareProperties_r(
 	FSendingRepState* RESTRICT RepState,
 	const int32 CmdStart,
@@ -709,12 +772,6 @@ bool FRepLayout::CompareProperties(
 {
 	SCOPE_CYCLE_COUNTER(STAT_NetReplicateDynamicPropCompareTime);
 
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::CompareProperties: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return false;
-	}
-
 	if (LayoutState == ERepLayoutState::Empty)
 	{
 		return false;
@@ -804,11 +861,6 @@ bool FRepLayout::ReplicateProperties(
 	SCOPE_CYCLE_COUNTER(STAT_NetReplicateDynamicPropTime);
 
 	check(ObjectClass == Owner);
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::ReplicateProperties: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return false;
-	}
 
 	// If we are an empty RepLayout, there's nothing to do.
 	if (LayoutState == ERepLayoutState::Empty)
@@ -1102,12 +1154,6 @@ void FRepLayout::PostReplicate(
 	FPacketIdRange& PacketRange,
 	bool bReliable) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::PostReplicate: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-
 	if (LayoutState == ERepLayoutState::Normal)
 	{
 		for (int32 i = RepState->HistoryStart; i < RepState->HistoryEnd; ++i)
@@ -1139,12 +1185,7 @@ void FRepLayout::ReceivedNak(FRepState* RepState, int32 NakPacketId) const
 		return;		// I'm not 100% certain why this happens, the only think I can think of is this is a bNetTemporary?
 	}
 
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::ReceivedNak: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-	else if (LayoutState == ERepLayoutState::Normal)
+	if (LayoutState == ERepLayoutState::Normal)
 	{
 		if (FSendingRepState* SendingRepState = RepState->GetSendingRepState())
 		{
@@ -1207,12 +1248,6 @@ bool FRepLayout::ReadyForDormancy(FRepState* RepState) const
 
 void FRepLayout::SerializeObjectReplicatedProperties(UObject* Object, FBitArchive & Ar) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::SerializeObjectReplicatedProperties: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-
 	static FRepSerializationSharedInfo Empty;
 
 	for (int32 i = 0; i < Parents.Num(); i++)
@@ -1828,12 +1863,6 @@ void FRepLayout::SendProperties(
 {
 	SCOPE_CYCLE_COUNTER(STAT_NetReplicateDynamicPropSendTime);
 
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::SendProperties: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-	
 	if (LayoutState == ERepLayoutState::Empty)
 	{
 		return;
@@ -2532,11 +2561,6 @@ bool FRepLayout::ReceiveProperties(
 	const EReceivePropertiesFlags Flags) const
 {
 	check(InObjectClass == Owner);
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::ReceiveProperties: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return false;
-	}
 
 	const bool bEnableRepNotifies = EnumHasAnyFlags(Flags, EReceivePropertiesFlags::RepNotifies);
 
@@ -2922,12 +2946,6 @@ void FRepLayout::GatherGuidReferences(
 	TSet<FNetworkGUID>& OutReferencedGuids,
 	int32& OutTrackedGuidMemoryBytes) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::GatherGuidReferences: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-
 	if (LayoutState == ERepLayoutState::Normal)
 	{
 		GatherGuidReferences_r(&RepState->GuidReferencesMap, OutReferencedGuids, OutTrackedGuidMemoryBytes);
@@ -2966,12 +2984,6 @@ bool FRepLayout::MoveMappedObjectToUnmapped_r(FGuidReferencesMap* GuidReferences
 
 bool FRepLayout::MoveMappedObjectToUnmapped(FReceivingRepState* RESTRICT RepState, const FNetworkGUID& GUID) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::MoveMappedObjectToUnmapped: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return false;
-	}
-
 	return MoveMappedObjectToUnmapped_r(&RepState->GuidReferencesMap, GUID);
 }
 
@@ -3102,12 +3114,6 @@ void FRepLayout::UpdateUnmappedObjects(
 	bool& bOutSomeObjectsWereMapped,
 	bool& bOutHasMoreUnmapped) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::UpdateUnmappedObjects: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-
 	bOutSomeObjectsWereMapped = false;
 	bOutHasMoreUnmapped = false;
 
@@ -3119,12 +3125,6 @@ void FRepLayout::UpdateUnmappedObjects(
 
 void FRepLayout::CallRepNotifies(FReceivingRepState* RepState, UObject* Object) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::CallRepNotifies: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-
 	if (RepState->RepNotifies.Num() == 0)
 	{
 		return;
@@ -3159,14 +3159,22 @@ void FRepLayout::CallRepNotifies(FReceivingRepState* RepState, UObject* Object) 
 		}
 		else if (RepNotifyFunc->NumParms == 1)
 		{
-			const FRepParentCmd& Parent = Parents[PropertyToParentHandle.FindChecked(RepProperty)];
-
-			Object->ProcessEvent(RepNotifyFunc, ShadowData + Parent);
-
-			// now store the complete value in the shadow buffer
-			if (!EnumHasAnyFlags(Parent.Flags, ERepParentFlags::IsNetSerialize | ERepParentFlags::IsCustomDelta))
+			// TODO_JDN: If this turns out to be too slow to be practical,
+			//	we should consider a TSortedMap of *just* these RepNotify properties, or even just
+			//	an Array of indices of RepNotify properties.
+			const FRepParentCmd* Parent = Parents.FindByPredicate([RepProperty](const FRepParentCmd& InParent)
 			{
-				RepProperty->CopyCompleteValue(ShadowData + Parent, RepProperty->ContainerPtrToValuePtr<uint8>(Object));
+				return InParent.Property == RepProperty;
+			});
+
+			check(Parent);
+
+			Object->ProcessEvent(RepNotifyFunc, ShadowData + (*Parent));
+			
+			// now store the complete value in the shadow buffer
+			if (!EnumHasAnyFlags(Parent->Flags, ERepParentFlags::IsNetSerialize | ERepParentFlags::IsCustomDelta))
+			{
+				RepProperty->CopyCompleteValue(ShadowData + (*Parent), RepProperty->ContainerPtrToValuePtr<uint8>(Object));
 			}
 		}
 	}
@@ -3237,12 +3245,6 @@ static void ValidateWithChecksum_r(
 template<ERepDataBufferType DataType>
 void FRepLayout::ValidateWithChecksum(TConstRepDataBuffer<DataType> Data, FBitArchive& Ar) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::ValidateWithChecksum: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-
 	TArray<FRepLayoutCmd>::TConstIterator CmdIt = Cmds.CreateConstIterator();
 	ValidateWithChecksum_r(CmdIt, Data, Ar);
 	check(CmdIt.GetIndex() == Cmds.Num());
@@ -3250,12 +3252,6 @@ void FRepLayout::ValidateWithChecksum(TConstRepDataBuffer<DataType> Data, FBitAr
 
 uint32 FRepLayout::GenerateChecksum(const FRepState* RepState) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::GenerateChecksum: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return 0;
-	}
-
 	FBitWriter Writer(1024, true);
 	ValidateWithChecksum(FConstRepShadowDataBuffer(RepState->GetReceivingRepState()->StaticBuffer.GetData()), Writer);
 
@@ -3268,11 +3264,6 @@ void FRepLayout::PruneChangeList(
 	TArray<uint16>& PrunedChanged) const
 {
 	check(Changed.Num() > 0);
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::PruneChangeList: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
 
 	PrunedChanged.Empty();
 
@@ -3293,12 +3284,6 @@ void FRepLayout::MergeChangeList(
 	TArray<uint16>& MergedDirty) const
 {
 	check(Dirty1.Num() > 0);
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::MergeChangeList: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-
 	MergedDirty.Empty();
 
 	if (ERepLayoutState::Normal == LayoutState)
@@ -3636,12 +3621,6 @@ bool FRepLayout::DiffProperties(
 	TConstRepDataBuffer<SrcType> Source,
 	const EDiffPropertiesFlags Flags) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::DiffProperties: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return false;
-	}
-
 	if (ERepLayoutState::Empty == LayoutState)
 	{
 		return false;
@@ -3661,12 +3640,6 @@ bool FRepLayout::DiffStableProperties(
 	TRepDataBuffer<DstType> Destination,
 	TConstRepDataBuffer<SrcType> Source) const
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::DiffStableProperties: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return false;
-	}
-
 	if (ERepLayoutState::Empty == LayoutState)
 	{
 		return false;
@@ -3948,12 +3921,7 @@ int32 FRepLayout::InitFromProperty_r(
 
 uint16 FRepLayout::AddParentProperty(UProperty* Property, int32 ArrayIndex)
 {
-	const uint16 Index = Parents.Emplace(Property, ArrayIndex);
-	if (ArrayIndex == 0)
-	{
-		PropertyToParentHandle.Emplace(Property, Index);
-	}
-	return Index;
+	return Parents.Emplace(Property, ArrayIndex);
 }
 
 /** Setup some flags on our parent properties, so we can handle them properly later.*/
@@ -4197,17 +4165,25 @@ static void BuildShadowOffsets(UStruct* Owner, TArray<FRepParentCmd>& Parents, T
 	}
 }
 
-void FRepLayout::InitFromObjectClass(UClass* InObjectClass, const UNetConnection* ServerConnection)
+TSharedPtr<FRepLayout> FRepLayout::CreateFromClass(UClass* InClass, const UNetConnection* ServerConnection, const ECreateRepLayoutFlags Flags)
+{
+	TSharedPtr<FRepLayout> RepLayout = MakeShareable<FRepLayout>(new FRepLayout());
+	RepLayout->InitFromClass(InClass, ServerConnection, Flags);
+	return RepLayout;
+}
+
+void FRepLayout::InitFromClass(UClass* InObjectClass, const UNetConnection* ServerConnection, const ECreateRepLayoutFlags Flags)
 {
 	SCOPE_CYCLE_COUNTER(STAT_RepLayout_InitFromObjectClass);
 	SCOPE_CYCLE_UOBJECT(ObjectClass, InObjectClass);
 
-	RoleIndex = -1;
-	RemoteRoleIndex = -1;
-	FirstNonCustomParent = -1;
+	const bool bIsObjectActor = InObjectClass->IsChildOf(AActor::StaticClass());
+	RoleIndex                 = -1;
+	RemoteRoleIndex           = -1;
+	FirstNonCustomParent      = -1;
 
-	int32 RelativeHandle = 0;
-	int32 LastOffset = -1;
+	int32 RelativeHandle      = 0;
+	int32 LastOffset          = -1;
 
 	InObjectClass->SetUpRuntimeReplicationData();
 	Parents.Empty(InObjectClass->ClassReps.Num());
@@ -4249,19 +4225,22 @@ void FRepLayout::InitFromObjectClass(UClass* InObjectClass, const UNetConnection
 			FirstNonCustomParent = ParentHandle;
 		}
 
-		// Find Role/RemoteRole property indexes so we can swap them on the client
-		if (Property->GetFName() == NAME_Role)
+		if (bIsObjectActor)
 		{
-			check(RoleIndex == -1);
-			check(Parents[ParentHandle].CmdEnd == Parents[ParentHandle].CmdStart + 1);
-			RoleIndex = ParentHandle;
-		}
+			// Find Role/RemoteRole property indexes so we can swap them on the client
+			if (Property->GetFName() == NAME_Role)
+			{
+				check(RoleIndex == -1);
+				check(Parents[ParentHandle].CmdEnd == Parents[ParentHandle].CmdStart + 1);
+				RoleIndex = ParentHandle;
+			}
 
-		if (Property->GetFName() == NAME_RemoteRole)
-		{
-			check(RemoteRoleIndex == -1);
-			check(Parents[ParentHandle].CmdEnd == Parents[ParentHandle].CmdStart + 1);
-			RemoteRoleIndex = ParentHandle;
+			if (Property->GetFName() == NAME_RemoteRole)
+			{
+				check(RemoteRoleIndex == -1);
+				check(Parents[ParentHandle].CmdEnd == Parents[ParentHandle].CmdStart + 1);
+				RemoteRoleIndex = ParentHandle;
+			}
 		}
 	}
 
@@ -4328,13 +4307,24 @@ void FRepLayout::InitFromObjectClass(UClass* InObjectClass, const UNetConnection
 		}
 	}
 
-	BuildHandleToCmdIndexTable_r(0, Cmds.Num() - 1, BaseHandleToCmdIndex);
+	if (!ServerConnection || EnumHasAnyFlags(Flags, ECreateRepLayoutFlags::MaySendProperties))
+	{
+		BuildHandleToCmdIndexTable_r(0, Cmds.Num() - 1, BaseHandleToCmdIndex);
+	}
+
 	BuildShadowOffsets<ERepBuildShadowOffsetsType::Class>(InObjectClass, Parents, Cmds, ShadowDataBufferSize, LayoutState);
 
 	Owner = InObjectClass;
 }
 
-void FRepLayout::InitFromFunction(UFunction* InFunction, const UNetConnection* ServerConnection)
+TSharedPtr<FRepLayout> FRepLayout::CreateFromFunction(UFunction* InFunction, const UNetConnection* ServerConnection, const ECreateRepLayoutFlags Flags)
+{
+	TSharedPtr<FRepLayout> RepLayout = MakeShareable<FRepLayout>(new FRepLayout());
+	RepLayout->InitFromFunction(InFunction, ServerConnection, Flags);
+	return RepLayout;
+}
+
+void FRepLayout::InitFromFunction(UFunction* InFunction, const UNetConnection* ServerConnection, const ECreateRepLayoutFlags Flags)
 {
 	int32 RelativeHandle = 0;
 
@@ -4353,7 +4343,11 @@ void FRepLayout::InitFromFunction(UFunction* InFunction, const UNetConnection* S
 
 	AddReturnCmd();
 
-	BuildHandleToCmdIndexTable_r(0, Cmds.Num() - 1, BaseHandleToCmdIndex);
+	if (!ServerConnection || EnumHasAnyFlags(Flags, ECreateRepLayoutFlags::MaySendProperties))
+	{
+		BuildHandleToCmdIndexTable_r(0, Cmds.Num() - 1, BaseHandleToCmdIndex);
+	}
+
 	BuildShadowOffsets<ERepBuildShadowOffsetsType::Function>(InFunction, Parents, Cmds, ShadowDataBufferSize, LayoutState);
 
 	Owner = InFunction;
@@ -4361,7 +4355,14 @@ void FRepLayout::InitFromFunction(UFunction* InFunction, const UNetConnection* S
 	LayoutState = Parents.Num() == 0 ? ERepLayoutState::Empty : ERepLayoutState::Normal;
 }
 
-void FRepLayout::InitFromStruct(UStruct* InStruct, const UNetConnection* ServerConnection)
+TSharedPtr<FRepLayout> FRepLayout::CreateFromStruct(UStruct* InStruct, const UNetConnection* ServerConnection, const ECreateRepLayoutFlags Flags)
+{
+	TSharedPtr<FRepLayout> RepLayout = MakeShareable<FRepLayout>(new FRepLayout());
+	RepLayout->InitFromStruct(InStruct, ServerConnection, Flags);
+	return RepLayout;
+}
+
+void FRepLayout::InitFromStruct(UStruct* InStruct, const UNetConnection* ServerConnection, const ECreateRepLayoutFlags Flags)
 {
 	int32 RelativeHandle = 0;
 
@@ -4385,7 +4386,11 @@ void FRepLayout::InitFromStruct(UStruct* InStruct, const UNetConnection* ServerC
 
 	AddReturnCmd();
 
-	BuildHandleToCmdIndexTable_r(0, Cmds.Num() - 1, BaseHandleToCmdIndex);
+	if (!ServerConnection || EnumHasAnyFlags(Flags, ECreateRepLayoutFlags::MaySendProperties))
+	{
+		BuildHandleToCmdIndexTable_r(0, Cmds.Num() - 1, BaseHandleToCmdIndex);
+	}
+
 	BuildShadowOffsets<ERepBuildShadowOffsetsType::Struct>(InStruct, Parents, Cmds, ShadowDataBufferSize, LayoutState);
 
 	Owner = InStruct;
@@ -4713,12 +4718,6 @@ void FRepLayout::BuildSharedSerializationForRPC_r(
 
 void FRepLayout::BuildSharedSerializationForRPC(void* Data)
 {
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::BuildSharedSerializationForRPC: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
-
 	if ((GNetSharedSerializedData != 0) && !SharedInfoRPC.IsValid())
 	{
 		SharedInfoRPCParentsChanged.Init(false, Parents.Num());
@@ -4766,11 +4765,6 @@ void FRepLayout::SendPropertiesForRPC(
 	void*			Data) const
 {
 	check(Function == Owner);
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::SendPropertiesForRPC: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
 
 	if (ERepLayoutState::Normal == LayoutState)
 	{
@@ -4833,11 +4827,6 @@ void FRepLayout::ReceivePropertiesForRPC(
 	TSet<FNetworkGUID>&	UnmappedGuids) const
 {
 	check(Function == Owner);
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::ReceivePropertiesForRPC: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
 
 	for (int32 i = 0; i < Parents.Num(); i++)
 	{
@@ -4920,11 +4909,6 @@ void FRepLayout::SerializePropertiesForStruct(
 	bool&			bHasUnmapped) const
 {
 	check(Struct == Owner);
-	if (LayoutState == ERepLayoutState::Uninitialized)
-	{
-		UE_LOG(LogRep, Error, TEXT("FRepLayout::SerializePropertiesForStruct: Uninitialized RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
-	}
 
 	static FRepSerializationSharedInfo Empty;
 
@@ -4990,33 +4974,28 @@ void FRepLayout::InitChangedTracker(FRepChangedPropertyTracker* ChangedTracker) 
 	}
 }
 
-void FRepLayout::InitShadowData(
-	FRepStateStaticBuffer&	ShadowData,
-	UClass*					InObjectClass,
-	const uint8* const		Src) const
+FRepStateStaticBuffer FRepLayout::CreateShadowBuffer(const uint8* const Source) const
 {
+	FRepStateStaticBuffer ShadowData(AsShared());
+
 	if (ShadowDataBufferSize == 0 && LayoutState != ERepLayoutState::Empty)
 	{
 		UE_LOG(LogRep, Error, TEXT("FRepLayout::InitShadowData: Invalid RepLayout: %s"), *GetPathNameSafe(Owner));
-		return;
 	}
-
-	ShadowData.Empty();
-
-	if (LayoutState == ERepLayoutState::Normal)
+	else if (LayoutState == ERepLayoutState::Normal)
 	{
-		ShadowData.AddZeroed(ShadowDataBufferSize);
-
-		// Construct the properties
-		ConstructProperties(ShadowData);
-
-		// Init the properties
-		CopyProperties(ShadowData, Src);
+		InitRepStateStaticBuffer(ShadowData, Source);
 	}
+
+	return ShadowData;
+}
+
+TSharedPtr<FReplicationChangelistMgr> FRepLayout::CreateReplicationChangelistMgr(const UObject* InObject) const
+{
+	return MakeShareable(new FReplicationChangelistMgr(AsShared(), (const uint8*)InObject->GetArchetype()));
 }
 
 TUniquePtr<FRepState> FRepLayout::CreateRepState(
-	UClass* InObjectClass,
 	const uint8* const Source,
 	TSharedPtr<FRepChangedPropertyTracker>& InRepChangedPropertyTracker,
 	ECreateRepStateFlags Flags) const
@@ -5043,21 +5022,27 @@ TUniquePtr<FRepState> FRepLayout::CreateRepState(
 	
 	if (!EnumHasAnyFlags(Flags, ECreateRepStateFlags::SkipCreateReceivingState))
 	{
-		RepState->ReceivingRepState.Reset(new FReceivingRepState());
+		FRepStateStaticBuffer StaticBuffer(AsShared());
 
 		// For server's, we don't need ShadowData as the ChangelistTracker / Manager will be used
 		// instead.
 		if (!bIsServer)
 		{
-			PRAGMA_DISABLE_DEPRECATION_WARNINGS
-			InitShadowData(RepState->ReceivingRepState->StaticBuffer, InObjectClass, Source);
-			PRAGMA_ENABLE_DEPRECATION_WARNINGS
+			InitRepStateStaticBuffer(StaticBuffer, Source);
 		}
 
-		RepState->ReceivingRepState->RepLayout = const_cast<FRepLayout*>(this)->AsShared();
+		RepState->ReceivingRepState.Reset(new FReceivingRepState(MoveTemp(StaticBuffer)));
 	}
 
 	return RepState;
+}
+
+void FRepLayout::InitRepStateStaticBuffer(FRepStateStaticBuffer& ShadowData, const uint8* Source) const
+{
+	check(ShadowData.Buffer.Num() == 0);
+	ShadowData.Buffer.SetNumZeroed(ShadowDataBufferSize);
+	ConstructProperties(ShadowData);
+	CopyProperties(ShadowData, Source);
 }
 
 
@@ -5077,7 +5062,7 @@ void FRepLayout::ConstructProperties(FRepStateStaticBuffer& InShadowData) const
 	}
 }
 
-void FRepLayout::CopyProperties(FRepStateStaticBuffer& InShadowData, const uint8* const Src) const
+void FRepLayout::CopyProperties(FRepStateStaticBuffer& InShadowData, const uint8* const Source) const
 {
 	uint8* ShadowData = InShadowData.GetData();
 
@@ -5088,7 +5073,7 @@ void FRepLayout::CopyProperties(FRepStateStaticBuffer& InShadowData, const uint8
 		if (Parent.ArrayIndex == 0)
 		{
 			check((Parent.ShadowOffset + Parent.Property->GetSize()) <= InShadowData.Num());
-			Parent.Property->CopyCompleteValue(ShadowData + Parent.ShadowOffset, Parent.Property->ContainerPtrToValuePtr<uint8>(Src));
+			Parent.Property->CopyCompleteValue(ShadowData + Parent.ShadowOffset, Parent.Property->ContainerPtrToValuePtr<uint8>(Source));
 		}
 	}
 }
@@ -5108,7 +5093,7 @@ void FRepLayout::DestructProperties(FRepStateStaticBuffer& InShadowData) const
 		}
 	}
 
-	InShadowData.Empty();
+	InShadowData.Buffer.Empty();
 }
 
 void FRepLayout::GetLifetimeCustomDeltaProperties(TArray<int32>& OutCustom, TArray<ELifetimeCondition>& OutConditions)
@@ -5144,7 +5129,6 @@ void FRepLayout::AddReferencedObjects(FReferenceCollector& Collector)
 			if (Current == nullptr)
 			{
 				UE_LOG(LogRep, Error, TEXT("Replicated Property is no longer valid: %s"),  *(Parent.CachedPropertyName.ToString()));
-				PropertyToParentHandle.Remove(Parent.Property);
 				Parent.Property = nullptr;
 			}
 		}
@@ -5154,7 +5138,6 @@ void FRepLayout::AddReferencedObjects(FReferenceCollector& Collector)
 void FRepLayout::CountBytes(FArchive& Ar) const
 {
 	GRANULAR_NETWORK_MEMORY_TRACKING_INIT(Ar, "FRepLayout::CountBytes");
-	GRANULAR_NETWORK_MEMORY_TRACKING_TRACK("PropertyToParentHandle", PropertyToParentHandle.CountBytes(Ar));
 	GRANULAR_NETWORK_MEMORY_TRACKING_TRACK("Parents", Parents.CountBytes(Ar));
 	GRANULAR_NETWORK_MEMORY_TRACKING_TRACK("Cmds", Cmds.CountBytes(Ar));
 	GRANULAR_NETWORK_MEMORY_TRACKING_TRACK("BaseHandleToCmdIndex", BaseHandleToCmdIndex.CountBytes(Ar));
@@ -5225,22 +5208,13 @@ void FRepState::CountBytes(FArchive& Ar) const
 	);	
 }
 
-FReceivingRepState::~FReceivingRepState()
+FRepStateStaticBuffer::~FRepStateStaticBuffer()
 {
-	if (RepLayout.IsValid() && StaticBuffer.Num() > 0)
-	{	
-		RepLayout->DestructProperties(StaticBuffer);
+	if (Buffer.Num() > 0)
+	{
+		RepLayout->DestructProperties(*this);
 	}
 }
-
-FRepChangelistState::~FRepChangelistState()
-{
-	if (RepLayout.IsValid() && StaticBuffer.Num() > 0)
-	{	
-		RepLayout->DestructProperties(StaticBuffer);
-	}
-}
-
 
 #define REPDATATYPE_SPECIALIZATION(DstType, SrcType) \
 template bool FRepLayout::DiffStableProperties(TArray<UProperty*>*, TArray<UObject*>*, TRepDataBuffer<DstType>, TConstRepDataBuffer<SrcType>) const; \
